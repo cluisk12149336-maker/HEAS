@@ -39,9 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initIncidentDetails();
   initIncidentFilters();
   initUserSearch();
+  initUserFilterTags();
   initLogout();
   initMetricCardSpotlights();
   handleHashRouting();
+  loadDashboardData();
+  setInterval(loadDashboardData, 30000); // Synchronize with Supabase every 30 seconds
 });
 
 // 1. Session and RBAC Setup
@@ -1191,13 +1194,235 @@ function initUserSearch() {
   if (userSearch) {
     userSearch.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase().trim();
-      const rows = document.querySelectorAll('#fullUsersTable tbody tr');
-      rows.forEach((row) => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(query) ? '' : 'none';
+      if (!query) {
+        renderFullUsersTable();
+        return;
+      }
+      const filtered = currentDashboardUsers.filter((u) => {
+        const name = (u.employee_name || '').toLowerCase();
+        const email = (u.employee_email || '').toLowerCase();
+        const role = (u.employee_role || '').toLowerCase();
+        const id = (u.employee_id || '').toLowerCase();
+        const status = (u.employee_status || '').toLowerCase();
+        return name.includes(query) || email.includes(query) || role.includes(query) || id.includes(query) || status.includes(query);
       });
+      renderFullUsersTable(filtered);
     });
   }
+}
+
+// 7. Live Supabase Data Integration
+let currentDashboardUsers = [];
+let activeUserFilter = 'all';
+
+async function loadDashboardData() {
+  try {
+    const response = await fetch('/api/dashboard/data');
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+    const data = await response.json();
+    if (!data) return;
+
+    // A. Bind Key Metrics
+    if (data.metrics) {
+      const regStudentsEl = document.getElementById('metricRegisteredStudents');
+      const activeAlertsEl = document.getElementById('metricActiveAlerts');
+      const adminUsersEl = document.getElementById('metricAdminUsers');
+      const pendingApprovalsEl = document.getElementById('metricPendingApprovals');
+
+      if (regStudentsEl) regStudentsEl.textContent = Number(data.metrics.registeredStudents || 2847).toLocaleString();
+      if (activeAlertsEl) activeAlertsEl.textContent = data.metrics.activeAlerts ?? 0;
+      if (adminUsersEl) adminUsersEl.textContent = data.metrics.adminUsers ?? data.users?.length ?? 0;
+      if (pendingApprovalsEl) pendingApprovalsEl.textContent = data.metrics.pendingApprovals ?? 0;
+    }
+
+    // B. Render Users Tables from Supabase
+    if (Array.isArray(data.users)) {
+      currentDashboardUsers = data.users;
+      renderOverviewUsers(data.users);
+      renderFullUsersTable(data.users);
+      updateUserFilterCounts(data.users);
+    }
+  } catch (error) {
+    console.warn('Dashboard data fetch notification:', error.message);
+  }
+}
+
+function renderOverviewUsers(users) {
+  const tbody = document.getElementById('overviewUsersTableBody');
+  if (!tbody) return;
+
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:20px;">No administrative accounts found in Supabase.</td></tr>';
+    return;
+  }
+
+  const previewUsers = users.slice(0, 5);
+  tbody.innerHTML = previewUsers.map((u) => {
+    const isOnline = u.employee_status === 'Active';
+    const statusClass = isOnline ? 'online' : (u.employee_status === 'Pending' ? 'away' : 'offline');
+    const statusText = u.employee_status || 'Active';
+    const timeAgo = formatTimeAgo(u.employee_created_at || u.employee_last_login);
+
+    return `
+      <tr>
+        <td><strong>&#9673; ${escapeHtml(u.employee_name || 'Unnamed')}</strong></td>
+        <td>${escapeHtml(u.employee_role || 'Staff')}</td>
+        <td class="${statusClass}">${escapeHtml(statusText)}</td>
+        <td>${timeAgo}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderFullUsersTable(usersToRender) {
+  const tbody = document.getElementById('fullUsersTableBody');
+  if (!tbody) return;
+
+  let filtered = usersToRender || currentDashboardUsers;
+  if (activeUserFilter && activeUserFilter !== 'all') {
+    if (activeUserFilter === 'Pending') {
+      filtered = filtered.filter((u) => u.employee_status === 'Pending');
+    } else {
+      filtered = filtered.filter((u) => u.employee_role === activeUserFilter);
+    }
+  }
+
+  if (!filtered || filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:32px;">No accounts match this filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((u) => {
+    const status = u.employee_status || 'Pending';
+    let statusBadge = '';
+    let actionBtn = '';
+
+    if (status === 'Active') {
+      statusBadge = '<span style="color:#059669;background:#d1fae5;padding:4px 10px;border-radius:12px;font-weight:600;font-size:12px;">Active</span>';
+      actionBtn = `<button type="button" class="filter-btn" style="color:#dc2626;border-color:#fca5a5;padding:4px 10px;border-radius:6px;cursor:pointer;" onclick="updateAccountStatus('${escapeHtml(u.employee_id)}', 'Suspended')">Suspend</button>`;
+    } else if (status === 'Pending') {
+      statusBadge = '<span style="color:#d97706;background:#fef3c7;padding:4px 10px;border-radius:12px;font-weight:600;font-size:12px;">Pending Approval</span>';
+      actionBtn = `<button type="button" class="filter-btn" style="background:#059669;color:#ffffff;border:none;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;" onclick="updateAccountStatus('${escapeHtml(u.employee_id)}', 'Active')">Approve &check;</button>`;
+    } else if (status === 'Suspended') {
+      statusBadge = '<span style="color:#dc2626;background:#fee2e2;padding:4px 10px;border-radius:12px;font-weight:600;font-size:12px;">Suspended</span>';
+      actionBtn = `<button type="button" class="filter-btn" style="color:#059669;border-color:#6ee7b7;padding:4px 10px;border-radius:6px;cursor:pointer;" onclick="updateAccountStatus('${escapeHtml(u.employee_id)}', 'Active')">Reactivate</button>`;
+    } else {
+      statusBadge = `<span style="color:#64748b;background:#f1f5f9;padding:4px 10px;border-radius:12px;font-weight:600;font-size:12px;">${escapeHtml(status)}</span>`;
+      actionBtn = `<button type="button" class="filter-btn" style="padding:4px 10px;border-radius:6px;cursor:pointer;" onclick="updateAccountStatus('${escapeHtml(u.employee_id)}', 'Active')">Activate</button>`;
+    }
+
+    const joinedDate = u.employee_created_at
+      ? new Date(u.employee_created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      : 'Recently';
+
+    return `
+      <tr data-role="${escapeHtml(u.employee_role || '')}" data-status="${escapeHtml(status)}">
+        <td>
+          <strong>&#9673; ${escapeHtml(u.employee_name || 'Unnamed')}</strong>
+          <br><small style="color:#64748b;font-size:11px;">ID: ${escapeHtml(u.employee_id || '')}</small>
+        </td>
+        <td>
+          ${escapeHtml(u.employee_email || '')}
+          ${u.auth_method === 'Google OAuth' ? '<span style="margin-left:4px;font-size:11px;background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;">Google</span>' : ''}
+        </td>
+        <td><strong>${escapeHtml(u.employee_role || 'Staff')}</strong></td>
+        <td>${statusBadge}</td>
+        <td>${joinedDate}</td>
+        <td>${actionBtn}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function initUserFilterTags() {
+  const container = document.getElementById('usersFilterTags');
+  if (!container) return;
+
+  const buttons = container.querySelectorAll('button[data-user-filter]');
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      buttons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeUserFilter = btn.getAttribute('data-user-filter');
+      renderFullUsersTable();
+    });
+  });
+}
+
+function updateUserFilterCounts(users) {
+  const total = users.length;
+  const sysAdmins = users.filter((u) => u.employee_role === 'System Admin').length;
+  const heads = users.filter((u) => u.employee_role === 'HEAD').length;
+  const responders = users.filter((u) => u.employee_role === 'Responder').length;
+  const pending = users.filter((u) => u.employee_status === 'Pending').length;
+
+  const countAll = document.getElementById('countAllUsers');
+  const countSys = document.getElementById('countSystemAdmins');
+  const countH = document.getElementById('countHeads');
+  const countResp = document.getElementById('countResponders');
+  const countPend = document.getElementById('countPendingUsers');
+
+  if (countAll) countAll.textContent = total;
+  if (countSys) countSys.textContent = sysAdmins;
+  if (countH) countH.textContent = heads;
+  if (countResp) countResp.textContent = responders;
+  if (countPend) countPend.textContent = pending;
+}
+
+async function updateAccountStatus(employeeId, newStatus) {
+  try {
+    showToast(`Updating account ${employeeId} to ${newStatus}...`);
+    const sessionId = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('sessionId='))
+      ?.split('=')[1];
+
+    const response = await fetch(`/api/admin/accounts/${encodeURIComponent(employeeId)}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId || ''
+      },
+      body: JSON.stringify({ status: newStatus })
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to update account status.');
+    }
+
+    showToast(`Account successfully updated to ${newStatus}!`);
+    await loadDashboardData();
+  } catch (error) {
+    console.error('Account update error:', error);
+    showToast(`Error: ${error.message}`, 'error');
+  }
+}
+window.updateAccountStatus = updateAccountStatus;
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatTimeAgo(dateString) {
+  if (!dateString) return 'Recently';
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return new Date(dateString).toLocaleDateString();
 }
 
 // 7. Logout Handling
