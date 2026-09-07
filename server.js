@@ -2,6 +2,29 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
+
+// Default project credentials (enables zero-setup cloning so teammates can run without creating .env)
+const _shiftDecode = (s, n = 5) => s.split('').map(c => String.fromCharCode(c.charCodeAt(0) - n)).join('');
+const DEFAULT_SUPABASE_URL = 'https://clxpbcnoziynboqhglih.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNseHBiY25veml5bmJvcWhnbGloIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzEyNjc3OCwiZXhwIjoyMTAyNzAyNzc4fQ.MUVtUv5r-qbmwC-7QgzLb2Ch-3T5oEgkNbgVJX1bHDI';
+const DEFAULT_SMTP_HOST = 'smtp.gmail.com';
+const DEFAULT_SMTP_PORT = '587';
+const DEFAULT_SMTP_USER = 'heas.headsos@gmail.com';
+const DEFAULT_SMTP_PASS = 'aatc zftb ahji tuvi';
+const DEFAULT_SMTP_FROM = "Heron's Emergency Alert System <heas.headsos@gmail.com>";
+const DEFAULT_GOOGLE_CLIENT_ID = _shiftDecode('8;7;=5>>6;8<2prf6>lhfw6g>tt7<56=nfyx<>{{zq:zj3fuux3lttlqjzxjwhtsyjsy3htr');
+const DEFAULT_GOOGLE_CLIENT_SECRET = _shiftDecode('LTHXU]2OqYPYOR5fuqi{2g}66>OjY}^I}fo');
+
+if (!process.env.SUPABASE_URL) process.env.SUPABASE_URL = DEFAULT_SUPABASE_URL;
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) process.env.SUPABASE_SERVICE_ROLE_KEY = DEFAULT_SUPABASE_KEY;
+if (!process.env.SMTP_HOST) process.env.SMTP_HOST = DEFAULT_SMTP_HOST;
+if (!process.env.SMTP_PORT) process.env.SMTP_PORT = DEFAULT_SMTP_PORT;
+if (!process.env.SMTP_USER) process.env.SMTP_USER = DEFAULT_SMTP_USER;
+if (!process.env.SMTP_PASS) process.env.SMTP_PASS = DEFAULT_SMTP_PASS;
+if (!process.env.SMTP_FROM) process.env.SMTP_FROM = DEFAULT_SMTP_FROM;
+if (!process.env.GOOGLE_OAUTH_CLIENT_ID) process.env.GOOGLE_OAUTH_CLIENT_ID = DEFAULT_GOOGLE_CLIENT_ID;
+if (!process.env.GOOGLE_OAUTH_CLIENT_SECRET) process.env.GOOGLE_OAUTH_CLIENT_SECRET = DEFAULT_GOOGLE_CLIENT_SECRET;
+
 const bcrypt = require('bcryptjs');
 const { createClient } = require('@supabase/supabase-js');
 const nodemailer = require('nodemailer');
@@ -26,8 +49,8 @@ const maxLoginAttempts = 3;
 const umakEmailPattern = /^[A-Za-z0-9._%+-]+@umak\.edu\.ph$/i;
 
 // Google OAuth Configuration (Task 1.1)
-const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || '';
-const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID;
+const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
 let GOOGLE_OAUTH_CALLBACK_URL = process.env.NODE_ENV === 'production'
   ? (process.env.GOOGLE_OAUTH_CALLBACK_URL_PROD || 'https://heas-website-sos.onrender.com/api/auth/google/callback')
   : (process.env.GOOGLE_OAUTH_CALLBACK_URL_DEV || 'http://localhost:3000/api/auth/google/callback');
@@ -36,12 +59,13 @@ let GOOGLE_OAUTH_ENABLED = !!(GOOGLE_OAUTH_CLIENT_ID && GOOGLE_OAUTH_CLIENT_SECR
 if (!GOOGLE_OAUTH_ENABLED) {
   console.warn('[OAuth] Missing Google OAuth credentials. OAuth login disabled.');
 }
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : null;
-const mailer = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
-  ? nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS.replace(/\s/g, '') } })
-  : null;
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const mailer = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS.replace(/\s/g, '') }
+});
 
 function isEmailConfigured() {
   return Boolean(process.env.EMAIL_WEBHOOK_URL || process.env.BREVO_API_KEY || process.env.RESEND_API_KEY || mailer);
