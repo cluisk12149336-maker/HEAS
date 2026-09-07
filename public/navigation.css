@@ -1,0 +1,201 @@
+/* =========================================================
+   HERON'S EMERGENCY ALERT SYSTEM - GLOBAL NAVIGATION COMPONENT
+   Stylesheet: navigation.css
+   ========================================================= */
+
+/* Layout Column Integration */
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  min-height: calc(100vh - 74px);
+  flex: 1;
+}
+
+/* Sidebar Rail Container */
+.dashboard-sidebar,
+dashboard-navigation {
+  align-self: start;
+  margin: 16px 8px 16px 14px;
+  padding: 16px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 28px;
+  background: linear-gradient(180deg, #e4f3ea 0%, #d5ece0 100%);
+  box-shadow: 0 10px 26px rgba(18, 60, 46, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  position: sticky;
+  top: 86px;
+  height: calc(100vh - 104px);
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 50;
+  box-sizing: border-box;
+}
+
+.dashboard-sidebar nav,
+dashboard-navigation nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Navigation Item Anchor */
+.dashboard-sidebar a,
+dashboard-navigation a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  color: #385d4f;
+  text-decoration: none;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.dashboard-sidebar a *,
+dashboard-navigation a * {
+  pointer-events: none;
+}
+
+.dashboard-sidebar a:hover,
+dashboard-navigation a:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.14) 100%);
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-top-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 12px rgba(18, 55, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.75);
+  color: #124434;
+  transform: translateY(-1px);
+}
+
+.dashboard-sidebar a .nav-icon,
+dashboard-navigation a .nav-icon {
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2b604c;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+}
+
+.dashboard-sidebar a iconify-icon,
+dashboard-navigation a iconify-icon {
+  display: block;
+  font-size: 22px;
+  width: 22px;
+  height: 22px;
+}
+
+.dashboard-sidebar a:hover .nav-icon,
+dashboard-navigation a:hover .nav-icon {
+  color: #0e3d2e;
+  transform: scale(1.06);
+}
+
+/* Authentic iOS Frosted Glass Active State */
+.dashboard-sidebar a.active,
+dashboard-navigation a.active {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.22) 48%, rgba(255, 255, 255, 0.45) 100%);
+  backdrop-filter: blur(22px) saturate(220%) contrast(105%);
+  -webkit-backdrop-filter: blur(22px) saturate(220%) contrast(105%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  border-left-color: rgba(255, 255, 255, 0.85);
+  border-bottom-color: rgba(255, 255, 255, 0.32);
+  border-right-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 
+    0 8px 24px -2px rgba(16, 56, 42, 0.12),
+    0 2px 6px -1px rgba(16, 56, 42, 0.08),
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.25);
+  color: #0c3325;
+}
+
+.dashboard-sidebar a.active .nav-icon,
+dashboard-navigation a.active .nav-icon {
+  color: #092f22;
+  filter: drop-shadow(0 1px 2px rgba(10, 45, 33, 0.2));
+  transform: scale(1.12);
+}
+
+/* Active indicator notch matching reference */
+.dashboard-sidebar a.active::before,
+dashboard-navigation a.active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 5px solid rgba(255, 255, 255, 0.95);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.14));
+}
+
+/* Floating tooltip for clean UX */
+.dashboard-sidebar a .nav-tooltip,
+dashboard-navigation a .nav-tooltip {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-5px);
+  padding: 5px 11px;
+  border-radius: 7px;
+  background: #13392e;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+  z-index: 999;
+}
+
+.dashboard-sidebar a .nav-tooltip::before,
+dashboard-navigation a .nav-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-right: 5px solid #13392e;
+}
+
+.dashboard-sidebar a:hover .nav-tooltip,
+dashboard-navigation a:hover .nav-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Responsive Overrides */
+@media (max-width: 1000px) {
+  .dashboard-layout {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+
+  .dashboard-sidebar,
+  dashboard-navigation {
+    padding: 14px 4px;
+    margin: 14px 4px 14px 8px;
+  }
+}

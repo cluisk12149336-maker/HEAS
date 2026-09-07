@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Heron's Emergency Alert System keeps the University of Makati community informed, protected, and connected.">
+  <title>Heron's Emergency Alert System</title>
+  <link rel="icon" type="image/png" href="/images/LOGO.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/styles.css?v=6">
+</head>
+<body>
+  <main class="hero-shell">
+    <div class="campus-photo" aria-hidden="true"></div>
+    <div class="top-bar">
+      <div class="brand-mark"><span class="brand-dot"></span> University of Makati</div>
+      <a class="help-link" href="#contact">Need help? <span>Contact campus safety</span> <b>&rarr;</b></a>
+    </div>
+
+    <section class="hero-content">
+      <article class="intro-panel">
+        <div class="logo-row" aria-label="University of Makati, Heron's Emergency Alert, and OHSO logos">
+          <img class="institution-logo umak-logo" src="/images/UMAK.png" alt="University of Makati logo">
+          <img class="institution-logo heron-logo" src="/images/LOGO.png" alt="Heron's Emergency Alert System logo">
+          <img class="institution-logo ohso-logo" src="/images/OHSO.png" alt="University of Makati Office of Health and Safety logo">
+        </div>
+        <p class="eyebrow">Safety, together</p>
+        <h1>Heron's Emergency<br><em>Alert System</em></h1>
+        <p class="intro-copy">The University's Emergency Alert System keeps students, faculty, and campus personnel informed, protected, and connected when it matters most.</p>
+        <button class="primary-button" id="signInButton">Sign in <span>&rarr;</span></button>
+        <div class="panel-footnote"><span class="status-dot"></span> <span class="footnote-divider"></span> Available 24/7</div>
+      </article>
+
+      <div class="device-stage" aria-label="Emergency alert system shown on mobile phones">
+        <div class="device device-back">
+          <div class="phone-screen login-screen" role="img" aria-label="Heron's Emergency Alert System Mobile Login Screen"></div>
+        </div>
+        <div class="device device-front">
+          <div class="phone-screen alert-screen" role="img" aria-label="Heron's Emergency Alert System Mobile Alert Screen"></div>
+        </div>
+        <div class="floating-note"><span>●</span><div><b>Stay connected</b><small>Real-time alerts for our community</small></div></div>
+      </div>
+    </section>
+
+    <!-- LANDING PAGE DETAILED SECTIONS -->
+    <div class="landing-sections">
+      <!-- Section 1: Live Oversight (Emergency Monitoring) -->
+      <section class="landing-section oversight-section" id="oversightSection">
+        <div class="section-container">
+          <div class="section-header">
+            <span class="section-eyebrow">LIVE OVERSIGHT</span>
+            <h2 class="section-title">Emergency Monitoring</h2>
+            <p class="section-desc">Monitor active emergency reports and quickly identify affected locations across campus.</p>
+          </div>
+
+          <div class="oversight-card">
+            <!-- Left: Interactive Live Map Visual -->
+            <div class="map-visual-container" aria-label="Campus emergency monitoring map">
+              <div id="landingMapCanvas" class="landing-map-canvas" aria-label="Interactive live campus emergency map"></div>
+              
+              <!-- Map Control Overlay -->
+              <div class="landing-map-controls" aria-label="Map controls">
+                <button type="button" data-landing-map="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+                <button type="button" data-landing-map="zoom-out" aria-label="Zoom out" title="Zoom out">&minus;</button>
+                <button type="button" data-landing-map="recenter" aria-label="Recenter to University of Makati" title="Recenter to campus">&#9673;</button>
+              </div>
+
+              <!-- Live Campus Status Indicator Badge -->
+              <div class="map-live-status-pill">
+                <span class="live-pulse-dot"></span>
+                <strong>UMak Live Radar</strong>
+                <small>• Real-Time</small>
+              </div>
+
+              <!-- Highlighted Callout Card -->
+              <div class="active-sos-callout">
+                <div class="callout-header">
+                  <span class="callout-live-indicator"><span class="beacon-pulse"></span></span>
+                  <span class="callout-title">Active SOS location</span>
+                  <span class="callout-sep">&mdash;</span>
+                  <span class="callout-location-name">University of Makati</span>
+                </div>
+                <div class="callout-meta-row">
+                  <span class="callout-time-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Alert received 2 minutes ago
+                  </span>
+                  <span class="callout-status-pill">High Priority</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Callout Side Panel -->
+            <aside class="oversight-side-panel">
+              <div class="side-panel-badge-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <circle cx="12" cy="11" r="3"/>
+                </svg>
+              </div>
+              <h3 class="side-panel-title">Coordinated response starts here.</h3>
+              <p class="side-panel-desc">Locate reports, assess urgency, and direct the right support team with a clear view of campus activity.</p>
+              
+              <div class="side-panel-highlights">
+                <div class="highlight-item">
+                  <span class="highlight-bullet">&#10003;</span>
+                  <span>Instant geofenced coordinate mapping</span>
+                </div>
+                <div class="highlight-item">
+                  <span class="highlight-bullet">&#10003;</span>
+                  <span>Automated dispatch to nearest responder unit</span>
+                </div>
+              </div>
+
+              <button class="side-panel-cta-button" id="oversightViewMap" type="button">
+                <span>View Live Map</span>
+                <span class="cta-arrow">&rarr;</span>
+              </button>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Response Queue (Recent Alerts) -->
+      <section class="landing-section response-queue-section" id="responseQueueSection">
+        <div class="section-container">
+          <div class="section-header-split">
+            <div>
+              <span class="section-eyebrow">RESPONSE QUEUE</span>
+              <h2 class="section-title">Recent Alerts</h2>
+            </div>
+            <a class="view-all-alerts-link" id="viewAllAlertsLink" href="#signInButton">
+              <span>View All Alerts</span>
+              <b class="link-arrow">&rarr;</b>
+            </a>
+          </div>
+
+          <div class="alert-cards-row">
+            <!-- Card 1 (Active) - Soft pink/red-tinted background -->
+            <article class="alert-card alert-card-active">
+              <div class="alert-top">
+                <div class="alert-heading-group">
+                  <div class="alert-icon-wrap icon-sos">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
+                      <line x1="12" y1="8" x2="12" y2="12"/>
+                      <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="alert-name">SOS Alert</h3>
+                    <span class="alert-student-id">Student ID: <strong>2024-00125</strong></span>
+                  </div>
+                </div>
+                <span class="alert-status-badge status-active">
+                  <span class="status-live-dot"></span> Active
+                </span>
+              </div>
+
+              <div class="alert-details-grid">
+                <div class="detail-line">
+                  <span class="detail-label">Location</span>
+                  <span class="detail-value">
+                    <svg class="detail-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    University of Makati
+                  </span>
+                </div>
+                <div class="detail-line">
+                  <span class="detail-label">Timestamp</span>
+                  <span class="detail-value">
+                    <svg class="detail-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    2 min ago
+                  </span>
+                </div>
+              </div>
+
+              <div class="alert-card-action">
+                <span class="team-tag">Dispatch: <strong>Alpha Team 1</strong></span>
+                <span class="action-hint">In Progress &rsaquo;</span>
+              </div>
+            </article>
+
+            <!-- Card 2 (Resolved) - Soft neutral background -->
+            <article class="alert-card alert-card-resolved">
+              <div class="alert-top">
+                <div class="alert-heading-group">
+                  <div class="alert-icon-wrap icon-medical">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="alert-name">Medical Assistance</h3>
+                    <span class="alert-student-id">Student ID: <strong>2024-00418</strong></span>
+                  </div>
+                </div>
+                <span class="alert-status-badge status-resolved">
+                  <span class="status-check-icon">&#10003;</span> Resolved
+                </span>
+              </div>
+
+              <div class="alert-details-grid">
+                <div class="detail-line">
+                  <span class="detail-label">Location</span>
+                  <span class="detail-value">
+                    <svg class="detail-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    CBA Building
+                  </span>
+                </div>
+                <div class="detail-line">
+                  <span class="detail-label">Timestamp</span>
+                  <span class="detail-value">
+                    <svg class="detail-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    15 min ago
+                  </span>
+                </div>
+              </div>
+
+              <div class="alert-card-action">
+                <span class="team-tag">Resolved by: <strong>Health Clinic</strong></span>
+                <span class="action-hint">Archived &rsaquo;</span>
+              </div>
+            </article>
+
+            <!-- Card 3 (Resolved) - Soft neutral background -->
+            <article class="alert-card alert-card-resolved">
+              <div class="alert-top">
+                <div class="alert-heading-group">
+                  <div class="alert-icon-wrap icon-safety">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="alert-name">Safety Concern</h3>
+                    <span class="alert-student-id">Student ID: <strong>2024-00231</strong></span>
+                  </div>
+                </div>
+                <span class="alert-status-badge status-resolved">
+                  <span class="status-check-icon">&#10003;</span> Resolved
+                </span>
+              </div>
+
+              <div class="alert-details-grid">
+                <div class="detail-line">
+                  <span class="detail-label">Location</span>
+                  <span class="detail-value">
+                    <svg class="detail-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    Main Campus
+                  </span>
+                </div>
+                <div class="detail-line">
+                  <span class="detail-label">Timestamp</span>
+                  <span class="detail-value">
+                    <svg class="detail-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    32 min ago
+                  </span>
+                </div>
+              </div>
+
+              <div class="alert-card-action">
+                <span class="team-tag">Resolved by: <strong>Campus Security</strong></span>
+                <span class="action-hint">Archived &rsaquo;</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: One Safety Workspace (Features Grid) -->
+      <section class="landing-section workspace-section" id="workspaceSection">
+        <div class="section-container">
+          <div class="section-header text-center">
+            <span class="section-eyebrow">ONE SAFETY WORKSPACE</span>
+            <h2 class="section-title">Built for a safer campus community.</h2>
+          </div>
+
+          <div class="features-grid">
+            <!-- Feature 1: Emergency Alerts -->
+            <article class="feature-card">
+              <div class="feature-icon-badge">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <h3 class="feature-title">Emergency Alerts</h3>
+              <p class="feature-desc">Receive and manage SOS reports in real time.</p>
+            </article>
+
+            <!-- Feature 2: Live Location -->
+            <article class="feature-card">
+              <div class="feature-icon-badge">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                </svg>
+              </div>
+              <h3 class="feature-title">Live Location</h3>
+              <p class="feature-desc">View reported emergency locations on an interactive map.</p>
+            </article>
+
+            <!-- Feature 3: Student Management -->
+            <article class="feature-card">
+              <div class="feature-icon-badge">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <h3 class="feature-title">Student Management</h3>
+              <p class="feature-desc">Manage registered student accounts and safety information.</p>
+            </article>
+
+            <!-- Feature 4: Incident Reports -->
+            <article class="feature-card">
+              <div class="feature-icon-badge">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </div>
+              <h3 class="feature-title">Incident Reports</h3>
+              <p class="feature-desc">Review previous incidents and generate safety reports.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer id="contact" class="professional-footer">
+      <div class="footer-container">
+        <!-- Main Essential Row -->
+        <div class="footer-main-row">
+          <div class="footer-identity">
+            <div class="footer-brand-lockup">
+              <img src="/images/LOGO.png" alt="Heron's Emergency Alert System" class="footer-logo">
+              <div>
+                <span class="footer-title">University of Makati</span>
+                <span class="footer-subtitle">Heron's Emergency Alert System &bull; OHSO</span>
+              </div>
+            </div>
+            <p class="footer-tagline">Campus safety, rapid emergency response, and 24/7 incident coordination.</p>
+          </div>
+
+          <div class="footer-contact-cluster">
+            <a href="mailto:ohso@umak.edu.ph" class="footer-pill-link" title="Official Safety Email">
+              <span class="pill-icon">✉</span>
+              <span>ohso@umak.edu.ph</span>
+            </a>
+            <a href="tel:288820535" class="footer-pill-link emergency-hotline" title="Campus Safety Hotline">
+              <span class="pill-icon">☎</span>
+              <span>Hotline: 288820535</span>
+            </a>
+            <div class="footer-pill-link status-pill-badge">
+              <span class="footer-online-dot"></span>
+              <span>24/7 Campus Dispatch</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clean Bottom Meta Row -->
+        <div class="footer-bottom-row">
+          <p class="footer-copyright">
+            &copy; 2026 University of Makati &bull; Occupational Health and Safety Office. All rights reserved.
+          </p>
+          <div class="footer-meta-links">
+            <a href="#oversightSection">Live Monitoring</a>
+            <span class="meta-sep">&bull;</span>
+            <a href="#responseQueueSection">Response Queue</a>
+            <span class="meta-sep">&bull;</span>
+            <a href="#workspaceSection">Workspace</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </main>
+  <div class="login-overlay" id="loginOverlay" hidden>
+    <section class="admin-login" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <button class="close-login" id="closeLogin" type="button" aria-label="Close login">&times;</button>
+      <div class="admin-logo-row">
+        <img src="/images/UMAK.png" alt="University of Makati">
+        <img src="/images/LOGO.png" alt="Heron's Emergency Alert System">
+        <img src="/images/OHSO.png" alt="Office of Health and Safety">
+      </div>
+      <h2 id="loginTitle">Administrator Login Portal</h2>
+      <p class="login-subtitle">Heron's Emergency Alert System</p>
+      <form id="loginForm" novalidate>
+        <label class="login-field"><span aria-hidden="true">&#9679;</span><input id="emailInput" type="email" placeholder="name@umak.edu.ph" pattern="[A-Za-z0-9._%+-]+@umak\.edu\.ph" title="Use your @umak.edu.ph email address" autocomplete="username" required></label>
+        <label class="login-field"><span aria-hidden="true">&#9679;</span><input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password" minlength="6" required><button class="password-toggle" id="passwordToggle" type="button" aria-label="Show password"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle></svg></button></label>
+        <div class="login-options"><a href="#" id="forgotPassword">Forgot your password?</a><span id="loginError" role="alert"></span></div>
+        <button class="admin-submit" type="submit">Sign In</button>
+      </form>
+      <div class="login-divider"><span>or</span></div>
+      <button class="google-login" id="googleLogin" type="button"><img src="/images/google.jpg" alt=""> Continue with Google</button>
+      <button class="request-account" id="requestAccount" type="button"><span>&#9679;</span> Request New Account <b>&rarr;</b></button>
+    </section>
+    <section class="otp-step" id="otpStep" hidden>
+      <div class="otp-symbol">&#9993;</div>
+      <h2>Verify your identity</h2>
+      <p>A 6-digit verification code was sent to<br><strong id="otpEmail">your registered UMak email</strong>.</p>
+      <label class="otp-label" for="otpInput">Verification code</label>
+      <input class="otp-input" id="otpInput" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="000000" autocomplete="one-time-code" required>
+      <p class="otp-error" id="otpError" role="alert"></p>
+      <button class="admin-submit" id="verifyOtp" type="button">Verify and Continue</button>
+      <button class="resend-otp" id="resendOtp" type="button">Didn’t receive the code? <strong>Resend</strong></button>
+      <button class="back-login" id="backLogin" type="button">Back to login</button>
+    </section>
+    <section class="reset-step" id="resetStep" hidden>
+      <div class="otp-symbol">&#128273;</div>
+      <h2>Reset your password</h2>
+      <p>Enter your registered UMak email and we will send you a verification code.</p>
+      <form id="resetRequestForm">
+        <label class="otp-label" for="resetEmail">Email address</label>
+        <input class="reset-input" id="resetEmail" type="email" placeholder="name@umak.edu.ph" pattern="[A-Za-z0-9._%+-]+@umak\.edu\.ph" title="Use your @umak.edu.ph email address" autocomplete="email" required>
+        <p class="otp-error" id="resetRequestError" role="alert"></p>
+        <button class="admin-submit" type="submit">Send reset code</button>
+      </form>
+      <form id="resetVerifyForm" hidden>
+        <div class="verify-form-header">
+          <p class="verify-email-label">Code sent to</p>
+          <p class="verify-email-display" id="resetEmailDisplay">user@umak.edu.ph</p>
+        </div>
+        <label class="otp-label" for="resetCode">Verification code</label>
+        <input class="otp-input" id="resetCode" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="000000" autocomplete="one-time-code" required>
+        <p class="otp-error" id="resetVerifyError" role="alert"></p>
+        <button class="admin-submit" id="verifyResetCodeButton" type="submit">Verify code</button>
+        <div class="resend-section">
+          <p class="resend-prompt">Didn't receive the code?</p>
+          <button class="resend-code-button" id="resendResetCode" type="button">Resend code</button>
+          <p class="resend-status" id="resendStatus" hidden></p>
+        </div>
+      </form>
+      <form id="resetUpdateForm" hidden>
+        <label class="otp-label" for="resetPassword">New password</label>
+        <div class="reset-password-field">
+          <input class="reset-input" id="resetPassword" type="password" autocomplete="new-password" required>
+          <button class="password-toggle reset-password-toggle" type="button" data-password-target="resetPassword" aria-label="Show new password"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle></svg></button>
+        </div>
+        <ul class="password-requirements" aria-label="Password requirements">
+          <li id="requirementLength">At least 16 characters</li>
+          <li id="requirementUppercase">One uppercase letter [A-Z]</li>
+          <li id="requirementLowercase">One lowercase letter [a-z]</li>
+          <li id="requirementNumber">One number [0-9]</li>
+          <li id="requirementSpecial">One special character [! @ # $ % ^ & *]</li>
+        </ul>
+        <label class="otp-label" for="confirmPassword">Confirm password</label>
+        <div class="reset-password-field">
+          <input class="reset-input" id="confirmPassword" type="password" autocomplete="new-password" required>
+          <button class="password-toggle reset-password-toggle" type="button" data-password-target="confirmPassword" aria-label="Show confirmed password"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle></svg></button>
+        </div>
+        <p class="otp-error" id="resetUpdateError" role="alert"></p>
+        <button class="admin-submit" id="resetPasswordButton" type="submit">Update password</button>
+      </form>
+      <button class="back-login" id="cancelReset" type="button">Back to login</button>
+    </section>
+    <section class="request-step" id="requestStep" hidden>
+      <h2>Request New Account</h2>
+      <p class="request-subtitle">Heron's Emergency Alert System - Administrator Access</p>
+      <p class="request-intro">Your request will be reviewed by system administrators.</p>
+      <form id="requestAccountForm">
+        <label class="request-field"><span aria-hidden="true">&#9679;</span><input id="requestName" type="text" placeholder="Enter your full name" autocomplete="name" pattern="[A-Za-z]+(?: [A-Za-z]+)*" title="Use letters only for your full name." required></label>
+        <label class="request-field"><span aria-hidden="true">&#9993;</span><input id="requestEmail" type="email" placeholder="name@umak.edu.ph" pattern="[A-Za-z0-9._%+-]+@umak\.edu\.ph" title="Use your @umak.edu.ph email address" autocomplete="email" required></label>
+        <div class="request-password-field">
+          <label class="request-field"><span aria-hidden="true">&#128274;</span><input id="requestPassword" type="password" placeholder="Create a strong password" minlength="16" required><button class="password-toggle request-password-toggle" type="button" data-password-target="requestPassword" data-password-label="password" aria-label="Show password"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle></svg></button></label>
+        </div>
+        <div class="request-password-field">
+          <label class="request-field"><span aria-hidden="true">&#128274;</span><input id="requestConfirmPassword" type="password" placeholder="Confirm your password" minlength="16" required><button class="password-toggle request-password-toggle" type="button" data-password-target="requestConfirmPassword" data-password-label="confirmation password" aria-label="Show confirmation password"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle></svg></button></label>
+        </div>
+        <ul class="request-password-checks" aria-label="Password requirements">
+          <li id="requestRequirementLength">At least 16 characters</li>
+          <li id="requestRequirementUppercase">One uppercase letter [A-Z]</li>
+          <li id="requestRequirementLowercase">One lowercase letter [a-z]</li>
+          <li id="requestRequirementNumber">One number [0-9]</li>
+          <li id="requestRequirementSpecial">One special character [! @ # $ % ^ & *]</li>
+        </ul>
+        <label class="request-field"><span aria-hidden="true">&#9776;</span><select id="requestRole" required><option value="" selected disabled>Select your role</option><option value="HEAD">HEAD</option><option value="System Admin">System Admin</option><option value="Responder">Responder</option></select></label>
+        <p class="request-error" id="requestAccountError" role="alert"></p>
+        <button class="request-submit" type="submit">Submit Request</button>
+      </form>
+      <button class="request-back" id="backRequestLogin" type="button">&lt; Back to Log In</button>
+      <p class="request-processing"><strong>Processing Time:</strong> Requests are typically viewed<br>within 24-48 hours. You will receive a<br>confirmation email and be notified once your<br>request has been processed.</p>
+    </section>
+    <section class="request-success-step" id="requestSuccessStep" hidden>
+      <button class="close-login" id="closeRequestSuccess" type="button" aria-label="Close">&times;</button>
+      <div class="admin-logo-row">
+        <img src="/images/UMAK.png" alt="University of Makati">
+        <img src="/images/LOGO.png" alt="Heron's Emergency Alert System">
+        <img src="/images/OHSO.png" alt="Office of Health and Safety">
+      </div>
+      <div class="success-icon-badge" aria-hidden="true">&#10003;</div>
+      <h2>Account Request Submitted</h2>
+      <p class="request-subtitle">Heron's Emergency Alert System &bull; Access Verification</p>
+
+      <div class="pending-status-card">
+        <div class="status-indicator-row">
+          <span class="status-pulse-dot"></span>
+          <span>Account Status: <strong>Pending Approval</strong></span>
+        </div>
+      </div>
+
+      <div class="success-details-summary">
+        <div class="summary-item">
+          <span>Applicant</span>
+          <strong id="successApplicantName">&mdash;</strong>
+        </div>
+        <div class="summary-item">
+          <span>Email Address</span>
+          <strong id="successApplicantEmail">&mdash;</strong>
+        </div>
+        <div class="summary-item">
+          <span>Requested Role</span>
+          <strong id="successApplicantRole" class="role-badge">&mdash;</strong>
+        </div>
+      </div>
+
+      <div class="approval-workflow-info">
+        <div class="workflow-header">
+          <span class="shield-symbol">&#128737;</span>
+          <strong>Dual-Approval Workflow</strong>
+        </div>
+        <p class="workflow-desc">
+          Your account request has been successfully submitted. The <strong>System Admin (IT)</strong> and <strong>HEAD</strong> must review and approve this request via email and directly on the system before your access is activated.
+        </p>
+        <p class="workflow-footnote">
+          An official confirmation notification will be sent to your registered UMak email address once processed.
+        </p>
+      </div>
+
+      <button class="admin-submit" id="backToLoginFromSuccess" type="button">Back to Log In</button>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status">Sign-in is ready for campus members.</div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="/app.js?v=7"></script>
+</body>
+</html>

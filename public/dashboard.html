@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Heron's Emergency Alert System - Administrator Command Dashboard for the University of Makati community.">
+  <title>HERON'S EMERGENCY ALERT SYSTEM - Administrator Dashboard</title>
+  <link rel="icon" type="image/png" href="/images/LOGO.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/navigation.css">
+  <link rel="stylesheet" href="/dashboard.css?v=1">
+  <script src="/iconify-icon.min.js"></script>
+  <script src="/nav-icons.js"></script>
+  <script src="/navigation.js"></script>
+</head>
+<body>
+  <div class="dashboard" id="dashboard">
+    <!-- Top Command Header -->
+    <header class="dashboard-header">
+      <a class="dashboard-brand" href="#dashboard" data-view="overview" aria-label="Heron's Emergency Alert System Dashboard">
+        <img src="/images/LOGO.png" alt="Heron's Emergency Alert System">
+        <span>HERON'S EMERGENCY ALERT SYSTEM<small>Administrator Access</small></span>
+      </a>
+      <div class="dashboard-actions">
+        <div class="user-menu">
+          <span class="user-avatar">A</span>
+          <span>
+            <strong id="dashboardName">Administrator</strong>
+            <small id="dashboardRole">System Administrator</small>
+          </span>
+        </div>
+        <button id="logoutButton" type="button" class="logout-button">Log out <span>&rarr;</span></button>
+      </div>
+    </header>
+
+    <!-- Dashboard Main Layout -->
+    <div class="dashboard-layout">
+      <!-- Global Sidebar Navigation Component (/navigation.js) -->
+      <aside class="dashboard-sidebar" id="dashboardSidebar" data-component="navigation" aria-label="Dashboard navigation">
+        <!-- Dynamically rendered and managed by GlobalNavigation -->
+      </aside>
+
+      <!-- Main Workspace Views -->
+      <main class="dashboard-main">
+
+        <!-- ================= PAGE 1: OVERVIEW DASHBOARD ================= -->
+        <section class="dashboard-view active" id="view-overview">
+          <!-- Key Metrics -->
+          <div class="metric-grid">
+            <article>
+              <span class="metric-icon green user-icon" aria-hidden="true">
+                <iconify-icon icon="solar:square-academic-cap-2-bold-duotone" width="22" height="22"></iconify-icon>
+              </span>
+              <div>
+                <small>REGISTERED STUDENTS</small>
+                <strong>2,847</strong>
+                <p>&uarr; 12 today</p>
+              </div>
+              <span class="metric-status people-status green-line" aria-hidden="true"></span>
+            </article>
+
+            <article>
+              <span class="metric-icon red alert-icon" aria-hidden="true">
+                <iconify-icon icon="solar:bell-bing-bold-duotone" width="22" height="22"></iconify-icon>
+              </span>
+              <div>
+                <small>ACTIVE ALERTS</small>
+                <strong>2</strong>
+                <p><a href="#alerts" onclick="switchView('alerts');" style="color:inherit;text-decoration:underline;">View all</a></p>
+              </div>
+              <span class="metric-status alert-status red-line" aria-hidden="true"></span>
+            </article>
+
+            <article>
+              <span class="metric-icon green shield-icon" aria-hidden="true">
+                <iconify-icon icon="solar:shield-check-bold-duotone" width="22" height="22"></iconify-icon>
+              </span>
+              <div>
+                <small>ADMIN USERS</small>
+                <strong>18</strong>
+                <p>Online</p>
+              </div>
+              <span class="metric-status keyhole-status green-line" aria-hidden="true"></span>
+            </article>
+
+            <article>
+              <span class="metric-icon green check-icon resolved-icon" aria-hidden="true">
+                <iconify-icon icon="solar:check-circle-bold-duotone" width="22" height="22"></iconify-icon>
+              </span>
+              <div>
+                <small>RESOLVED TODAY</small>
+                <strong>5</strong>
+                <p>&uarr; 2 today</p>
+              </div>
+              <span class="metric-status history-status green-line" aria-hidden="true"></span>
+            </article>
+          </div>
+
+          <!-- Two-column Overview Grid -->
+          <div class="dashboard-columns">
+            <div class="dashboard-center">
+              <!-- Live Map Panel -->
+              <section class="dashboard-panel map-panel" id="mapPanel">
+                <div class="panel-heading">
+                  <div>
+                    <h2><span>&#9678;</span> LIVE INCIDENT MAP</h2>
+                    <p>Real-time monitoring of incidents and campus responders</p>
+                  </div>
+                  <div class="map-menu">
+                    <button class="map-menu-toggle" type="button" aria-label="Map filters" aria-expanded="false">&#8942;</button>
+                    <div class="map-menu-list" role="menu">
+                      <button type="button" role="menuitem" data-map-filter="center">&#9673; Center</button>
+                      <button type="button" role="menuitem" data-map-filter="all">&#9673; All</button>
+                      <button type="button" role="menuitem" data-map-filter="active">&#9679; Active</button>
+                      <button type="button" role="menuitem" data-map-filter="ongoing">&#9679; On Going</button>
+                      <button type="button" role="menuitem" data-map-filter="resolved">&#10003; Resolved</button>
+                      <button type="button" role="menuitem" data-map-filter="cancelled">&#10005; Cancelled</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="incident-map" id="incidentMap">
+                  <div id="mapCanvas" aria-label="Interactive live incident map"></div>
+                  <div class="map-controls">
+                    <b data-map-action="zoom-in" title="Zoom In">+</b>
+                    <b data-map-action="zoom-out" title="Zoom Out">&minus;</b>
+                    <b data-map-action="locate" title="Recenter on UMak Campus">&#9673;</b>
+                  </div>
+                  <span class="map-label label-one">Lawn Bridge</span>
+                  <span class="map-label label-two">West Rembo</span>
+                  <span class="map-label label-three">San Jose</span>
+                  <div class="map-legend">
+                    <span><i class="active-dot"></i>Active</span>
+                    <span><i class="ongoing-dot"></i>On Going</span>
+                    <span><i class="resolved-dot"></i>Resolved</span>
+                  </div>
+                  <small class="map-credit">&copy; OpenStreetMap contributors</small>
+                </div>
+              </section>
+
+              <!-- Lower Panels: Users and Incidents -->
+              <div class="lower-panels">
+                <section class="dashboard-panel" id="usersPanel">
+                  <div class="panel-heading compact">
+                    <div>
+                      <h2>ADMIN USERS</h2>
+                      <p>Manage system administrators</p>
+                    </div>
+                    <button type="button" onclick="document.querySelector('a[data-view=users]').click();">View All</button>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>NAME</th>
+                        <th>ROLE</th>
+                        <th>STATUS</th>
+                        <th>LAST ACTIVE</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>&#9673; Jolhehem Billones</td>
+                        <td>System Administrator</td>
+                        <td class="online">Online</td>
+                        <td>2 mins ago</td>
+                      </tr>
+                      <tr>
+                        <td>&#9673; Maria Santos</td>
+                        <td>Administrator</td>
+                        <td class="online">Online</td>
+                        <td>5 mins ago</td>
+                      </tr>
+                      <tr>
+                        <td>&#9673; John Dela Cruz</td>
+                        <td>Operator</td>
+                        <td class="away">Away</td>
+                        <td>20 mins ago</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+
+                <section class="dashboard-panel" id="incidentPanel">
+                  <div class="panel-heading compact">
+                    <div>
+                      <h2>RECENT INCIDENTS</h2>
+                      <p>Latest incidents reported</p>
+                    </div>
+                    <button type="button" onclick="document.querySelector('a[data-view=incidents]').click();">View All</button>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>INCIDENT ID</th>
+                        <th>TYPE</th>
+                        <th>STATUS</th>
+                        <th>TIME</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr data-incident-id="MED_0001" data-status="ongoing" data-type="medical" title="Click to view incident details & history">
+                        <td>MED_0001</td>
+                        <td class="medical">&hearts; Medical</td>
+                        <td><em class="status ongoing">On Going</em></td>
+                        <td>4 mins ago</td>
+                      </tr>
+                      <tr data-incident-id="SEC_0001" data-status="active" data-type="security" title="Click to view incident details & history">
+                        <td>SEC_0001</td>
+                        <td class="security">&#9670; Security</td>
+                        <td><em class="status active">Active</em></td>
+                        <td>23 mins ago</td>
+                      </tr>
+                      <tr data-incident-id="CAMP_0001" data-status="resolved" data-type="medical" title="Click to view incident details & history">
+                        <td>CAMP_0001</td>
+                        <td class="medical">&hearts; Medical</td>
+                        <td><em class="status resolved">Resolved</em></td>
+                        <td>1 hour ago</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+              </div>
+            </div>
+
+            <!-- Right Column: Alert Notifications -->
+            <aside class="dashboard-panel notifications-panel" id="notificationsPanel">
+              <div class="panel-heading compact">
+                <h2>&#9830; ALERT NOTIFICATIONS</h2>
+              </div>
+              <div class="alert-tabs" role="tablist" aria-label="Alert filters">
+                <button class="active" type="button" role="tab" aria-selected="true" data-alert-filter="all">All</button>
+                <button type="button" role="tab" aria-selected="false" data-alert-filter="urgent">Urgent</button>
+                <button type="button" role="tab" aria-selected="false" data-alert-filter="medical">Medical</button>
+                <button type="button" role="tab" aria-selected="false" data-alert-filter="security">Security</button>
+                <button type="button" role="tab" aria-selected="false" data-alert-filter="vicinity">Campus Vicinity</button>
+              </div>
+
+              <article class="alert-item ongoing" data-alert-type="medical" data-status="ongoing">
+                <div>
+                  <strong>&hearts; Medical</strong>
+                  <small>2025-12-01 16:49:30</small>
+                </div>
+                <h3>MED_0001 <em class="ongoing"> ON GOING </em></h3>
+                <p>4231m from UMAK</p>
+                <footer class="ongoing">&clubs; Awaiting Assignment <b>&rsaquo;</b></footer>
+              </article>
+
+              <article class="alert-item active urgent" data-alert-type="security" data-status="active">
+                <div>
+                  <strong>&#9670; Security</strong>
+                  <small>2025-12-01 12:50:38</small>
+                </div>
+                <h3>SEC_0001 <em class="active"> ACTIVE </em></h3>
+                <p>3074m from UMAK</p>
+                <footer class="active">&#9888; High Priority Emergency <b>&rsaquo;</b></footer>
+              </article>
+
+              <article class="alert-item ongoing" data-alert-type="vicinity" data-status="ongoing">
+                <div>
+                  <strong>&#9678; Campus Vicinity</strong>
+                  <small>2025-12-01 12:05:44</small>
+                </div>
+                <h3>VIC_0001 <em class="ongoing"> ON GOING </em></h3>
+                <p>Activity detected near the campus boundary requiring safety review.</p>
+                <footer class="ongoing">&#9888; Activity near campus boundary <b>&rsaquo;</b></footer>
+              </article>
+
+              <article class="alert-item resolved" data-alert-type="medical" data-status="resolved">
+                <div>
+                  <strong>&hearts; Medical</strong>
+                  <small>2025-12-01 10:21:17</small>
+                </div>
+                <h3>CAMP_0001 <em class="resolved"> RESOLVED </em></h3>
+                <p>1850m from UMAK</p>
+                <footer class="resolved">&clubs; Incident Resolved <b>&rsaquo;</b></footer>
+              </article>
+
+              <a class="all-alerts" href="#alerts" onclick="switchView('alerts');">View All Notifications &rsaquo;</a>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 2: LIVE MAP VIEW ================= -->
+        <section class="dashboard-view" id="view-map">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9678;</span> Live Interactive Emergency Map</h1>
+              <p>Real-time telemetry, geofence radius, active distress beacons, and responder field units.</p>
+            </div>
+          </div>
+
+          <div class="dashboard-panel">
+            <div class="panel-toolbar">
+              <div class="search-box">
+                <span>&#128269;</span>
+                <input id="liveMapSearchInput" type="text" placeholder="Search zone, responder or building...">
+              </div>
+              <div class="filter-tags" id="liveMapFilterTags">
+                <button class="filter-btn active" type="button" data-live-filter="all">All Beacons</button>
+                <button class="filter-btn" type="button" data-live-filter="active">Active SOS</button>
+                <button class="filter-btn" type="button" data-live-filter="ongoing">On Going</button>
+                <button class="filter-btn" type="button" data-live-filter="resolved">Resolved</button>
+              </div>
+            </div>
+            <div class="incident-map" id="liveIncidentMap" style="height: 560px;">
+              <div id="liveMapCanvas" aria-label="Interactive live incident map"></div>
+              <div class="map-controls">
+                <b data-live-map-action="zoom-in" title="Zoom In">+</b>
+                <b data-live-map-action="zoom-out" title="Zoom Out">&minus;</b>
+                <b data-live-map-action="locate" title="Recenter on UMak Campus">&#9673;</b>
+              </div>
+              <span class="map-label label-one">Lawn Bridge</span>
+              <span class="map-label label-two">West Rembo</span>
+              <span class="map-label label-three">San Jose</span>
+              <div class="map-legend">
+                <span><i class="active-dot"></i>Active</span>
+                <span><i class="ongoing-dot"></i>On Going</span>
+                <span><i class="resolved-dot"></i>Resolved</span>
+              </div>
+              <small class="map-credit">&copy; OpenStreetMap contributors</small>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 3: INCIDENTS DIRECTORY ================= -->
+        <section class="dashboard-view" id="view-incidents">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9888;</span> Campus Emergency Incidents</h1>
+              <p>Full incident audit log, active SOS alerts, dispatch statuses, and resolution archives.</p>
+            </div>
+            <div class="view-actions">
+              <button class="filter-btn active" type="button" onclick="showToast('Exporting incident log to CSV...')">Export CSV</button>
+            </div>
+          </div>
+
+          <div class="dashboard-panel">
+            <div class="panel-toolbar">
+              <div class="search-box">
+                <span>&#128269;</span>
+                <input id="incidentSearchInput" type="text" placeholder="Search by Incident ID, Type, or Location...">
+              </div>
+              <div class="filter-tags">
+                <button class="filter-btn incidents-filter-btn active" data-status-filter="all" type="button">All (6)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="active" type="button">Active (2)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="ongoing" type="button">On Going (1)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="resolved" type="button">Resolved (3)</button>
+              </div>
+            </div>
+            <table id="fullIncidentsTable">
+              <thead>
+                <tr>
+                  <th>INCIDENT ID</th>
+                  <th>EMERGENCY TYPE</th>
+                  <th>LOCATION</th>
+                  <th>DISPATCHED UNIT</th>
+                  <th>REPORTED TIME</th>
+                  <th>STATUS</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-status="ongoing" title="Click to view incident details & history">
+                  <td><strong>#SOS-2024-00126</strong></td>
+                  <td class="medical">&hearts; Medical Assistance</td>
+                  <td>Sports Complex - Basketball Court</td>
+                  <td>Beta Team 1</td>
+                  <td>5 min ago</td>
+                  <td><em class="status ongoing">On Going</em></td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('Assigned Beta Team to incident.')">Assign</button></td>
+                </tr>
+                <tr data-status="active">
+                  <td><strong>#SOS-2024-00125</strong></td>
+                  <td class="medical">&hearts; Severe Medical Call</td>
+                  <td>Student Center Plaza (2nd Floor)</td>
+                  <td>Alpha Team 1</td>
+                  <td>2 min ago</td>
+                  <td><em class="status active">Active</em></td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('Viewing live responder tracking.')">Track Unit</button></td>
+                </tr>
+                <tr data-status="active">
+                  <td><strong>#SOS-2024-00124</strong></td>
+                  <td class="security">&#9670; Suspicious Activity</td>
+                  <td>Library Building Main Entrance</td>
+                  <td>Security Unit 2</td>
+                  <td>8 min ago</td>
+                  <td><em class="status active">Active</em></td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('Opening incident report dispatch.')">Details</button></td>
+                </tr>
+                <tr data-status="resolved">
+                  <td><strong>#SOS-2024-00123</strong></td>
+                  <td class="security">&#9670; Fire Alarm Drill</td>
+                  <td>Administrative Building</td>
+                  <td>Bravo Team 2</td>
+                  <td>15 min ago</td>
+                  <td><em class="status resolved">Resolved</em></td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('Incident archived.')">View Log</button></td>
+                </tr>
+                <tr data-status="resolved">
+                  <td><strong>#SOS-2024-00122</strong></td>
+                  <td class="medical">&hearts; Dehydration / Faint</td>
+                  <td>University Track Oval</td>
+                  <td>Medical Station A</td>
+                  <td>1 hour ago</td>
+                  <td><em class="status resolved">Resolved</em></td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('Incident archived.')">View Log</button></td>
+                </tr>
+                <tr data-status="resolved">
+                  <td><strong>#SOS-2024-00121</strong></td>
+                  <td class="security">&#9670; Lost ID &amp; Belongings</td>
+                  <td>Academic Building 1</td>
+                  <td>Security Desk</td>
+                  <td>3 hours ago</td>
+                  <td><em class="status resolved">Resolved</em></td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('Incident archived.')">View Log</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 4: ALERTS CENTER ================= -->
+        <section class="dashboard-view" id="view-alerts">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9679;</span> Notifications &amp; Emergency Alert Feed</h1>
+              <p>Campus-wide safety broadcast alerts and high-priority distress signals.</p>
+            </div>
+            <div class="view-actions">
+              <button class="filter-btn active" type="button" onclick="showToast('Broadcast dialog opened.')">+ Send Broadcast Alert</button>
+            </div>
+          </div>
+
+          <div class="dashboard-panel" style="max-width: 800px;">
+            <div class="alert-tabs" role="tablist">
+              <button class="active" type="button" role="tab" aria-selected="true" data-alert-filter="all">All Alerts</button>
+              <button type="button" role="tab" aria-selected="false" data-alert-filter="urgent">Urgent</button>
+              <button type="button" role="tab" aria-selected="false" data-alert-filter="medical">Medical</button>
+              <button type="button" role="tab" aria-selected="false" data-alert-filter="security">Security</button>
+              <button type="button" role="tab" aria-selected="false" data-alert-filter="vicinity">Campus Vicinity</button>
+            </div>
+
+            <article class="alert-item ongoing" style="margin: 14px;" data-status="ongoing" data-alert-type="medical">
+              <div>
+                <strong class="medical">&hearts; Immediate Medical Emergency</strong>
+                <small>Today &bull; 14:32:15</small>
+              </div>
+              <h3>ICD_00106 &mdash; Student Center Plaza (2nd Floor) <em class="ongoing"> ON GOING </em></h3>
+              <p>Student reported severe asthma attack. Emergency oxygen requested. ETA 45 seconds.</p>
+              <footer class="ongoing">&clubs; Awaiting Unit Assignment <b>&rsaquo;</b></footer>
+            </article>
+
+            <article class="alert-item active urgent" style="margin: 14px;" data-status="active" data-alert-type="security">
+              <div>
+                <strong class="security">&#9670; Campus Perimeter Alert</strong>
+                <small>Today &bull; 12:50:38</small>
+              </div>
+              <h3>ICD_00105 &mdash; J.P. Rizal Ext. Campus Gate <em class="active"> ACTIVE </em></h3>
+              <p>Vehicle fender collision outside campus entrance. Traffic assistance deployed.</p>
+              <footer class="active">&#9888; High Priority Emergency <b>&rsaquo;</b></footer>
+            </article>
+
+            <article class="alert-item active" style="margin: 14px;" data-status="active" data-alert-type="vicinity">
+              <div>
+                <strong>&#9678; Campus Vicinity Alert</strong>
+                <small>Today &bull; 12:05:44</small>
+              </div>
+              <h3>VIC_0001 &mdash; Campus Boundary <em class="active"> ACTIVE </em></h3>
+              <p>Activity detected near the campus boundary requiring safety review.</p>
+              <footer class="active">&#9888; Activity near campus boundary <b>&rsaquo;</b></footer>
+            </article>
+
+            <article class="alert-item ongoing responder" style="margin: 14px;" data-status="ongoing" data-alert-type="security">
+              <div>
+                <strong class="security">&#9673; Patrol Unit Deployment</strong>
+                <small>Today &bull; 11:15:20</small>
+              </div>
+              <h3>RSP_00245 &mdash; Main Gate Perimeter <em class="ongoing"> ON GOING </em></h3>
+              <p>Patrol unit active. Field officers conducting safety sweep.</p>
+              <footer class="ongoing">&clubs; Alpha Team 1 En Route <b>&rsaquo;</b></footer>
+            </article>
+
+            <article class="alert-item resolved" style="margin: 14px;" data-status="resolved" data-alert-type="medical">
+              <div>
+                <strong class="medical">&hearts; Medical Treatment Completed</strong>
+                <small>Today &bull; 10:21:17</small>
+              </div>
+              <h3>ICD_00103 &mdash; Gymnasium Clinic <em class="resolved"> RESOLVED </em></h3>
+              <p>Sports injury treated by campus nurse. Student discharged safely.</p>
+              <footer class="resolved">&clubs; Clinic Staff Closed <b>&rsaquo;</b></footer>
+            </article>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 5: USERS MANAGEMENT ================= -->
+        <section class="dashboard-view" id="view-users">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9673;</span> Administrative User Directory</h1>
+              <p>Manage system administrators, security leads, and campus responders.</p>
+            </div>
+            <div class="view-actions">
+              <button class="filter-btn active" type="button" onclick="showToast('Add user dialog opened.')">+ Add Administrator</button>
+            </div>
+          </div>
+
+          <div class="dashboard-panel">
+            <div class="panel-toolbar">
+              <div class="search-box">
+                <span>&#128269;</span>
+                <input id="userSearchInput" type="text" placeholder="Search by name, role or email...">
+              </div>
+              <div class="filter-tags">
+                <button class="filter-btn active" type="button">All (6)</button>
+                <button class="filter-btn" type="button">System Admin (2)</button>
+                <button class="filter-btn" type="button">Responders (4)</button>
+              </div>
+            </div>
+            <table id="fullUsersTable">
+              <thead>
+                <tr>
+                  <th>ADMIN USER</th>
+                  <th>EMAIL ADDRESS</th>
+                  <th>ASSIGNED ROLE</th>
+                  <th>STATUS</th>
+                  <th>LAST ACTIVE</th>
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>&#9673; Jolhehem Billones</strong></td>
+                  <td>jbillones@umak.edu.ph</td>
+                  <td>System Administrator</td>
+                  <td class="online">Online</td>
+                  <td>2 mins ago</td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('User profile opened.')">Edit</button></td>
+                </tr>
+                <tr>
+                  <td><strong>&#9673; Maria Santos</strong></td>
+                  <td>msantos@umak.edu.ph</td>
+                  <td>Administrator</td>
+                  <td class="online">Online</td>
+                  <td>5 mins ago</td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('User profile opened.')">Edit</button></td>
+                </tr>
+                <tr>
+                  <td><strong>&#9673; John Dela Cruz</strong></td>
+                  <td>jdelacruz@umak.edu.ph</td>
+                  <td>Operator</td>
+                  <td class="away">Away</td>
+                  <td>20 mins ago</td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('User profile opened.')">Edit</button></td>
+                </tr>
+                <tr>
+                  <td><strong>&#9673; Captain Ronald Cruz</strong></td>
+                  <td>rcruz@umak.edu.ph</td>
+                  <td>Safety HEAD</td>
+                  <td class="online">Online</td>
+                  <td>12 mins ago</td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('User profile opened.')">Edit</button></td>
+                </tr>
+                <tr>
+                  <td><strong>&#9673; Nurse Elena Garcia</strong></td>
+                  <td>egarcia@umak.edu.ph</td>
+                  <td>Medical Responder</td>
+                  <td class="online">Online</td>
+                  <td>1 min ago</td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('User profile opened.')">Edit</button></td>
+                </tr>
+                <tr>
+                  <td><strong>&#9673; Officer Carlo Tan</strong></td>
+                  <td>ctan@umak.edu.ph</td>
+                  <td>Field Responder</td>
+                  <td class="offline">Offline</td>
+                  <td>2 hours ago</td>
+                  <td><button type="button" class="filter-btn" onclick="showToast('User profile opened.')">Edit</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 6: TEAMS ================= -->
+        <section class="dashboard-view" id="view-teams">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9673;</span> Emergency Response Teams</h1>
+              <p>Active deployment teams, assigned zones, on-duty personnel, and radio channels.</p>
+            </div>
+            <div class="view-actions">
+              <button class="filter-btn active" type="button" onclick="showToast('Create team dialog opened.')">+ Create New Team</button>
+            </div>
+          </div>
+
+          <div class="teams-grid">
+            <div class="team-card">
+              <div class="team-card-header">
+                <h3>Alpha Patrol Unit 1</h3>
+                <span class="team-badge active">ON PATROL</span>
+              </div>
+              <div class="team-info-list">
+                <div><span>Leader:</span> <strong>Officer Carlo Tan</strong></div>
+                <div><span>Members:</span> <strong>4 Officers</strong></div>
+                <div><span>Coverage Area:</span> <strong>Main Gate &amp; Quadrangle</strong></div>
+                <div><span>Active Task:</span> <strong class="online">Patrolling J.P. Rizal Gate</strong></div>
+              </div>
+              <button type="button" class="filter-btn" onclick="showToast('Contacting Alpha Patrol Unit...')">Dispatch Radio &rarr;</button>
+            </div>
+
+            <div class="team-card">
+              <div class="team-card-header">
+                <h3>Beta Medical Response</h3>
+                <span class="team-badge active">ACTIVE CALL</span>
+              </div>
+              <div class="team-info-list">
+                <div><span>Leader:</span> <strong>Nurse Elena Garcia</strong></div>
+                <div><span>Members:</span> <strong>3 EMT Personnel</strong></div>
+                <div><span>Coverage Area:</span> <strong>Sports Complex &amp; Clinic</strong></div>
+                <div><span>Active Task:</span> <strong class="medical">#SOS-2024-00126</strong></div>
+              </div>
+              <button type="button" class="filter-btn" onclick="showToast('Contacting Beta Medical...')">Dispatch Radio &rarr;</button>
+            </div>
+
+            <div class="team-card">
+              <div class="team-card-header">
+                <h3>Gamma Campus Safety</h3>
+                <span class="team-badge standby">STANDBY</span>
+              </div>
+              <div class="team-info-list">
+                <div><span>Leader:</span> <strong>Lead Officer Ramon Reyes</strong></div>
+                <div><span>Members:</span> <strong>5 Safety Officers</strong></div>
+                <div><span>Coverage Area:</span> <strong>Dormitory Buildings &amp; Oval</strong></div>
+                <div><span>Active Task:</span> <strong>Routine Standby</strong></div>
+              </div>
+              <button type="button" class="filter-btn" onclick="showToast('Contacting Gamma Team...')">Dispatch Radio &rarr;</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 7: REPORTS & ANALYTICS ================= -->
+        <section class="dashboard-view" id="view-reports">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9636;</span> Incident Analytics &amp; Reports</h1>
+              <p>Monthly response performance, emergency resolution benchmarks, and safety compliance logs.</p>
+            </div>
+            <div class="view-actions">
+              <button class="filter-btn active" type="button" onclick="showToast('Exporting PDF summary report...')">Download PDF</button>
+            </div>
+          </div>
+
+          <div class="dashboard-panel">
+            <div class="reports-stats-grid">
+              <div class="stat-box">
+                <span>Avg. Emergency Response Time</span>
+                <strong>2.4 min</strong>
+                <small>&darr; 18% faster than benchmark</small>
+              </div>
+              <div class="stat-box">
+                <span>Total Incidents (This Month)</span>
+                <strong>48</strong>
+                <small>&uarr; 3 alerts this week</small>
+              </div>
+              <div class="stat-box">
+                <span>Incident Resolution Rate</span>
+                <strong>98.2%</strong>
+                <small>47 of 48 cases resolved safely</small>
+              </div>
+            </div>
+
+            <div style="padding: 18px; border-top: 1px solid #edf0ee;">
+              <h3 style="font-size: 13px; color: #183e35; margin: 0 0 10px;">Monthly Incident Breakdown</h3>
+              <p style="font-size: 10px; color: #697871; margin-bottom: 14px;">Data verified across University of Makati campus safety zones.</p>
+              <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 180px; padding: 12px; background: #fafbfb; border: 1px solid #e3eae5; border-radius: 6px;">
+                  <strong style="color: #ed3942; font-size: 18px;">62%</strong>
+                  <span style="display: block; font-size: 10px; color: #556660; margin-top: 4px;">Medical Requests</span>
+                </div>
+                <div style="flex: 1; min-width: 180px; padding: 12px; background: #fafbfb; border: 1px solid #e3eae5; border-radius: 6px;">
+                  <strong style="color: #25845d; font-size: 18px;">26%</strong>
+                  <span style="display: block; font-size: 10px; color: #556660; margin-top: 4px;">Security &amp; Welfare Checks</span>
+                </div>
+                <div style="flex: 1; min-width: 180px; padding: 12px; background: #fafbfb; border: 1px solid #e3eae5; border-radius: 6px;">
+                  <strong style="color: #e69a25; font-size: 18px;">12%</strong>
+                  <span style="display: block; font-size: 10px; color: #556660; margin-top: 4px;">Traffic &amp; Drill Procedures</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 8: AUDIT LOGS ================= -->
+        <section class="dashboard-view" id="view-audit">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9881;</span> Administrative Audit Logs</h1>
+              <p>Immutable log of administrator sign-ins, dispatch decisions, and security credential changes.</p>
+            </div>
+            <div class="view-actions">
+              <button class="filter-btn active" type="button" onclick="showToast('Exporting audit trail to CSV...')">Export Audit Trail</button>
+            </div>
+          </div>
+
+          <div class="dashboard-panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>TIMESTAMP</th>
+                  <th>USER ACCOUNT</th>
+                  <th>ACTION / EVENT</th>
+                  <th>IP / CLIENT</th>
+                  <th>OUTCOME</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2026-09-04 22:50:12</td>
+                  <td>jbillones@umak.edu.ph</td>
+                  <td>Admin Portal Login (Verified 2FA)</td>
+                  <td>192.168.1.45 (Windows PC)</td>
+                  <td><span class="audit-badge success">SUCCESS</span></td>
+                </tr>
+                <tr>
+                  <td>2026-09-04 22:32:05</td>
+                  <td>msantos@umak.edu.ph</td>
+                  <td>Assigned Team Beta to #SOS-2024-00126</td>
+                  <td>192.168.1.18 (Console)</td>
+                  <td><span class="audit-badge auth">DISPATCHED</span></td>
+                </tr>
+                <tr>
+                  <td>2026-09-04 21:14:50</td>
+                  <td>system_cron</td>
+                  <td>Daily Telemetry Health Check</td>
+                  <td>127.0.0.1 (Server Daemon)</td>
+                  <td><span class="audit-badge success">COMPLETED</span></td>
+                </tr>
+                <tr>
+                  <td>2026-09-04 19:40:11</td>
+                  <td>jdelacruz@umak.edu.ph</td>
+                  <td>Account Status Review: Pending HEAD Approved</td>
+                  <td>192.168.1.62 (Web)</td>
+                  <td><span class="audit-badge success">APPROVED</span></td>
+                </tr>
+                <tr>
+                  <td>2026-09-04 17:05:22</td>
+                  <td>guest_auth</td>
+                  <td>Failed Login Attempt (Invalid OTP)</td>
+                  <td>112.198.70.12 (Mobile)</td>
+                  <td><span class="audit-badge alert">BLOCKED</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 9: SYSTEM SETTINGS ================= -->
+        <section class="dashboard-view" id="view-settings">
+          <div class="view-header">
+            <div>
+              <h1><span>&#9881;</span> Campus Safety &amp; System Settings</h1>
+              <p>Configure emergency radius thresholds, automated SMS broadcasts, and dispatch routing.</p>
+            </div>
+            <div class="view-actions">
+              <button class="filter-btn active" type="button" onclick="showToast('Configuration settings saved.')">Save Changes</button>
+            </div>
+          </div>
+
+          <div class="settings-grid">
+            <div class="settings-card">
+              <h3>Geofence Safety Zone</h3>
+              <p>Radius within which student mobile alerts trigger priority dispatch.</p>
+              <div class="setting-row">
+                <span>Campus Radius (350m)</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <span>Auto-detect off-campus emergencies</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <h3>Emergency Notifications</h3>
+              <p>Real-time audio sirens and instant responder SMS alerts.</p>
+              <div class="setting-row">
+                <span>High-priority Siren Audio</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <span>SMS Dispatch Notifications</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <h3>Authentication &amp; Security</h3>
+              <p>Two-factor authentication and session management policies.</p>
+              <div class="setting-row">
+                <span>Require 2FA Email OTP</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <span>Auto Session Timeout (30 min)</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked>
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <div class="alert-details-overlay" id="alertDetailsOverlay" hidden>
+    <section class="alert-details-dialog" role="dialog" aria-modal="true" aria-labelledby="alertDetailsTitle">
+      <button class="alert-details-close" id="closeAlertDetails" type="button" aria-label="Close alert details">&times;</button>
+      <div class="alert-details-header"><h2>Alert Details</h2></div>
+      <div class="alert-detail-assignee" id="alertDetailAssignee"></div>
+      <div class="alert-details-grid">
+        <div class="alert-details-main">
+          <article class="alert-detail-summary">
+            <div class="alert-detail-summary-top">
+              <span class="alert-details-kicker" id="alertDetailsKicker">ALERT</span>
+              <span class="alert-detail-incident-id" id="alertDetailsIncidentId"></span>
+            </div>
+            <h3 id="alertDetailsTitle"></h3>
+            <div class="alert-detail-summary-meta">
+              <span id="alertDetailsStatus"></span>
+              <span id="alertDetailsMeta"></span>
+            </div>
+          </article>
+          <div class="alert-detail-columns">
+            <article class="alert-detail-card">
+              <h3>Incident Information</h3>
+              <dl>
+                <div><dt>Category:</dt><dd id="alertDetailsCategory"></dd></div>
+                <div><dt>Type:</dt><dd id="alertDetailsType"></dd></div>
+                <div><dt>Status:</dt><dd id="alertDetailsStatusValue"></dd></div>
+                <div><dt>Reported:</dt><dd id="alertDetailsReported"></dd></div>
+                <div><dt>Location:</dt><dd id="alertDetailsLocation"></dd></div>
+                <div><dt>Floor:</dt><dd id="alertDetailsFloor">2nd Floor</dd></div>
+                <div><dt>Room:</dt><dd id="alertDetailsRoom">Common Plaza / Facility</dd></div>
+                <div><dt>User ID:</dt><dd id="alertDetailsUserId">10000056</dd></div>
+              </dl>
+            </article>
+            <article class="alert-detail-card alert-detail-description">
+              <h3>Description</h3>
+              <p id="alertDetailsDescription"></p>
+            </article>
+          </div>
+          <section class="alert-student-information" id="alertStudentSection">
+            <button type="button" class="alert-student-toggle" id="alertStudentToggle" aria-expanded="false" aria-controls="alertStudentFields">
+              <span class="student-toggle-title"><strong>&#9679;</strong> Student Information</span>
+              <span class="student-toggle-badge" id="studentToggleAction">
+                <span class="action-text">Show More</span>
+                <span class="action-arrow" aria-hidden="true">&#9662;</span>
+              </span>
+            </button>
+            <div class="alert-student-fields" id="alertStudentFields">
+              <div class="alert-student-content">
+                <div><span>Name:</span><strong id="alertStudentName">Jolhehem Billones</strong></div>
+                <div><span>Age:</span><strong id="alertStudentAge">20</strong></div>
+                <div><span>Year Level:</span><strong id="alertStudentYear">2nd Year</strong></div>
+                <div><span>College:</span><strong id="alertStudentCollege">College of Health Sciences</strong></div>
+                <div><span>Contact Number:</span><strong id="alertStudentContact">0917 123 4567</strong></div>
+                <div><span>Address:</span><strong id="alertStudentAddress">University of Makati Campus Residence</strong></div>
+                <div class="alert-contact-group">
+                  <h4>Primary Emergency Contact</h4>
+                  <div><span>Name:</span><strong id="alertStudentPrimaryName">Maria Billones</strong></div>
+                  <div><span>Contact Number:</span><strong id="alertStudentPrimaryContact">0918 234 5678</strong></div>
+                  <div><span>Address:</span><strong id="alertStudentPrimaryAddress">Taguig City, Metro Manila</strong></div>
+                </div>
+                <div class="alert-contact-group">
+                  <h4>Secondary Emergency Contact</h4>
+                  <div><span>Name:</span><strong id="alertStudentSecondaryName">Jose Billones</strong></div>
+                  <div><span>Contact Number:</span><strong id="alertStudentSecondaryContact">0920 345 6789</strong></div>
+                  <div><span>Address:</span><strong id="alertStudentSecondaryAddress">Makati City, Metro Manila</strong></div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="alert-history-information" id="alertHistorySection">
+            <button type="button" class="alert-history-toggle" id="alertHistoryToggle" aria-expanded="false" aria-controls="alertHistoryFields">
+              <span class="history-toggle-title"><strong>&#9679;</strong> Incident History &amp; Timeline</span>
+              <span class="history-toggle-badge" id="historyToggleAction">
+                <span class="action-text">Show More</span>
+                <span class="action-arrow" aria-hidden="true">&#9662;</span>
+              </span>
+            </button>
+            <div class="alert-history-fields" id="alertHistoryFields">
+              <div class="alert-history-content">
+                <div class="alert-track-list" id="alertTrackList">
+                  <div class="track-step complete"><i></i><strong>Reported</strong><time>Dec 03, 2025 04:42:44 PM</time></div>
+                  <div class="track-step complete"><i></i><strong>Acknowledged</strong><time>Dec 03, 2025 04:50:09 PM</time></div>
+                  <div class="track-step complete"><i></i><strong>In Progress</strong><time>Dec 03, 2025 04:50:09 PM</time></div>
+                  <div class="track-step"><i></i><strong>Resolved</strong><time>&mdash;</time></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="alert-detail-map" id="alertDetailMap" aria-label="Alert location map"></div>
+      </div>
+      <div class="alert-details-footer">
+        <button type="button" onclick="showToast('Opening student chat.')">&#128172; Chat Student</button>
+        <button type="button" class="cancel-action" onclick="showToast('Alert marked as cancelled.')">&#10005; Mark as Cancelled</button>
+        <button type="button" class="resolve-action" onclick="showToast('Alert marked as resolved.')">&#10003; Mark Resolved</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Global Toast Notification Banner -->
+  <div class="toast" id="toast" role="status">Welcome to Heron's Emergency Alert Dashboard.</div>
+
+  <!-- Leaflet Map JS and Dashboard Logic -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="/dashboard.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "herons-emergency-alert-system",
+  "version": "1.0.0",
+  "description": "University of Makati Heron's Emergency Alert System landing page",
+  "main": "server.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.2",
+    "nodemailer": "^7.0.6"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "fast-check": "^4.9.0",
+    "jest": "^30.5.0",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.11"
+  }
+}
