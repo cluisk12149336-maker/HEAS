@@ -43,14 +43,100 @@ const mailer = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMT
   ? nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS.replace(/\s/g, '') } })
   : null;
 
+function isEmailConfigured() {
+  return Boolean(process.env.EMAIL_WEBHOOK_URL || process.env.BREVO_API_KEY || process.env.RESEND_API_KEY || mailer);
+}
+
+async function sendSystemEmail({ from, to, subject, text, html }) {
+  const sender = from || process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@umak.edu.ph';
+
+  // 1. Google Apps Script Webhook (HTTPS port 443 — works on Render free tier without SMTP blocking)
+  if (process.env.EMAIL_WEBHOOK_URL) {
+    try {
+      const resp = await fetch(process.env.EMAIL_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, text, html, from: sender })
+      });
+      console.log(`[Email Webhook sent] to ${to} (status: ${resp.status})`);
+      return true;
+    } catch (err) {
+      console.error(`[Email Webhook error] failed sending to ${to}:`, err.message);
+    }
+  }
+
+  // 2. Brevo API (HTTPS port 443 — 300 free emails/day, no credit card)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: "Heron's Emergency Alert System", email: process.env.SMTP_USER || 'heas.headsos@gmail.com' },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text
+        })
+      });
+      console.log(`[Brevo API sent] to ${to} (status: ${resp.status})`);
+      return true;
+    } catch (err) {
+      console.error(`[Brevo API error] failed sending to ${to}:`, err.message);
+    }
+  }
+
+  // 3. Resend API (HTTPS port 443)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM || "Heron's Alert <onboarding@resend.dev>",
+          to: [to],
+          subject,
+          html,
+          text
+        })
+      });
+      console.log(`[Resend API sent] to ${to} (status: ${resp.status})`);
+      return true;
+    } catch (err) {
+      console.error(`[Resend API error] failed sending to ${to}:`, err.message);
+    }
+  }
+
+  // 4. Nodemailer SMTP (Local development or SMTP-permitted servers)
+  if (mailer) {
+    try {
+      const info = await mailer.sendMail({ from: sender, to, subject, text, html });
+      console.log(`[SMTP email sent] to ${to} (messageId: ${info.messageId})`);
+      return true;
+    } catch (err) {
+      console.error(`[SMTP email error] failed sending to ${to}:`, err.message);
+      return false;
+    }
+  }
+
+  console.log(`[Email demo fallback] ${to}: ${subject}`);
+  return false;
+}
+
 async function deliverOtp(email, otp, subject = "Your Heron's Emergency Alert System verification code") {
-  if (!mailer) {
+  if (!isEmailConfigured()) {
     console.log(`[OTP demo] ${email}: ${otp} (expires in 5 minutes)`);
     return false;
   }
 
   const safeOtp = String(otp || '').trim();
-  const info = await mailer.sendMail({
+  const sent = await sendSystemEmail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: email,
     subject,
@@ -98,17 +184,16 @@ async function deliverOtp(email, otp, subject = "Your Heron's Emergency Alert Sy
       </div>
     `
   });
-  console.log(`[OTP email sent] ${email} (messageId: ${info.messageId})`);
-  return true;
+  return sent;
 }
 
 async function deliverAccountConfirmation(email, employeeId, employeeName, employeeRole, employeeStatus) {
-  if (!mailer) {
+  if (!isEmailConfigured()) {
     console.log(`[Account confirmation demo] ${email} (ID: ${employeeId}, Role: ${employeeRole}, Status: ${employeeStatus})`);
     return false;
   }
 
-  const info = await mailer.sendMail({
+  const sent = await sendSystemEmail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: email,
     subject: "Your Account Request Has Been Received - Heron's Emergency Alert System",
@@ -175,8 +260,7 @@ async function deliverAccountConfirmation(email, employeeId, employeeName, emplo
       </div>
     `
   });
-  console.log(`[Account confirmation email sent] ${email} (Employee ID: ${employeeId}, messageId: ${info.messageId})`);
-  return true;
+  return sent;
 }
 
 function createChallenge(account) {
@@ -301,12 +385,12 @@ async function provisionNewOAuthAccount(email, name, googleSub) {
 
 // Helper: Send admin notification email
 async function deliverAdminNotification(userEmail, userName, userRole, employeeId) {
-  if (!mailer) {
+  if (!isEmailConfigured()) {
     console.log(`[Admin notification demo] New OAuth account pending approval: ${userEmail} (${employeeId})`);
     return false;
   }
   
-  const info = await mailer.sendMail({
+  const sent = await sendSystemEmail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: process.env.SMTP_FROM || process.env.SMTP_USER,
     subject: "New Account Pending Approval - Heron's Emergency Alert System",
@@ -360,19 +444,17 @@ async function deliverAdminNotification(userEmail, userName, userRole, employeeI
       </div>
     `
   });
-  
-  console.log(`[Admin notification email sent] for ${userEmail} (messageId: ${info.messageId})`);
-  return true;
+  return sent;
 }
 
 // Helper: Send account approval email
 async function deliverApprovalNotification(userEmail, userName) {
-  if (!mailer) {
+  if (!isEmailConfigured()) {
     console.log(`[Approval notification demo] Account approved for ${userEmail}`);
     return false;
   }
   
-  const info = await mailer.sendMail({
+  const sent = await sendSystemEmail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: userEmail,
     subject: "Your Account Has Been Approved - Heron's Emergency Alert System",
@@ -412,9 +494,7 @@ async function deliverApprovalNotification(userEmail, userName) {
       </div>
     `
   });
-  
-  console.log(`[Approval notification email sent] to ${userEmail} (messageId: ${info.messageId})`);
-  return true;
+  return sent;
 }
 
 // Helper: Decode JWT (simplified for Google ID tokens)
@@ -500,7 +580,7 @@ const server = http.createServer((request, response) => {
       failedLoginAttempts.delete(account.employee_email);
       const { challengeId, challenge } = createChallenge(account);
       await deliverOtp(account.employee_email, challenge.otp);
-      sendJson(response, 200, { challengeId, email: account.employee_email, expiresIn: 300, emailSent: Boolean(mailer) });
+      sendJson(response, 200, { challengeId, email: account.employee_email, expiresIn: 300, emailSent: isEmailConfigured() });
     }).catch((error) => { console.error('Login or OTP email error:', error.message); sendJson(response, 502, { error: `Unable to send verification email: ${error.message}` }); });
     return;
   }
@@ -515,7 +595,7 @@ const server = http.createServer((request, response) => {
       challenge.expires = Date.now() + 5 * 60 * 1000;
       challenge.lastSent = Date.now();
       await deliverOtp(challenge.account.employee_email, nextOtp);
-      sendJson(response, 200, { email: challenge.account.employee_email, emailSent: Boolean(mailer), expiresIn: 300 });
+      sendJson(response, 200, { email: challenge.account.employee_email, emailSent: isEmailConfigured(), expiresIn: 300 });
     }).catch((error) => { console.error('OTP email error:', error.message); sendJson(response, 502, { error: 'Unable to send the verification email.' }); });
     return;
   }
@@ -553,7 +633,7 @@ const server = http.createServer((request, response) => {
         console.error('Password reset resend email error:', error.message);
       });
 
-      sendJson(response, 200, { email: reset.email, emailSent: Boolean(mailer), expiresIn: 300 });
+      sendJson(response, 200, { email: reset.email, emailSent: isEmailConfigured(), expiresIn: 300 });
     }).catch((error) => {
       console.error('Resend password reset error:', error.message);
       sendJson(response, 502, { error: 'Unable to send the verification email.' });
