@@ -711,123 +711,12 @@ function initIncidentMap() {
   if (!mapElement) return;
 
   const umak = [14.5628, 121.0561];
-  const mapMarkers = [];
   incidentMap = L.map(mapElement, { zoomControl: false }).setView(umak, 15);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(incidentMap);
-
-  const createMarker = (position, color, label, incidentData) => {
-    const icon = L.divIcon({
-      className: 'incident-pin',
-      html: `
-        <div class="incident-marker-badge" style="--pin-color:${color}">
-          <span class="pin-label">${label}</span>
-        </div>
-      `,
-      iconSize: [40, 40],
-      iconAnchor: [20, 40],
-      popupAnchor: [0, -35]
-    });
-
-    const popupContent = `
-      <div class="incident-popup-card">
-        <div class="popup-header">
-          <div class="status-tag" style="background:${color}20;border-left:3px solid ${color}">
-            <span class="pulse-dot" style="background:${color}"></span> ${incidentData.status}
-          </div>
-          <span class="incident-id">#${incidentData.id}</span>
-        </div>
-        <div class="popup-content">
-          <div class="content-header">
-            <strong>${incidentData.type}</strong>
-            <small>${incidentData.time}</small>
-          </div>
-          <div class="details-table">
-            <div class="detail-row">
-              <span class="label">Type:</span>
-              <span class="value">${incidentData.category}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Location:</span>
-              <span class="value">${incidentData.location}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Distance:</span>
-              <span class="value">${incidentData.distance}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Team:</span>
-              <span class="value" style="color:#159653;font-weight:bold;">${incidentData.team}</span>
-            </div>
-          </div>
-          <div class="popup-action">
-            <button type="button" onclick="openIncidentDetails('${incidentData.id}')">View Details &rarr;</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const marker = L.marker(position, { icon }).addTo(incidentMap).bindPopup(popupContent, { maxWidth: 280 });
-    mapMarkers.push({ marker, status: incidentData.status.toLowerCase(), data: incidentData });
-  };
-
-  createMarker([14.5631, 121.0565], '#ed3942', '!', {
-    id: 'MED_0001',
-    status: 'ACTIVE',
-    type: 'Medical Emergency',
-    category: 'Acute Respiratory Distress',
-    time: '4 min ago • 16:49:30',
-    location: 'UMak Student Center Plaza (2nd Floor)',
-    distance: '0m from UMAK',
-    team: 'Alpha Team 1 (ETA: 45s)'
-  });
-
-  createMarker([14.5620, 121.0550], '#eab308', '3', {
-    id: 'SEC_0001',
-    status: 'ON GOING',
-    type: 'Perimeter Security Alert',
-    category: 'Gate Traffic Hazard & Perimeter Control',
-    time: '23 min ago • 12:50:38',
-    location: 'J.P. Rizal Campus Gate (Patrol Unit)',
-    distance: '175m from incident',
-    team: 'Alpha Team 1'
-  });
-
-  createMarker([14.5615, 121.0575], '#eab308', '!', {
-    id: 'VIC_0001',
-    status: 'ON GOING',
-    type: 'Security Review',
-    category: 'Suspicious Activity Report',
-    time: '8 min ago • 14:24:30',
-    location: 'Library Building Main Entrance',
-    distance: '280m from UMAK',
-    team: 'Awaiting Assignment'
-  });
-
-  createMarker([14.5645, 121.0555], '#16a34a', '✓', {
-    id: 'CAMP_0001',
-    status: 'RESOLVED',
-    type: 'Gymnasium Minor Sports Injury',
-    category: 'Clinical First Aid Treatment',
-    time: '1 hour ago • 10:21:17',
-    location: 'Gymnasium Clinic',
-    distance: '120m from UMAK',
-    team: 'Bravo Team 2'
-  });
-
-  createMarker([14.5610, 121.0545], '#ed3942', 'i', {
-    id: 'URG_0001',
-    status: 'ACTIVE',
-    type: 'Medical Assistance',
-    category: 'Minor Injury Report',
-    time: '1 hour ago • 10:21:17',
-    location: 'Sports Complex - Basketball Court',
-    distance: '450m from UMAK',
-    team: 'Beta Team 1 (ETA: 2m)'
-  });
 
   // Campus boundary circle
   L.circle(umak, {
@@ -859,18 +748,19 @@ function initIncidentMap() {
     menuToggle.setAttribute('aria-expanded', String(isOpen));
   });
 
+  // Filter Live Markers
   menuItems.forEach((item) => {
     item.addEventListener('click', () => {
       const filter = item.dataset.mapFilter;
       if (filter === 'center') {
         incidentMap.setView(umak, 15);
       } else {
-        mapMarkers.forEach(({ marker, status }) => {
+        const markersArray = window.overviewMapMarkers || [];
+        markersArray.forEach(({ marker, data }) => {
+          const status = (data.status || '').toLowerCase().replace(/[^a-z]/g, '');
           const matches = filter === 'all'
-            || (filter === 'active' && status.includes('active'))
-            || (filter === 'ongoing' && (status.includes('ongoing') || status.includes('on going') || status.includes('pending')))
-            || (filter === 'resolved' && status.includes('resolved'))
-            || status.includes(filter);
+            || (filter === 'active' && status === 'active')
+            || (filter === 'ongoing' && (status === 'ongoing' || status === 'pending'));
           if (matches) marker.addTo(incidentMap);
           else incidentMap.removeLayer(marker);
         });
@@ -890,131 +780,18 @@ function initIncidentMap() {
   window.addEventListener('resize', () => incidentMap.invalidateSize());
   setTimeout(() => incidentMap.invalidateSize(), 200);
 }
-
-// 3b. Live Interactive Map View Initialization (Live Map Tab)
 function initLiveIncidentMap() {
   if (liveIncidentMap || typeof L === 'undefined') return;
   const mapElement = document.querySelector('#liveMapCanvas');
   if (!mapElement) return;
 
   const umak = [14.5628, 121.0561];
-  const liveMarkers = [];
   liveIncidentMap = L.map(mapElement, { zoomControl: false }).setView(umak, 15);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(liveIncidentMap);
-
-  const createMarker = (position, color, label, incidentData) => {
-    const icon = L.divIcon({
-      className: 'incident-pin',
-      html: `
-        <div class="incident-marker-badge" style="--pin-color:${color}">
-          <span class="pin-label">${label}</span>
-        </div>
-      `,
-      iconSize: [40, 40],
-      iconAnchor: [20, 40],
-      popupAnchor: [0, -35]
-    });
-
-    const popupContent = `
-      <div class="incident-popup-card">
-        <div class="popup-header">
-          <div class="status-tag" style="background:${color}20;border-left:3px solid ${color}">
-            <span class="pulse-dot" style="background:${color}"></span> ${incidentData.status}
-          </div>
-          <span class="incident-id">#${incidentData.id}</span>
-        </div>
-        <div class="popup-content">
-          <div class="content-header">
-            <strong>${incidentData.type}</strong>
-            <small>${incidentData.time}</small>
-          </div>
-          <div class="details-table">
-            <div class="detail-row">
-              <span class="label">Type:</span>
-              <span class="value">${incidentData.category}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Location:</span>
-              <span class="value">${incidentData.location}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Distance:</span>
-              <span class="value">${incidentData.distance}</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">Team:</span>
-              <span class="value" style="color:#159653;font-weight:bold;">${incidentData.team}</span>
-            </div>
-          </div>
-          <div class="popup-action">
-            <button type="button" onclick="openIncidentDetails('${incidentData.id}')">View Details &rarr;</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const marker = L.marker(position, { icon }).addTo(liveIncidentMap).bindPopup(popupContent, { maxWidth: 280 });
-    liveMarkers.push({ marker, status: incidentData.status.toLowerCase(), data: incidentData });
-  };
-
-  createMarker([14.5631, 121.0565], '#ed3942', '!', {
-    id: 'MED_0001',
-    status: 'ACTIVE',
-    type: 'Medical Emergency',
-    category: 'Acute Respiratory Distress',
-    time: '4 mins ago • 16:49:30',
-    location: 'UMak Student Center Plaza (2nd Floor)',
-    distance: '0m from UMAK',
-    team: 'Alpha Team 1 (ETA: 45s)'
-  });
-
-  createMarker([14.5620, 121.0550], '#eab308', '!', {
-    id: 'SEC_0001',
-    status: 'ON GOING',
-    type: 'Perimeter Security Alert',
-    category: 'Gate Traffic Hazard & Perimeter Control',
-    time: '23 mins ago • 12:50:38',
-    location: 'J.P. Rizal Ext. Campus Gate',
-    distance: '175m from incident',
-    team: 'Alpha Team 1'
-  });
-
-  createMarker([14.5615, 121.0575], '#eab308', '!', {
-    id: 'VIC_0001',
-    status: 'ON GOING',
-    type: 'Security Review',
-    category: 'Suspicious Activity Report',
-    time: '8 min ago • 14:24:30',
-    location: 'Library Building Main Entrance',
-    distance: '280m from UMAK',
-    team: 'Awaiting Assignment'
-  });
-
-  createMarker([14.5645, 121.0555], '#16a34a', '✓', {
-    id: 'CAMP_0001',
-    status: 'RESOLVED',
-    type: 'Gymnasium Minor Sports Injury',
-    category: 'Clinical First Aid Treatment',
-    time: '1 hour ago • 10:21:17',
-    location: 'Gymnasium Clinic',
-    distance: '120m from UMAK',
-    team: 'Bravo Team 2'
-  });
-
-  createMarker([14.5610, 121.0545], '#ed3942', '!', {
-    id: 'URG_0001',
-    status: 'ACTIVE',
-    type: 'Medical Assistance',
-    category: 'Minor Injury Report',
-    time: '1 hour ago • 10:21:17',
-    location: 'Sports Complex - Basketball Court',
-    distance: '450m from UMAK',
-    team: 'Beta Team 1 (ETA: 2m)'
-  });
 
   // Campus boundary circle
   L.circle(umak, {
@@ -1036,7 +813,7 @@ function initLiveIncidentMap() {
     });
   });
 
-  // Filter tags
+  // Filter tags tied to dynamic markers
   const filterBtns = document.querySelectorAll('#liveMapFilterTags button');
   filterBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1044,23 +821,25 @@ function initLiveIncidentMap() {
       btn.classList.add('active');
       const filter = btn.dataset.liveFilter || 'all';
 
-      liveMarkers.forEach(({ marker, status }) => {
+      const markersArray = window.liveMapMarkers || [];
+      markersArray.forEach(({ marker, data }) => {
+        const status = (data.status || '').toLowerCase().replace(/[^a-z]/g, '');
         const matches = filter === 'all'
-          || (filter === 'active' && status.includes('active'))
-          || (filter === 'ongoing' && (status.includes('ongoing') || status.includes('on going') || status.includes('pending')))
-          || (filter === 'resolved' && status.includes('resolved'));
+          || (filter === 'active' && status === 'active')
+          || (filter === 'ongoing' && (status === 'ongoing' || status === 'pending'));
         if (matches) marker.addTo(liveIncidentMap);
         else liveIncidentMap.removeLayer(marker);
       });
     });
   });
 
-  // Search input
+  // Search input tied to dynamic markers
   const searchInput = document.querySelector('#liveMapSearchInput');
   searchInput?.addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase().trim();
-    liveMarkers.forEach(({ marker, data }) => {
-      const text = `${data.id} ${data.type} ${data.category} ${data.location} ${data.team}`.toLowerCase();
+    const markersArray = window.liveMapMarkers || [];
+    markersArray.forEach(({ marker, data }) => {
+      const text = `${data.display_id || data.id} ${data.incident || data.assistance_type} ${data.location_address} ${data.responder_name}`.toLowerCase();
       if (!q || text.includes(q)) {
         marker.addTo(liveIncidentMap);
       } else {
@@ -6382,7 +6161,6 @@ function updateDynamicMapMarkers(incidents) {
 
   // 4. Plot the New Markers
   mapIncidents.forEach(incident => {
-    // Only plot if coordinates actually exist in the database
     if (!incident.latitude || !incident.longitude) return;
     
     const catLower = (incident.assistance_type || incident.category || '').toLowerCase();
@@ -6391,11 +6169,20 @@ function updateDynamicMapMarkers(incidents) {
     // Hide resolved/cancelled incidents from the active maps
     if (statLower === 'cancelled' || statLower === 'canceled' || statLower === 'resolved') return;
 
-    let color = '#ed3942'; // Default Red (Medical/Active)
-    let iconLabel = '!';
-    
-    if (catLower.includes('sec')) { color = '#eab308'; iconLabel = '🛡️'; }
-    if (catLower.includes('vicin') || catLower.includes('campus')) { color = '#2563eb'; iconLabel = '📍'; }
+    // Set Icon Based on Category
+    let iconLabel = '🚨';
+    if (catLower.includes('sec')) iconLabel = '🛡️';
+    else if (catLower.includes('vicin') || catLower.includes('campus')) iconLabel = '📍';
+    else if (catLower.includes('urg')) iconLabel = '⚠️';
+    else iconLabel = '❤️';
+
+    // Set Color Based on Status
+    let color = '#ed3942'; // Default Red (Active)
+    if (statLower === 'ongoing' || statLower === 'pending') {
+      color = '#eab308'; // Yellow for On Going
+    } else if (catLower.includes('vicin') || catLower.includes('campus')) {
+      color = '#2563eb'; // Blue for Vicinity
+    }
 
     const popupContent = `
       <div class="incident-popup-card">
@@ -6420,7 +6207,6 @@ function updateDynamicMapMarkers(incidents) {
       </div>
     `;
 
-    // Create the physical HTML pin
     const customIcon = L.divIcon({
       className: 'incident-pin',
       html: `<div style="background-color: ${color}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.4);"><span style="font-size: 14px;">${iconLabel}</span></div>`,
@@ -6429,7 +6215,6 @@ function updateDynamicMapMarkers(incidents) {
       popupAnchor: [0, -25]
     });
 
-    // Safely add to Overview Map
     if (typeof incidentMap !== 'undefined' && incidentMap !== null) {
       const oMarker = L.marker([incident.latitude, incident.longitude], { icon: customIcon })
         .addTo(incidentMap)
@@ -6437,7 +6222,6 @@ function updateDynamicMapMarkers(incidents) {
       window.overviewMapMarkers.push({ marker: oMarker, data: incident });
     }
 
-    // Safely add to Live Map
     if (typeof liveIncidentMap !== 'undefined' && liveIncidentMap !== null) {
       const lMarker = L.marker([incident.latitude, incident.longitude], { icon: customIcon })
         .addTo(liveIncidentMap)
@@ -6446,7 +6230,6 @@ function updateDynamicMapMarkers(incidents) {
     }
   });
 }
-
 
 // LIVE GPS TRACKING FOR RESPONDERS
 let responderWatchId = null;
