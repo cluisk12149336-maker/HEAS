@@ -33,7 +33,10 @@ GOOGLE_OAUTH_CLIENT_ID=ask_team_lead_for_id
 GOOGLE_OAUTH_CLIENT_SECRET=ask_team_lead_for_secret
 ```
 
-### 3. Start the Local Server
+### 3. Apply the Responder Completion Migration
+In the Supabase SQL Editor, run `database/013_add_responder_completion_report.sql` against the project database. The responder-to-HEAD review flow requires the completion report columns on `public.emergency_alerts`.
+
+### 4. Start the Local Server
 ```bash
 npm start
 ```

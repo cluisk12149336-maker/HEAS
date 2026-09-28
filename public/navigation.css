@@ -1,3 +1,4 @@
+
 /* =========================================================
    HERON'S EMERGENCY ALERT SYSTEM - GLOBAL NAVIGATION COMPONENT
    Stylesheet: navigation.css
@@ -39,6 +40,16 @@ dashboard-navigation nav {
   align-items: center;
   gap: 12px;
   width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Pinned to bottom of vertical navigation rail */
+.dashboard-sidebar a.nav-bottom,
+dashboard-navigation a.nav-bottom,
+.dashboard-sidebar a[data-view="profile"],
+dashboard-navigation a[data-view="profile"] {
+  margin-top: auto;
 }
 
 /* Navigation Item Anchor */
@@ -197,5 +208,19 @@ dashboard-navigation a:hover .nav-tooltip {
   dashboard-navigation {
     padding: 14px 4px;
     margin: 14px 4px 14px 8px;
+  }
+}
+
+@media (max-width: 700px) {
+  .dashboard-sidebar nav,
+  dashboard-navigation nav {
+    height: auto;
+  }
+
+  .dashboard-sidebar a.nav-bottom,
+  dashboard-navigation a.nav-bottom,
+  .dashboard-sidebar a[data-view="profile"],
+  dashboard-navigation a[data-view="profile"] {
+    margin-top: 0;
   }
 }

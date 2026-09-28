@@ -11,10 +11,12 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/navigation.css">
-  <link rel="stylesheet" href="/dashboard.css?v=1">
+  <link rel="stylesheet" href="/dashboard.css?v=3">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="/iconify-icon.min.js"></script>
   <script src="/nav-icons.js"></script>
   <script src="/navigation.js"></script>
+  
 </head>
 <body>
   <div class="dashboard" id="dashboard">
@@ -25,14 +27,15 @@
         <span>HERON'S EMERGENCY ALERT SYSTEM<small>Administrator Access</small></span>
       </a>
       <div class="dashboard-actions">
-        <div class="user-menu">
-          <span class="user-avatar">A</span>
-          <span>
-            <strong id="dashboardName">Administrator</strong>
+        <div class="user-menu" id="headerUserMenu" role="button" tabindex="0" title="Click to view Account / Profile" aria-label="Account Profile">
+          <span class="user-avatar" id="headerAvatarWrap">
+            <img id="headerAvatarImg" src="/images/default-avatar.png" alt="Profile Avatar">
+          </span>
+          <span class="user-menu-info">
+            <strong id="dashboardName">Jolehmeh Billones</strong>
             <small id="dashboardRole">System Administrator</small>
           </span>
         </div>
-        <button id="logoutButton" type="button" class="logout-button">Log out <span>&rarr;</span></button>
       </div>
     </header>
 
@@ -48,6 +51,9 @@
 
         <!-- ================= PAGE 1: OVERVIEW DASHBOARD ================= -->
         <section class="dashboard-view active" id="view-overview">
+          <!-- Responder Active Rescue Notification Banner on Dashboard -->
+          <div id="overviewResponderRescueBanner" class="overview-responder-rescue-banner" style="display:none;"></div>
+
           <!-- Key Metrics -->
           <div class="metric-grid">
             <article>
@@ -62,14 +68,14 @@
               <span class="metric-status people-status green-line" aria-hidden="true"></span>
             </article>
 
-            <article>
+            <article style="cursor: pointer;" onclick="navigateToIncidentsView('active_ongoing');" title="Click to view Active and On Going incidents">
               <span class="metric-icon red alert-icon" aria-hidden="true">
                 <iconify-icon icon="solar:bell-bing-bold-duotone" width="22" height="22"></iconify-icon>
               </span>
               <div>
-                <small>ACTIVE ALERTS</small>
+                <small>ACTIVE ALERTS &amp; ON GOING</small>
                 <strong id="metricActiveAlerts">2</strong>
-                <p><a href="#alerts" onclick="switchView('alerts');" style="color:inherit;text-decoration:underline;">View all</a></p>
+                <p><a href="#incidents" onclick="event.stopPropagation(); navigateToIncidentsView('active_ongoing'); return false;" style="color:inherit;text-decoration:underline;">View all</a></p>
               </div>
               <span class="metric-status alert-status red-line" aria-hidden="true"></span>
             </article>
@@ -79,9 +85,9 @@
                 <iconify-icon icon="solar:shield-check-bold-duotone" width="22" height="22"></iconify-icon>
               </span>
               <div>
-                <small>ADMIN USERS</small>
+                <small>ADMIN ACCOUNTS</small>
                 <strong id="metricAdminUsers">--</strong>
-                <p id="metricAdminSub">Database accounts</p>
+                <p id="metricAdminSub">Active employee accounts</p>
               </div>
               <span class="metric-status keyhole-status green-line" aria-hidden="true"></span>
             </article>
@@ -91,9 +97,9 @@
                 <iconify-icon icon="solar:check-circle-bold-duotone" width="22" height="22"></iconify-icon>
               </span>
               <div>
-                <small>PENDING APPROVALS</small>
-                <strong id="metricPendingApprovals">--</strong>
-                <p><a href="#users" onclick="switchView('users');" style="color:inherit;text-decoration:underline;">Review accounts</a></p>
+                <small>ACTIVE STUDENT ACCOUNTS</small>
+                <strong id="metricActiveStudentAccounts">--</strong>
+                <p><a href="#users" onclick="navigateToStudentAccounts('Active'); return false;" style="color:inherit;text-decoration:underline;">Review accounts</a></p>
               </div>
               <span class="metric-status history-status green-line" aria-hidden="true"></span>
             </article>
@@ -173,7 +179,7 @@
                       <h2>RECENT INCIDENTS</h2>
                       <p>Latest incidents reported</p>
                     </div>
-                    <button type="button" onclick="document.querySelector('a[data-view=incidents]').click();">View All</button>
+                    <button type="button" onclick="navigateToIncidentsView('all');">View All</button>
                   </div>
                   <table>
                     <thead>
@@ -184,27 +190,18 @@
                         <th>TIME</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      <tr data-incident-id="MED_0001" data-status="ongoing" data-type="medical" title="Click to view incident details & history">
-                        <td>MED_0001</td>
-                        <td class="medical">&hearts; Medical</td>
-                        <td><em class="status ongoing">On Going</em></td>
-                        <td>4 mins ago</td>
-                      </tr>
-                      <tr data-incident-id="SEC_0001" data-status="active" data-type="security" title="Click to view incident details & history">
-                        <td>SEC_0001</td>
-                        <td class="security">&#9670; Security</td>
-                        <td><em class="status active">Active</em></td>
-                        <td>23 mins ago</td>
-                      </tr>
-                      <tr data-incident-id="CAMP_0001" data-status="resolved" data-type="medical" title="Click to view incident details & history">
-                        <td>CAMP_0001</td>
-                        <td class="medical">&hearts; Medical</td>
-                        <td><em class="status resolved">Resolved</em></td>
-                        <td>1 hour ago</td>
+                    <tbody id="overviewIncidentsTableBody">
+                      <tr>
+                        <td colspan="4" style="text-align:center;padding:16px;color:#64748b;">Loading recent incidents from Supabase...</td>
                       </tr>
                     </tbody>
                   </table>
+                  <div class="panel-bottom-action">
+                    <button type="button" class="btn-view-all-incidents" onclick="navigateToIncidentsView('all');">
+                      <span>View All Incidents</span>
+                      <iconify-icon icon="solar:arrow-right-linear" width="15" height="15"></iconify-icon>
+                    </button>
+                  </div>
                 </section>
               </div>
             </div>
@@ -214,7 +211,7 @@
               <div class="panel-heading compact">
                 <h2>&#9830; ALERT NOTIFICATIONS</h2>
               </div>
-              <div class="alert-tabs" role="tablist" aria-label="Alert filters">
+              <div class="alert-tabs" id="overviewAlertsFilters" role="tablist" aria-label="Alert filters">
                 <button class="active" type="button" role="tab" aria-selected="true" data-alert-filter="all">All</button>
                 <button type="button" role="tab" aria-selected="false" data-alert-filter="urgent">Urgent</button>
                 <button type="button" role="tab" aria-selected="false" data-alert-filter="medical">Medical</button>
@@ -222,47 +219,13 @@
                 <button type="button" role="tab" aria-selected="false" data-alert-filter="vicinity">Campus Vicinity</button>
               </div>
 
-              <article class="alert-item ongoing" data-alert-type="medical" data-status="ongoing">
-                <div>
-                  <strong>&hearts; Medical</strong>
-                  <small>2025-12-01 16:49:30</small>
+              <div id="overviewAlertsContainer" class="overview-alerts-container">
+                <div class="overview-alerts-empty">
+                  Loading live alert notifications from Supabase...
                 </div>
-                <h3>MED_0001 <em class="ongoing"> ON GOING </em></h3>
-                <p>4231m from UMAK</p>
-                <footer class="ongoing">&clubs; Awaiting Assignment <b>&rsaquo;</b></footer>
-              </article>
+              </div>
 
-              <article class="alert-item active urgent" data-alert-type="security" data-status="active">
-                <div>
-                  <strong>&#9670; Security</strong>
-                  <small>2025-12-01 12:50:38</small>
-                </div>
-                <h3>SEC_0001 <em class="active"> ACTIVE </em></h3>
-                <p>3074m from UMAK</p>
-                <footer class="active">&#9888; High Priority Emergency <b>&rsaquo;</b></footer>
-              </article>
-
-              <article class="alert-item ongoing" data-alert-type="vicinity" data-status="ongoing">
-                <div>
-                  <strong>&#9678; Campus Vicinity</strong>
-                  <small>2025-12-01 12:05:44</small>
-                </div>
-                <h3>VIC_0001 <em class="ongoing"> ON GOING </em></h3>
-                <p>Activity detected near the campus boundary requiring safety review.</p>
-                <footer class="ongoing">&#9888; Activity near campus boundary <b>&rsaquo;</b></footer>
-              </article>
-
-              <article class="alert-item resolved" data-alert-type="medical" data-status="resolved">
-                <div>
-                  <strong>&hearts; Medical</strong>
-                  <small>2025-12-01 10:21:17</small>
-                </div>
-                <h3>CAMP_0001 <em class="resolved"> RESOLVED </em></h3>
-                <p>1850m from UMAK</p>
-                <footer class="resolved">&clubs; Incident Resolved <b>&rsaquo;</b></footer>
-              </article>
-
-              <a class="all-alerts" href="#alerts" onclick="switchView('alerts');">View All Notifications &rsaquo;</a>
+              <a class="all-alerts" id="overviewAlertsViewAll" href="#alerts" onclick="switchView('alerts');">View All Notifications &rsaquo;</a>
             </aside>
           </div>
         </section>
@@ -313,25 +276,30 @@
         <section class="dashboard-view" id="view-incidents">
           <div class="view-header">
             <div>
-              <h1><span>&#9888;</span> Campus Emergency Incidents</h1>
-              <p>Full incident audit log, active SOS alerts, dispatch statuses, and resolution archives.</p>
-            </div>
-            <div class="view-actions">
-              <button class="filter-btn active" type="button" onclick="showToast('Exporting incident log to CSV...')">Export CSV</button>
+              <h1><span>&#9888;</span> Campus Emergency Incidents <span class="role-view-badge" id="incidentsRoleBadge" style="display:none; font-size:12px; font-weight:600; padding:3px 10px; border-radius:9999px; vertical-align:middle; margin-left:10px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">System Admin Access</span></h1>
+              <p id="incidentsSubtitle">Full incident audit log, active SOS alerts, dispatch statuses, and resolution archives.</p>
             </div>
           </div>
 
-          <div class="dashboard-panel">
+          <!-- Responder Assigned Emergency Scope Banner -->
+          <div id="responderScopeBanner" class="responder-scope-banner" style="display:none;"></div>
+
+          <!-- Notification Container for Responder Rescue Missions -->
+          <div id="responderRescueNotificationContainer" class="responder-rescue-notification-container" style="display:none;"></div>
+
+          <div class="dashboard-panel" id="incidentDirectoryPanel">
             <div class="panel-toolbar">
               <div class="search-box">
                 <span>&#128269;</span>
                 <input id="incidentSearchInput" type="text" placeholder="Search by Incident ID, Type, or Location...">
               </div>
-              <div class="filter-tags">
-                <button class="filter-btn incidents-filter-btn active" data-status-filter="all" type="button">All (6)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="active" type="button">Active (2)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="ongoing" type="button">On Going (1)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="resolved" type="button">Resolved (3)</button>
+              <div class="filter-tags" id="incidentFilterTags">
+                <button class="filter-btn incidents-filter-btn active" data-status-filter="all" type="button">All (<span id="countIncidentsAll">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="active_ongoing" type="button">Active &amp; On Going (<span id="countIncidentsActiveOngoing">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="ongoing" type="button">On Going (<span id="countIncidentsPending">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="active" type="button">Active (<span id="countIncidentsActive">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="resolved" type="button">Resolved (<span id="countIncidentsResolved">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="cancelled" type="button">Cancelled (<span id="countIncidentsCancelled">0</span>)</button>
               </div>
             </div>
             <table id="fullIncidentsTable">
@@ -346,60 +314,9 @@
                   <th>ACTION</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr data-status="ongoing" title="Click to view incident details & history">
-                  <td><strong>#SOS-2024-00126</strong></td>
-                  <td class="medical">&hearts; Medical Assistance</td>
-                  <td>Sports Complex - Basketball Court</td>
-                  <td>Beta Team 1</td>
-                  <td>5 min ago</td>
-                  <td><em class="status ongoing">On Going</em></td>
-                  <td><button type="button" class="filter-btn" onclick="showToast('Assigned Beta Team to incident.')">Assign</button></td>
-                </tr>
-                <tr data-status="active">
-                  <td><strong>#SOS-2024-00125</strong></td>
-                  <td class="medical">&hearts; Severe Medical Call</td>
-                  <td>Student Center Plaza (2nd Floor)</td>
-                  <td>Alpha Team 1</td>
-                  <td>2 min ago</td>
-                  <td><em class="status active">Active</em></td>
-                  <td><button type="button" class="filter-btn" onclick="showToast('Viewing live responder tracking.')">Track Unit</button></td>
-                </tr>
-                <tr data-status="active">
-                  <td><strong>#SOS-2024-00124</strong></td>
-                  <td class="security">&#9670; Suspicious Activity</td>
-                  <td>Library Building Main Entrance</td>
-                  <td>Security Unit 2</td>
-                  <td>8 min ago</td>
-                  <td><em class="status active">Active</em></td>
-                  <td><button type="button" class="filter-btn" onclick="showToast('Opening incident report dispatch.')">Details</button></td>
-                </tr>
-                <tr data-status="resolved">
-                  <td><strong>#SOS-2024-00123</strong></td>
-                  <td class="security">&#9670; Fire Alarm Drill</td>
-                  <td>Administrative Building</td>
-                  <td>Bravo Team 2</td>
-                  <td>15 min ago</td>
-                  <td><em class="status resolved">Resolved</em></td>
-                  <td><button type="button" class="filter-btn" onclick="showToast('Incident archived.')">View Log</button></td>
-                </tr>
-                <tr data-status="resolved">
-                  <td><strong>#SOS-2024-00122</strong></td>
-                  <td class="medical">&hearts; Dehydration / Faint</td>
-                  <td>University Track Oval</td>
-                  <td>Medical Station A</td>
-                  <td>1 hour ago</td>
-                  <td><em class="status resolved">Resolved</em></td>
-                  <td><button type="button" class="filter-btn" onclick="showToast('Incident archived.')">View Log</button></td>
-                </tr>
-                <tr data-status="resolved">
-                  <td><strong>#SOS-2024-00121</strong></td>
-                  <td class="security">&#9670; Lost ID &amp; Belongings</td>
-                  <td>Academic Building 1</td>
-                  <td>Security Desk</td>
-                  <td>3 hours ago</td>
-                  <td><em class="status resolved">Resolved</em></td>
-                  <td><button type="button" class="filter-btn" onclick="showToast('Incident archived.')">View Log</button></td>
+              <tbody id="fullIncidentsTableBody">
+                <tr>
+                  <td colspan="7" style="text-align:center;padding:28px;color:#64748b;">Loading emergency incidents from Supabase...</td>
                 </tr>
               </tbody>
             </table>
@@ -483,45 +400,49 @@
         <section class="dashboard-view" id="view-users">
           <div class="view-header">
             <div>
-              <h1><span>&#9673;</span> Administrative User Directory</h1>
-              <p>Manage system administrators, security leads, and campus responders.</p>
-            </div>
-            <div class="view-actions">
-              <button class="filter-btn active" type="button" onclick="showToast('Add user dialog opened.')">+ Add Administrator</button>
+              <h1><span>&#9673;</span> Student Users Directory</h1>
+              <p>Registered University of Makati student records and directory.</p>
             </div>
           </div>
 
-          <div class="dashboard-panel">
+          <!-- Student Account Records Container -->
+          <div class="dashboard-panel" id="studentUsersPanel">
             <div class="panel-toolbar">
               <div class="search-box">
                 <span>&#128269;</span>
-                <input id="userSearchInput" type="text" placeholder="Search by name, role or email...">
+                <input id="studentSearchInput" type="text" placeholder="Search by student ID, name, email or college...">
               </div>
-              <div class="filter-tags" id="usersFilterTags">
-                <button class="filter-btn active" type="button" data-user-filter="all">All (<span id="countAllUsers">0</span>)</button>
-                <button class="filter-btn" type="button" data-user-filter="System Admin">System Admin (<span id="countSystemAdmins">0</span>)</button>
-                <button class="filter-btn" type="button" data-user-filter="HEAD">HEAD (<span id="countHeads">0</span>)</button>
-                <button class="filter-btn" type="button" data-user-filter="Responder">Responders (<span id="countResponders">0</span>)</button>
-                <button class="filter-btn" type="button" data-user-filter="Pending" style="color: #b45309; font-weight: 600;">Pending (<span id="countPendingUsers">0</span>)</button>
+              <div class="filter-tags" id="studentFilterTags">
+                <button class="filter-btn active" type="button" data-student-filter="all">All Students (<span id="countAllStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Active">Active (<span id="countActiveStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Pending" style="color: #b45309; font-weight: 600;">Pending (<span id="countPendingStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Disapproved" style="color: #b91c1c; font-weight: 600;">Disapproved (<span id="countDisapprovedStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Inactive" style="color: #64748b;">Inactive (<span id="countInactiveStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Suspended" style="color: #b91c1c;">Suspended (<span id="countSuspendedStudents">0</span>)</button>
               </div>
             </div>
-            <table id="fullUsersTable">
-              <thead>
-                <tr>
-                  <th>ADMIN USER</th>
-                  <th>EMAIL ADDRESS</th>
-                  <th>ASSIGNED ROLE</th>
-                  <th>STATUS</th>
-                  <th>JOINED</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody id="fullUsersTableBody">
-                <tr>
-                  <td colspan="6" style="text-align:center;padding:24px;color:#64748b;">Loading administrative users from Supabase...</td>
-                </tr>
-              </tbody>
-            </table>
+            <div style="width: 100%; overflow-x: auto;">
+              <table id="studentUsersTable" style="min-width: 960px; width: 100%;">
+                <thead>
+                  <tr>
+                    <th>STUDENT ID</th>
+                    <th>STUDENT NAME</th>
+                    <th>EMAIL ADDRESS</th>
+                    <th>COLLEGE / INSTITUTE</th>
+                    <th>YEAR LEVEL</th>
+                    <th>CONTACT NO.</th>
+                    <th>STATUS</th>
+                    <th>REGISTERED</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="studentUsersTableBody">
+                  <tr>
+                    <td colspan="9" style="text-align:center;padding:24px;color:#64748b;">Loading student records from Supabase...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -529,107 +450,255 @@
         <section class="dashboard-view" id="view-teams">
           <div class="view-header">
             <div>
-              <h1><span>&#9673;</span> Emergency Response Teams</h1>
-              <p>Active deployment teams, assigned zones, on-duty personnel, and radio channels.</p>
-            </div>
-            <div class="view-actions">
-              <button class="filter-btn active" type="button" onclick="showToast('Create team dialog opened.')">+ Create New Team</button>
+              <h1><span>&#9673;</span> Administrator User</h1>
+              <p>System administrators, safety heads, and emergency responders.</p>
             </div>
           </div>
 
-          <div class="teams-grid">
-            <div class="team-card">
-              <div class="team-card-header">
-                <h3>Alpha Patrol Unit 1</h3>
-                <span class="team-badge active">ON PATROL</span>
+          <div class="dashboard-panel">
+            <div class="panel-toolbar team-toolbar">
+              <div class="search-box">
+                <span>&#128269;</span>
+                <input id="teamSearchInput" type="search" placeholder="Search by name, role or email..." aria-label="Search administrator accounts">
               </div>
-              <div class="team-info-list">
-                <div><span>Leader:</span> <strong>Officer Carlo Tan</strong></div>
-                <div><span>Members:</span> <strong>4 Officers</strong></div>
-                <div><span>Coverage Area:</span> <strong>Main Gate &amp; Quadrangle</strong></div>
-                <div><span>Active Task:</span> <strong class="online">Patrolling J.P. Rizal Gate</strong></div>
+              <div class="filter-tags" id="teamStatusFilters" aria-label="Filter administrator accounts">
+                <button class="filter-btn active" type="button" data-team-filter="all">All (<span id="teamCountAll">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="System Admin">System Admin (<span id="teamCountAdmin">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="HEAD">HEAD (<span id="teamCountHead">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="Responder">Responders (<span id="teamCountResponder">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="Disapproved" style="color: #b91c1c; font-weight: 600;">Disapproved (<span id="teamCountDisapproved">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="Suspended" style="color: #b91c1c; font-weight: 600;">Suspended (<span id="teamCountSuspended">0</span>)</button>
               </div>
-              <button type="button" class="filter-btn" onclick="showToast('Contacting Alpha Patrol Unit...')">Dispatch Radio &rarr;</button>
             </div>
-
-            <div class="team-card">
-              <div class="team-card-header">
-                <h3>Beta Medical Response</h3>
-                <span class="team-badge active">ACTIVE CALL</span>
-              </div>
-              <div class="team-info-list">
-                <div><span>Leader:</span> <strong>Nurse Elena Garcia</strong></div>
-                <div><span>Members:</span> <strong>3 EMT Personnel</strong></div>
-                <div><span>Coverage Area:</span> <strong>Sports Complex &amp; Clinic</strong></div>
-                <div><span>Active Task:</span> <strong class="medical">#SOS-2024-00126</strong></div>
-              </div>
-              <button type="button" class="filter-btn" onclick="showToast('Contacting Beta Medical...')">Dispatch Radio &rarr;</button>
-            </div>
-
-            <div class="team-card">
-              <div class="team-card-header">
-                <h3>Gamma Campus Safety</h3>
-                <span class="team-badge standby">STANDBY</span>
-              </div>
-              <div class="team-info-list">
-                <div><span>Leader:</span> <strong>Lead Officer Ramon Reyes</strong></div>
-                <div><span>Members:</span> <strong>5 Safety Officers</strong></div>
-                <div><span>Coverage Area:</span> <strong>Dormitory Buildings &amp; Oval</strong></div>
-                <div><span>Active Task:</span> <strong>Routine Standby</strong></div>
-              </div>
-              <button type="button" class="filter-btn" onclick="showToast('Contacting Gamma Team...')">Dispatch Radio &rarr;</button>
+            <div class="team-table-wrap">
+              <table id="teamsAdminUsersTable">
+                <thead>
+                  <tr>
+                    <th>ADMIN USER</th>
+                    <th>EMAIL ADDRESS</th>
+                    <th>ASSIGNED ROLE</th>
+                    <th>STATUS</th>
+                    <th>JOINED</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="teamsAdminUsersTableBody">
+                  <tr><td colspan="6" class="team-table-message">Loading administrative users...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
 
         <!-- ================= PAGE 7: REPORTS & ANALYTICS ================= -->
         <section class="dashboard-view" id="view-reports">
+          <!-- View Header -->
           <div class="view-header">
             <div>
               <h1><span>&#9636;</span> Incident Analytics &amp; Reports</h1>
-              <p>Monthly response performance, emergency resolution benchmarks, and safety compliance logs.</p>
-            </div>
-            <div class="view-actions">
-              <button class="filter-btn active" type="button" onclick="showToast('Exporting PDF summary report...')">Download PDF</button>
+              <p>Real-time emergency telemetry, resolution tracking, and safety compliance logs.</p>
             </div>
           </div>
 
-          <div class="dashboard-panel">
-            <div class="reports-stats-grid">
-              <div class="stat-box">
-                <span>Avg. Emergency Response Time</span>
-                <strong>2.4 min</strong>
-                <small>&darr; 18% faster than benchmark</small>
+          <!-- TOP SECTION: Module from image.png -->
+          <!-- 1. Metric Cards Row (Total Incidents, Active, Pending, Resolved, Cancelled) -->
+          <div class="report-summary-cards">
+            <!-- Total Incidents Card -->
+            <div class="report-metric-card card-total">
+              <div class="card-icon">
+                <iconify-icon icon="solar:list-check-bold-duotone" width="22" height="22"></iconify-icon>
               </div>
-              <div class="stat-box">
-                <span>Total Incidents (This Month)</span>
-                <strong>48</strong>
-                <small>&uarr; 3 alerts this week</small>
-              </div>
-              <div class="stat-box">
-                <span>Incident Resolution Rate</span>
-                <strong>98.2%</strong>
-                <small>47 of 48 cases resolved safely</small>
+              <div class="card-content">
+                <span class="card-title">Total Incidents</span>
+                <strong class="card-value" id="reportMetricTotal">105</strong>
               </div>
             </div>
 
-            <div style="padding: 18px; border-top: 1px solid #edf0ee;">
-              <h3 style="font-size: 13px; color: #183e35; margin: 0 0 10px;">Monthly Incident Breakdown</h3>
-              <p style="font-size: 10px; color: #697871; margin-bottom: 14px;">Data verified across University of Makati campus safety zones.</p>
-              <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 180px; padding: 12px; background: #fafbfb; border: 1px solid #e3eae5; border-radius: 6px;">
-                  <strong style="color: #ed3942; font-size: 18px;">62%</strong>
-                  <span style="display: block; font-size: 10px; color: #556660; margin-top: 4px;">Medical Requests</span>
-                </div>
-                <div style="flex: 1; min-width: 180px; padding: 12px; background: #fafbfb; border: 1px solid #e3eae5; border-radius: 6px;">
-                  <strong style="color: #25845d; font-size: 18px;">26%</strong>
-                  <span style="display: block; font-size: 10px; color: #556660; margin-top: 4px;">Security &amp; Welfare Checks</span>
-                </div>
-                <div style="flex: 1; min-width: 180px; padding: 12px; background: #fafbfb; border: 1px solid #e3eae5; border-radius: 6px;">
-                  <strong style="color: #e69a25; font-size: 18px;">12%</strong>
-                  <span style="display: block; font-size: 10px; color: #556660; margin-top: 4px;">Traffic &amp; Drill Procedures</span>
+            <!-- Active Card -->
+            <div class="report-metric-card card-active">
+              <div class="card-icon">
+                <iconify-icon icon="solar:danger-circle-bold-duotone" width="22" height="22"></iconify-icon>
+              </div>
+              <div class="card-content">
+                <span class="card-title">Active</span>
+                <strong class="card-value" id="reportMetricActive">1</strong>
+              </div>
+            </div>
+
+            <!-- On Going Card -->
+            <div class="report-metric-card card-pending card-ongoing">
+              <div class="card-icon">
+                <iconify-icon icon="solar:clock-circle-bold-duotone" width="22" height="22"></iconify-icon>
+              </div>
+              <div class="card-content">
+                <span class="card-title">On Going</span>
+                <strong class="card-value" id="reportMetricPending">0</strong>
+              </div>
+            </div>
+
+            <!-- Resolved Card -->
+            <div class="report-metric-card card-resolved">
+              <div class="card-icon">
+                <iconify-icon icon="solar:check-circle-bold-duotone" width="22" height="22"></iconify-icon>
+              </div>
+              <div class="card-content">
+                <span class="card-title">Resolved</span>
+                <strong class="card-value" id="reportMetricResolved">47</strong>
+              </div>
+            </div>
+
+            <!-- Cancelled Card -->
+            <div class="report-metric-card card-cancelled">
+              <div class="card-icon">
+                <iconify-icon icon="solar:close-circle-bold-duotone" width="22" height="22"></iconify-icon>
+              </div>
+              <div class="card-content">
+                <span class="card-title">Cancelled</span>
+                <strong class="card-value" id="reportMetricCancelled">56</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Filter & Search Panel -->
+          <div class="report-filter-panel">
+            <div class="filter-panel-header">
+              <span class="filter-header-icon"><iconify-icon icon="solar:filter-bold-duotone"></iconify-icon></span>
+              <span>FILTER &amp; SEARCH</span>
+            </div>
+
+            <div class="filter-controls-row">
+              <div class="filter-field">
+                <label for="reportSortOrder">
+                  <iconify-icon icon="solar:sort-vertical-bold-duotone" class="field-icon"></iconify-icon>
+                  SORT ORDER
+                </label>
+                <select id="reportSortOrder" class="report-input-select">
+                  <option value="desc">Most Recent First</option>
+                  <option value="asc">Oldest First</option>
+                </select>
+              </div>
+
+              <div class="filter-field">
+                <label for="reportStatusFilter">
+                  <iconify-icon icon="solar:record-circle-bold-duotone" class="field-icon"></iconify-icon>
+                  STATUS
+                </label>
+                <select id="reportStatusFilter" class="report-input-select">
+                  <option value="all">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="On Going">On Going</option>
+                  <option value="Resolved">Resolved</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              <div class="filter-field">
+                <label for="reportCategoryFilter">
+                  <iconify-icon icon="solar:tag-bold-duotone" class="field-icon"></iconify-icon>
+                  CATEGORY
+                </label>
+                <select id="reportCategoryFilter" class="report-input-select">
+                  <option value="all">All Categories</option>
+                  <option value="Medical">All Categories (or Medical)</option>
+                  <option value="Security">Security</option>
+                  <option value="Urgent">Urgent / Facility</option>
+                </select>
+              </div>
+
+              <div class="filter-field search-field">
+                <label for="reportSearchInput">
+                  <iconify-icon icon="solar:magnifer-bold-duotone" class="field-icon"></iconify-icon>
+                  SEARCH
+                </label>
+                <div class="report-search-wrapper">
+                  <iconify-icon icon="solar:magnifer-linear"></iconify-icon>
+                  <input type="text" id="reportSearchInput" placeholder="Search incidents...">
                 </div>
               </div>
+            </div>
+
+            <div class="filter-dates-row">
+              <div class="filter-field">
+                <label for="reportStartDate">
+                  <iconify-icon icon="solar:calendar-bold-duotone" class="field-icon"></iconify-icon>
+                  START DATE
+                </label>
+                <input type="date" id="reportStartDate" class="report-input-date">
+              </div>
+
+              <div class="filter-field">
+                <label for="reportEndDate">
+                  <iconify-icon icon="solar:calendar-bold-duotone" class="field-icon"></iconify-icon>
+                  END DATE
+                </label>
+                <input type="date" id="reportEndDate" class="report-input-date">
+              </div>
+
+              <div class="filter-actions-col">
+                <button type="button" class="btn-clear-dates" id="reportClearDatesBtn">&times; Clear Dates</button>
+              </div>
+            </div>
+
+            <div class="filter-actions-bar">
+              <button type="button" class="btn-export-incidents" id="reportExportCsvBtn">
+                <iconify-icon icon="solar:download-minimalistic-bold"></iconify-icon>
+                Export Incidents
+              </button>
+              <button type="button" class="btn-archived-toggle" id="reportArchivedBtn">
+                <iconify-icon icon="solar:archive-bold-duotone"></iconify-icon>
+                Archived <span class="badge-count" id="reportArchivedCount">0</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Incidents Table from image.png -->
+          <div class="report-table-card">
+            <div class="table-responsive">
+              <table class="report-incidents-table" id="reportIncidentsTable">
+                <thead>
+                  <tr>
+                    <th>Incident ID</th>
+                    <th>Location</th>
+                    <th>Category</th>
+                    <th>Student/Reporter</th>
+                    <th>Status</th>
+                    <th>Reported Time</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="reportIncidentsTableBody">
+                  <tr>
+                    <td colspan="7" style="text-align:center;padding:36px;color:#64748b;">
+                      Loading incident reports from Supabase...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="report-table-footer" id="reportTableFooter">
+              <span id="reportTablePaginationInfo">Showing 1-10 of 105 incidents</span>
+              <div class="report-pagination-controls" id="reportPaginationControls"></div>
+            </div>
+          </div>
+
+          <!-- Modals for Student Info & Audit History -->
+          <div id="incidentStudentModal" class="report-modal-backdrop" style="display:none;">
+            <div class="report-modal-dialog">
+              <div class="report-modal-header">
+                <h3>Reporter / Student Details</h3>
+                <button type="button" class="btn-close-modal" onclick="closeIncidentStudentModal()">&times;</button>
+              </div>
+              <div class="report-modal-body" id="incidentStudentModalBody"></div>
+            </div>
+          </div>
+
+          <div id="incidentAuditModal" class="report-modal-backdrop" style="display:none;">
+            <div class="report-modal-dialog">
+              <div class="report-modal-header">
+                <h3>Incident History &amp; Audit Trail</h3>
+                <button type="button" class="btn-close-modal" onclick="closeIncidentAuditModal()">&times;</button>
+              </div>
+              <div class="report-modal-body" id="incidentAuditModalBody"></div>
             </div>
           </div>
         </section>
@@ -641,61 +710,26 @@
               <h1><span>&#9881;</span> Administrative Audit Logs</h1>
               <p>Immutable log of administrator sign-ins, dispatch decisions, and security credential changes.</p>
             </div>
-            <div class="view-actions">
-              <button class="filter-btn active" type="button" onclick="showToast('Exporting audit trail to CSV...')">Export Audit Trail</button>
-            </div>
           </div>
 
           <div class="dashboard-panel">
             <table>
               <thead>
                 <tr>
-                  <th>TIMESTAMP</th>
-                  <th>USER ACCOUNT</th>
-                  <th>ACTION / EVENT</th>
-                  <th>IP / CLIENT</th>
-                  <th>OUTCOME</th>
+                  <th>EMAIL</th>
+                  <th>NAME</th>
+                  <th>ROLE</th>
+                  <th>STATUS</th>
+                  <th>CREATED AT</th>
+                  <th>LAST LOGIN (UTC)</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr>
-                  <td>2026-09-04 22:50:12</td>
-                  <td>jbillones@umak.edu.ph</td>
-                  <td>Admin Portal Login (Verified 2FA)</td>
-                  <td>192.168.1.45 (Windows PC)</td>
-                  <td><span class="audit-badge success">SUCCESS</span></td>
-                </tr>
-                <tr>
-                  <td>2026-09-04 22:32:05</td>
-                  <td>msantos@umak.edu.ph</td>
-                  <td>Assigned Team Beta to #SOS-2024-00126</td>
-                  <td>192.168.1.18 (Console)</td>
-                  <td><span class="audit-badge auth">DISPATCHED</span></td>
-                </tr>
-                <tr>
-                  <td>2026-09-04 21:14:50</td>
-                  <td>system_cron</td>
-                  <td>Daily Telemetry Health Check</td>
-                  <td>127.0.0.1 (Server Daemon)</td>
-                  <td><span class="audit-badge success">COMPLETED</span></td>
-                </tr>
-                <tr>
-                  <td>2026-09-04 19:40:11</td>
-                  <td>jdelacruz@umak.edu.ph</td>
-                  <td>Account Status Review: Pending HEAD Approved</td>
-                  <td>192.168.1.62 (Web)</td>
-                  <td><span class="audit-badge success">APPROVED</span></td>
-                </tr>
-                <tr>
-                  <td>2026-09-04 17:05:22</td>
-                  <td>guest_auth</td>
-                  <td>Failed Login Attempt (Invalid OTP)</td>
-                  <td>112.198.70.12 (Mobile)</td>
-                  <td><span class="audit-badge alert">BLOCKED</span></td>
-                </tr>
+              <tbody id="auditAccountsTableBody">
+                <tr><td colspan="6">Loading employee accounts...</td></tr>
               </tbody>
             </table>
           </div>
+
         </section>
 
         <!-- ================= PAGE 9: SYSTEM SETTINGS ================= -->
@@ -765,6 +799,211 @@
                   <input type="checkbox" checked>
                   <span class="slider"></span>
                 </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= PAGE 10: ACCOUNT / PROFILE ================= -->
+        <section class="dashboard-view" id="view-profile">
+          <!-- Profile Hero Header Banner -->
+          <div class="profile-hero-banner">
+            <div class="profile-hero-avatar-wrap">
+              <div class="profile-hero-avatar">
+                <img id="profileHeroAvatarImg" src="/images/default-avatar.png" alt="Profile Avatar">
+              </div>
+              <span class="profile-hero-status-dot" title="Active"></span>
+            </div>
+            <div class="profile-hero-info">
+              <h1 id="profileHeroName">Jolehmeh Billones</h1>
+              <p id="profileHeroRole">System Administrator</p>
+              <div class="profile-hero-badges">
+                <span class="hero-badge badge-active">
+                  <iconify-icon icon="solar:check-circle-bold" width="13" height="13"></iconify-icon>
+                  <span id="profileHeroStatusText">Active</span>
+                </span>
+                <span class="hero-badge badge-id">
+                  <iconify-icon icon="solar:card-2-bold-duotone" width="13" height="13"></iconify-icon>
+                  <span id="profileHeroIdText">ID: ADM-ADM00001</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Account Overview Card -->
+          <div class="profile-overview-card">
+            <div class="profile-overview-header">
+              <div class="overview-header-left">
+                <iconify-icon icon="solar:chart-2-bold-duotone" width="20" height="20"></iconify-icon>
+                <h2>Account Overview</h2>
+              </div>
+              <div class="overview-header-right">
+                <span class="system-active-pill">
+                  <span class="pulse-dot"></span> System Active
+                </span>
+              </div>
+            </div>
+            <div class="profile-overview-body">
+              <div class="overview-stat-box">
+                <div class="stat-icon-wrap icon-blue">
+                  <iconify-icon icon="solar:card-2-bold-duotone" width="22" height="22"></iconify-icon>
+                </div>
+                <div class="stat-content">
+                  <small>ADMINISTRATOR ID</small>
+                  <strong id="statEmployeeId">ADM-ADM00001</strong>
+                </div>
+              </div>
+              <div class="overview-stat-box">
+                <div class="stat-icon-wrap icon-green">
+                  <iconify-icon icon="solar:shield-check-bold-duotone" width="22" height="22"></iconify-icon>
+                </div>
+                <div class="stat-content">
+                  <small>ACCESS LEVEL</small>
+                  <strong id="statAccessLevel">System Administrator</strong>
+                </div>
+              </div>
+              <div class="overview-stat-box">
+                <div class="stat-icon-wrap icon-purple">
+                  <iconify-icon icon="solar:clock-circle-bold-duotone" width="22" height="22"></iconify-icon>
+                </div>
+                <div class="stat-content">
+                  <small>LAST ACTIVITY</small>
+                  <strong id="statLastActivity">2025-12-01T22:32:37.267631+00:00</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Two-Column Profile Grid -->
+          <div class="profile-content-grid">
+            <!-- Left Column: Profile Information & Account Security -->
+            <div class="profile-column-left">
+              <!-- Card 1: Profile Information -->
+              <div class="profile-card">
+                <div class="profile-card-header">
+                  <div class="card-title-wrap">
+                    <iconify-icon icon="solar:user-bold-duotone" width="20" height="20" class="text-blue"></iconify-icon>
+                    <h3>Profile Information</h3>
+                  </div>
+                  <span class="verified-pill">
+                    <iconify-icon icon="solar:check-circle-bold" width="13" height="13"></iconify-icon> Verified
+                  </span>
+                </div>
+                <form id="profileInfoForm" class="profile-form">
+                  <div class="profile-form-grid">
+                    <div class="form-group">
+                      <label for="profileFullName">Full Name</label>
+                      <input type="text" id="profileFullName" name="fullName" value="Jolehmeh Billones" required placeholder="Enter full name">
+                    </div>
+                    <div class="form-group">
+                      <label for="profileUsername">Username</label>
+                      <input type="text" id="profileUsername" name="username" value="admin_joleh" required placeholder="Enter username">
+                    </div>
+                    <div class="form-group">
+                      <label for="profileEmail">Email Address</label>
+                      <input type="email" id="profileEmail" name="email" value="juliemay1917@gmail.com" required placeholder="Enter email address">
+                    </div>
+                    <div class="form-group">
+                      <label for="profileRole">Department Role</label>
+                      <input type="text" id="profileRole" name="role" value="System Administrator" readonly disabled class="input-disabled">
+                      <span class="form-helper-text">
+                        <iconify-icon icon="solar:lock-keyhole-bold-duotone" width="13" height="13"></iconify-icon>
+                        Managed by system administrators
+                      </span>
+                    </div>
+                  </div>
+                  <div class="profile-form-actions">
+                    <button type="submit" id="btnUpdateProfile" class="btn-profile-primary">
+                      <iconify-icon icon="solar:diskette-bold-duotone" width="17" height="17"></iconify-icon>
+                      Update Information
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Card 2: Account Security -->
+              <div class="profile-card mt-4">
+                <div class="profile-card-header">
+                  <div class="card-title-wrap">
+                    <iconify-icon icon="solar:shield-warning-bold-duotone" width="20" height="20" class="text-red"></iconify-icon>
+                    <h3>Account Security</h3>
+                  </div>
+                </div>
+                <div class="security-notices">
+                  <!-- Notice 1: Password Security -->
+                  <div class="security-notice notice-yellow">
+                    <div class="notice-icon-circle icon-yellow">
+                      <iconify-icon icon="solar:key-bold-duotone" width="18" height="18"></iconify-icon>
+                    </div>
+                    <div class="notice-content">
+                      <h4>Password Security</h4>
+                      <p>For password changes, please contact your system administrator or IT support.</p>
+                    </div>
+                  </div>
+                  <!-- Notice 2: Session Information -->
+                  <div class="security-notice notice-blue">
+                    <div class="notice-icon-circle icon-blue">
+                      <iconify-icon icon="solar:clock-circle-bold-duotone" width="18" height="18"></iconify-icon>
+                    </div>
+                    <div class="notice-content">
+                      <h4>Session Information</h4>
+                      <p>Your session will automatically expire after 30 minutes of inactivity for security purposes.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Profile Picture & Quick Actions -->
+            <div class="profile-column-right">
+              <!-- Card 3: Profile Picture -->
+              <div class="profile-card">
+                <div class="profile-card-header">
+                  <div class="card-title-wrap">
+                    <iconify-icon icon="solar:camera-bold-duotone" width="20" height="20" class="text-purple"></iconify-icon>
+                    <h3>Profile Picture</h3>
+                  </div>
+                </div>
+                <div class="profile-picture-section">
+                  <div class="avatar-preview-wrap">
+                    <img id="profilePicturePreview" src="/images/default-avatar.png" alt="Profile Picture Preview">
+                  </div>
+                  <p class="upload-heading">Upload New Picture</p>
+                  <input type="file" id="profileAvatarFileInput" accept="image/png, image/jpeg, image/gif, image/webp" style="display:none;">
+                  <button type="button" id="btnChooseImage" class="btn-choose-file">
+                    <iconify-icon icon="solar:gallery-wide-bold-duotone" width="18" height="18"></iconify-icon>
+                    Choose Image
+                  </button>
+                  <span class="file-hint">JPG, PNG, GIF &bull; Max 5MB</span>
+                  <button type="button" id="btnUploadPicture" class="btn-upload-file">
+                    <iconify-icon icon="solar:upload-track-bold-duotone" width="18" height="18"></iconify-icon>
+                    Upload Picture
+                  </button>
+                </div>
+              </div>
+
+              <!-- Card 4: Quick Actions -->
+              <div class="profile-card mt-4">
+                <div class="profile-card-header">
+                  <div class="card-title-wrap">
+                    <iconify-icon icon="solar:bolt-bold-duotone" width="20" height="20" class="text-amber"></iconify-icon>
+                    <h3>Quick Actions</h3>
+                  </div>
+                </div>
+                <div class="quick-actions-list">
+                  <button type="button" id="btnProfileReturnDashboard" class="quick-action-btn">
+                    <iconify-icon icon="solar:arrow-left-circle-bold-duotone" width="18" height="18" class="text-blue"></iconify-icon>
+                    <span>Return to Dashboard</span>
+                  </button>
+                  <button type="button" id="btnProfileUserManagement" class="quick-action-btn">
+                    <iconify-icon icon="solar:users-group-two-rounded-bold-duotone" width="18" height="18" class="text-green"></iconify-icon>
+                    <span>User Management</span>
+                  </button>
+                  <button type="button" id="btnProfileSecureLogout" class="quick-action-btn btn-logout-action">
+                    <iconify-icon icon="solar:logout-2-bold-duotone" width="18" height="18"></iconify-icon>
+                    <span>Secure Logout</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -865,18 +1104,664 @@
         <div class="alert-detail-map" id="alertDetailMap" aria-label="Alert location map"></div>
       </div>
       <div class="alert-details-footer">
-        <button type="button" onclick="showToast('Opening student chat.')">&#128172; Chat Student</button>
-        <button type="button" class="cancel-action" onclick="showToast('Alert marked as cancelled.')">&#10005; Mark as Cancelled</button>
-        <button type="button" class="resolve-action" onclick="showToast('Alert marked as resolved.')">&#10003; Mark Resolved</button>
+        <span id="alertDetailsViewOnlyNotice" style="display:none; font-size:12px; color:#64748b; font-weight:600; margin-right:auto; padding-left:4px;">&#128065; System Admin access</span>
+        <button type="button" class="assign-action" id="openAssignResponderBtn" onclick="window.openAssignResponderModal && window.openAssignResponderModal(this.dataset.incidentId || undefined)" title="Assign a responder unit to rescue this incident">&#128657; Assign Responder</button>
+        <button type="button" class="finish-task-action" id="responderFinishTaskBtn" onclick="openResponderFinishModal()" title="Submit rescue completion report or cancel the response" hidden>&#10003; Done Rescue</button>
+        <button type="button" class="cancel-action" id="markAlertCancelledBtn" onclick="openCancelConfirmModal()" title="Cancel this incident alert">&#10005; Mark as Cancelled</button>
+        <button type="button" class="resolve-action" id="openResolutionSummary" onclick="window.openResolutionSummary && window.openResolutionSummary()" title="Complete and resolve emergency incident">&#10003; Resolve</button>
       </div>
     </section>
   </div>
+
+  <div class="alert-chat-overlay" id="alertChatOverlay" hidden>
+    <section class="alert-chat-dialog" role="dialog" aria-modal="true" aria-labelledby="alertChatTitle">
+      <header class="alert-chat-header">
+        <div>
+          <span>EMERGENCY MESSAGE</span>
+          <h2 id="alertChatTitle">Message</h2>
+          <p id="alertChatReference"></p>
+        </div>
+        <button type="button" id="closeAlertChat" aria-label="Close chat">&times;</button>
+      </header>
+      <p class="alert-chat-delivery" id="alertChatDeliveryNotice" aria-live="polite" hidden></p>
+      <div class="alert-chat-messages" id="alertChatMessages" role="log" aria-live="polite" aria-relevant="additions text">
+        <p class="alert-chat-state">Loading messages...</p>
+      </div>
+      <form class="alert-chat-composer" id="alertChatForm">
+        <input id="alertChatInput" type="text" maxlength="4000" placeholder="Type your message" aria-label="Type your message" autocomplete="off" disabled>
+        <button type="submit" id="alertChatSend" aria-label="Send message" disabled>&#10148;</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="resolution-summary-overlay" id="resolutionSummaryOverlay" hidden>
+    <section class="resolution-summary-dialog" role="dialog" aria-modal="true" aria-labelledby="resolutionSummaryTitle">
+      <header class="resolution-summary-header">
+        <div>
+          <span>RESOLUTION SUMMARY</span>
+          <h2 id="resolutionSummaryTitle"></h2>
+        </div>
+        <button type="button" id="closeResolutionSummary" aria-label="Close resolution summary">&times;</button>
+      </header>
+      <form id="resolutionSummaryForm">
+        <div class="resolution-summary-body">
+          <div class="resolution-summary-reference">
+            <div><span>REFERENCE</span><strong id="resolutionReference"></strong></div>
+            <span class="resolution-final-tag">FINAL REPORT</span>
+          </div>
+          <div class="resolution-summary-metrics">
+            <div><span>REPORTED</span><strong id="resolutionReported"></strong></div>
+            <div><span>RESOLVED</span><strong id="resolutionResolved"></strong></div>
+            <div><span>RESPONSE TIME</span><strong id="resolutionResponseTime"></strong></div>
+          </div>
+          <div class="resolution-summary-details">
+            <section>
+              <h3>KEY DETAILS</h3>
+              <p><span>Student</span><strong id="resolutionStudent"></strong></p>
+              <p><span>Category</span><strong id="resolutionCategory"></strong></p>
+            </section>
+            <section>
+              <h3>GUIDANCE</h3>
+              <ul>
+                <li>Provide a concise narrative of how the incident was resolved.</li>
+                <li>Mention key actions, coordination steps, and outcomes.</li>
+                <li>Keep the summary factual; it will be stored as the official record.</li>
+              </ul>
+            </section>
+          </div>
+          <section class="responder-report-review" id="responderReportReview" hidden>
+            <div><strong>Responder Completion Report</strong><span id="responderReportAuthor"></span></div>
+            <p id="responderReportText"></p>
+          </section>
+          <label class="resolution-summary-field" for="resolutionSummaryText">Final Summary <span>*</span></label>
+          <textarea id="resolutionSummaryText" name="resolution_summary" maxlength="2000" required placeholder="Example: Coordinated with the campus clinic to stabilize the student, escorted to medical care, incident closed after confirming full recovery."></textarea>
+          <div class="resolution-summary-field-footer">
+            <span id="resolutionSummaryError" role="alert"></span>
+            <span><span id="resolutionCharacterCount">0</span> / 2000 characters</span>
+          </div>
+          <p class="resolution-summary-note">This narrative will appear in the incident history report.</p>
+        </div>
+        <footer class="resolution-summary-footer">
+          <button type="button" class="resolution-cancel" id="cancelResolutionSummary">Cancel</button>
+          <button type="submit" class="resolution-submit" id="submitResolutionSummary">Submit &amp; Archive</button>
+        </footer>
+      </form>
+    </section>
+  </div>
+
+  <!-- Successfully Resolved Modal -->
+  <div class="resolution-success-overlay" id="resolutionSuccessModal" hidden>
+    <div class="resolution-success-dialog" role="dialog" aria-modal="true" aria-labelledby="resolutionSuccessTitle">
+      <div class="resolution-success-icon-wrap">
+        <div class="resolution-success-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+      </div>
+      <h2 id="resolutionSuccessTitle" class="resolution-success-title">Successfully Resolved</h2>
+      <p class="resolution-success-message">
+        Incident <strong id="resolutionSuccessIncidentId">MED_0001</strong> has been marked as <strong>Resolved</strong> and archived in the safety records.
+      </p>
+      <div class="resolution-success-details">
+        <div class="success-detail-row">
+          <span>Incident ID:</span>
+          <strong id="successModalCode">MED_0001</strong>
+        </div>
+        <div class="success-detail-row">
+          <span>Emergency Type:</span>
+          <strong id="successModalType">Medical</strong>
+        </div>
+        <div class="success-detail-row">
+          <span>Status:</span>
+          <span style="background-color: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 9999px;">Resolved</span>
+        </div>
+        <div class="success-detail-row">
+          <span>Resolved At:</span>
+          <strong id="successModalTime">—</strong>
+        </div>
+        <div class="success-detail-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px;">
+          <span style="color:#64748b; font-size:11px;">Resolution Summary:</span>
+          <div id="successModalSummaryText" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; width:100%; font-size:12px; color:#1e293b; line-height:1.45; word-break: break-word;"></div>
+        </div>
+      </div>
+      <div class="resolution-success-actions">
+        <button type="button" class="btn-success-modal-close" id="btnResolutionSuccessClose" onclick="closeSuccessfullyResolvedModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Responder Done Helping / Finish Rescue Task Modal -->
+  <div class="responder-finish-overlay" id="responderFinishOverlay" hidden onclick="if(event.target===this)closeResponderFinishModal()">
+    <div class="responder-finish-modal" role="dialog" aria-modal="true" aria-labelledby="responderFinishTitle">
+      <div class="finish-modal-header">
+        <div class="finish-header-icon">
+          <iconify-icon icon="solar:shield-check-bold-duotone" width="28" height="28"></iconify-icon>
+        </div>
+        <div class="finish-header-text">
+          <span class="finish-badge">EMERGENCY RESCUE COMPLETION</span>
+          <h2 id="responderFinishTitle">Done Helping &bull; Finish Emergency Task</h2>
+          <p>Confirm conclusion of on-site rescue assistance for this emergency.</p>
+        </div>
+        <button type="button" class="close-finish-modal" onclick="closeResponderFinishModal()" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <div class="finish-modal-body">
+        <!-- Incident & Student Overview Summary Box -->
+        <div class="finish-incident-summary">
+          <div class="summary-top">
+            <span class="finish-type-pill" id="finishIncidentTypePill">Medical Emergency</span>
+            <strong class="finish-code" id="finishIncidentCode">#MED_0011</strong>
+          </div>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <small>STUDENT IN NEED</small>
+              <strong id="finishStudentName">UMak Student</strong>
+              <span id="finishStudentCollege" style="font-size:11px;color:#64748b;">University Community</span>
+            </div>
+            <div class="summary-item">
+              <small>INCIDENT LOCATION</small>
+              <strong id="finishLocation">University Campus</strong>
+            </div>
+            <div class="summary-item">
+              <small>ASSIGNED RESPONDER</small>
+              <strong id="finishResponderName">Assigned Unit</strong>
+            </div>
+            <div class="summary-item">
+              <small>MISSION STATUS</small>
+              <strong id="finishElapsed" style="color:#15803d;">Active rescue en route</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes Textarea -->
+        <div class="finish-textarea-group">
+          <label for="finishResolutionNotes">Rescue Completion Report <span aria-hidden="true">*</span>:</label>
+          <textarea id="finishResolutionNotes" rows="3" maxlength="2000" required placeholder="Describe how you helped the student and the outcome of the rescue..."></textarea>
+        </div>
+
+        <!-- Confirmation Notice -->
+        <div class="finish-confirmation-notice">
+          <iconify-icon icon="solar:info-circle-bold" width="18" height="18"></iconify-icon>
+          <span>Submitting the report notifies the HEAD that this incident is ready for final review. It does not resolve the incident.</span>
+        </div>
+        <div class="finish-cancel-choice">
+          <p>Choose an action for this ongoing rescue.</p>
+          <div>
+            <button type="button" class="btn-finish-cancel-yes" onclick="openResponderCancelReasonModal()">Yes, cancel response</button>
+            <button type="button" class="btn-finish-cancel-no" id="submitRescueReportBtn" onclick="submitResponderFinishTask()">Submit Completion Report</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="finish-modal-footer">
+        <button type="button" class="btn-cancel-finish" onclick="closeResponderFinishModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="responder-cancel-reason-overlay" id="responderCancelReasonOverlay" hidden onclick="if(event.target===this)closeResponderCancelReasonModal()">
+    <section class="responder-cancel-reason-dialog" role="dialog" aria-modal="true" aria-labelledby="responderCancelReasonTitle">
+      <header>
+        <span>RESPONSE CANCELLATION</span>
+        <h2 id="responderCancelReasonTitle">What is the reason for cancelling this rescue?</h2>
+        <p>Incident <strong id="responderCancelReasonIncidentId">—</strong></p>
+      </header>
+      <label for="responderCancelReasonInput">Rescue cancellation reason <span aria-hidden="true">*</span></label>
+      <textarea id="responderCancelReasonInput" rows="4" maxlength="1000" required placeholder="Explain why this rescue response is being cancelled."></textarea>
+      <div class="responder-cancel-reason-actions">
+        <button type="button" onclick="closeResponderCancelReasonModal()">Back</button>
+        <button type="button" id="submitResponderCancellationBtn" onclick="submitResponderCancellation()">Confirm Cancellation</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="responder-report-success-overlay" id="responderReportSuccessModal" hidden onclick="if(event.target===this)window.closeResponderReportSuccessModal && window.closeResponderReportSuccessModal()">
+    <section class="responder-report-success-dialog" role="dialog" aria-modal="true" aria-labelledby="responderReportSuccessTitle">
+      <span class="responder-report-success-icon" aria-hidden="true">&#10003;</span>
+      <p class="responder-report-success-kicker">RESCUE COMPLETED</p>
+      <h2 id="responderReportSuccessTitle">Incident rescued successfully</h2>
+      <p>Incident <strong id="responderReportSuccessIncidentId">—</strong> has been removed from your active rescue assignments. The HEAD account can review your report and click <strong>Resolve</strong>; the incident remains On Going until then.</p>
+      <button type="button" onclick="window.closeResponderReportSuccessModal && window.closeResponderReportSuccessModal()">Done</button>
+    </section>
+  </div>
+
+  <!-- Cancel Incident Confirmation Modal (Yes / No Choice) -->
+  <div class="cancel-confirm-overlay" id="cancelConfirmModal" hidden onclick="if(event.target===this)closeCancelConfirmModal()">
+    <div class="cancel-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="cancelConfirmTitle">
+      <div class="cancel-confirm-icon-wrap">
+        <div class="cancel-confirm-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </div>
+      </div>
+      <h2 id="cancelConfirmTitle" class="cancel-confirm-title">Do you really want to cancel it?</h2>
+      <p class="cancel-confirm-message">
+        Are you sure you want to cancel incident <strong id="cancelConfirmIncidentId">INCIDENT</strong>? This will update the status to <strong>Cancelled</strong> across all dashboard and incident logs.
+      </p>
+      <div class="cancel-confirm-details">
+        <div class="cancel-detail-row">
+          <span>Incident ID:</span>
+          <strong id="cancelModalCode">—</strong>
+        </div>
+        <div class="cancel-detail-row">
+          <span>Student:</span>
+          <strong id="cancelModalStudent">—</strong>
+        </div>
+        <div class="cancel-detail-row">
+          <span>Category:</span>
+          <strong id="cancelModalCategory">—</strong>
+        </div>
+        <div class="cancel-detail-row">
+          <span>Current Status:</span>
+          <strong id="cancelModalCurrentStatus" style="color: #b45309;">On Going</strong>
+        </div>
+      </div>
+
+      <!-- ADD THIS TEXTAREA BLOCK -->
+      <div style="margin-bottom: 18px; text-align: left;">
+        <label for="generalCancelReasonInput" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+          Reason for Cancellation <span style="color: #dc2626;">*</span>
+        </label>
+        <textarea id="generalCancelReasonInput" rows="3" required placeholder="Explain why this incident is being cancelled..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; resize: vertical; box-sizing: border-box;"></textarea>
+      </div>
+      <!-- END TEXTAREA BLOCK -->
+      <div class="cancel-confirm-actions">
+        <button type="button" class="btn-cancel-choice btn-cancel-yes" id="btnCancelConfirmYes" onclick="confirmAndExecuteCancellation()">Yes, please cancel it</button>
+        <button type="button" class="btn-cancel-choice btn-cancel-no" id="btnCancelConfirmNo" onclick="closeCancelConfirmModal()">No</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assign Responder to Rescue Incident Modal -->
+  <div class="assign-responder-overlay" id="assignResponderModal" hidden onclick="if(event.target===this)closeAssignResponderModal()">
+    <div class="assign-responder-dialog" role="dialog" aria-modal="true" aria-labelledby="assignResponderTitle">
+      <header class="assign-responder-header">
+        <div>
+          <span class="assign-kicker">DISPATCH &amp; RESCUE ASSIGNMENT</span>
+          <h2 id="assignResponderTitle">Assign Responder to Rescue</h2>
+          <p id="assignResponderSubtitle">Dispatch appropriate response unit for this emergency incident</p>
+        </div>
+        <button type="button" class="assign-responder-close" id="closeAssignResponderBtn" onclick="closeAssignResponderModal()" aria-label="Close">&times;</button>
+      </header>
+
+      <form id="assignResponderForm" onsubmit="handleAssignResponderSubmit(event)">
+        <div class="assign-responder-body">
+          <!-- Incident Overview Card -->
+          <div class="assign-incident-banner">
+            <div class="banner-badge" id="assignIncidentTypeBadge">Medical Emergency</div>
+            <div class="banner-details">
+              <strong id="assignIncidentCode">#MED_0010</strong>
+              <span id="assignIncidentDetail">Emergency Incident Request</span>
+              <small id="assignIncidentLocation">University of Makati Campus</small>
+            </div>
+          </div>
+
+          <!-- Rescue Assignment Method / Selector for each incident type -->
+          <div class="assign-form-group">
+            <label for="assignRescueUnitSelect">
+              <strong>Specialized Rescue Unit for <span id="assignIncidentTypeName">Medical</span>:</strong>
+            </label>
+            <select id="assignRescueUnitSelect" class="assign-select" onchange="handleRescueUnitSelectionChange(this.value)">
+              <!-- Dynamically populated based on incident category -->
+            </select>
+            <small class="assign-helper">Specialized units tailored for this incident type.</small>
+          </div>
+
+          <!-- Registered Personnel (Responder Accounts) -->
+          <div class="assign-form-group">
+            <label for="assignResponderAccountSelect">
+              <strong>Assigned Registered Responder:</strong> <span class="required" style="color:#dc2626;">*</span>
+            </label>
+            <select id="assignResponderAccountSelect" class="assign-select" onchange="handleResponderAccountChange(this.value)">
+              <option value="">-- Select registered responder personnel --</option>
+              <!-- Populated from database employee responders -->
+            </select>
+            <input type="hidden" id="assignResponderNameInput" class="assign-input">
+          </div>
+
+          <div class="assign-form-group">
+            <label for="assignResponderPhoneInput">
+              <strong>Contact / Radio Channel:</strong>
+            </label>
+            <input type="text" id="assignResponderPhoneInput" class="assign-input" placeholder="e.g. 0917-888-5053">
+          </div>
+
+          <div class="assign-grid-two">
+            <div class="assign-form-group">
+              <label for="assignEtaSelect">
+                <strong>Estimated Arrival Time (ETA):</strong>
+              </label>
+              <select id="assignEtaSelect" class="assign-select">
+                <option value="3">~3 minutes (Immediate On-Campus)</option>
+                <option value="5" selected>~5 minutes (Standard Response)</option>
+                <option value="8">~8 minutes (Perimeter / Vicinity)</option>
+                <option value="10">~10 minutes</option>
+                <option value="15">~15 minutes (External Support)</option>
+              </select>
+            </div>
+
+            <div class="assign-form-group">
+              <label for="assignStatusTransition">
+                <strong>Update Incident Status:</strong>
+              </label>
+              <select id="assignStatusTransition" class="assign-select">
+                <option value="On Going" selected>On Going / En Route</option>
+                <option value="Active">Keep Active</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="assign-form-group">
+            <label for="assignDispatchNotes">
+              <strong>Rescue Mission Notes / Dispatch Instructions:</strong>
+            </label>
+            <textarea id="assignDispatchNotes" class="assign-textarea" rows="2" placeholder="e.g. Proceed with rescue equipment directly to the student location."></textarea>
+          </div>
+        </div>
+
+        <footer class="assign-responder-footer">
+          <button type="button" class="btn-assign-cancel" onclick="closeAssignResponderModal()">Cancel</button>
+          <button type="submit" class="btn-assign-submit" id="btnAssignResponderSubmit">
+            Dispatch &amp; Assign Responder
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <!-- Responder Assigned Success Pop-up Modal -->
+  <div class="assign-success-overlay" id="assignSuccessModal" hidden onclick="if(event.target===this)closeAssignSuccessModal()">
+    <div class="assign-success-dialog" role="dialog" aria-modal="true" aria-labelledby="assignSuccessTitle">
+      <div class="assign-success-icon-wrap">
+        <div class="assign-success-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+      </div>
+      <h2 id="assignSuccessTitle" class="assign-success-title">Responder Assigned</h2>
+      <p class="assign-success-message">
+        A responder has been successfully assigned to this incident.
+      </p>
+      <div class="assign-success-details">
+        <div class="success-detail-row">
+          <span>Incident:</span>
+          <strong id="assignSuccessIncidentCode">—</strong>
+        </div>
+        <div class="success-detail-row">
+          <span>Assigned Responder:</span>
+          <strong id="assignSuccessResponderName" style="color: #0284c7;">—</strong>
+        </div>
+        <div class="success-detail-row">
+          <span>Contact Number:</span>
+          <strong id="assignSuccessPhone">—</strong>
+        </div>
+        <div class="success-detail-row">
+          <span>Incident Status:</span>
+          <span id="assignSuccessStatus" style="background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 9999px;">On Going</span>
+        </div>
+        <div class="success-detail-row">
+          <span>Estimated Arrival:</span>
+          <strong id="assignSuccessEta">~5 minutes</strong>
+        </div>
+      </div>
+      <div class="assign-success-actions">
+        <button type="button" class="btn-assign-success-close" id="btnAssignSuccessClose" onclick="closeAssignSuccessModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cancel-confirm-overlay" id="disapproveConfirmModal" hidden onclick="if(event.target===this)closeDisapproveConfirmModal()">
+    <div class="cancel-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="disapproveConfirmTitle" aria-describedby="disapproveConfirmMessage">
+      <div class="cancel-confirm-icon-wrap">
+        <div class="cancel-confirm-icon" aria-hidden="true">!</div>
+      </div>
+      <h2 id="disapproveConfirmTitle" class="cancel-confirm-title">Disapprove this account?</h2>
+      <p id="disapproveConfirmMessage" class="cancel-confirm-message">
+        Are you sure you want to disapprove <strong id="disapproveConfirmAccount">this account</strong>? This account will lose access.
+      </p>
+      <div class="cancel-confirm-actions">
+        <button type="button" class="btn-cancel-choice btn-cancel-yes" id="btnDisapproveConfirmYes" onclick="confirmDisapproveAccount()">Yes, disapprove it</button>
+        <button type="button" class="btn-cancel-choice btn-cancel-no" onclick="closeDisapproveConfirmModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Incidents Sidebar Pop-up (Right Drawer matching image.png) -->
+  <div id="exportIncidentsOverlay" class="drawer-overlay" onclick="closeExportDrawer()"></div>
+  <aside id="exportIncidentsDrawer" class="export-incidents-drawer" aria-labelledby="exportDrawerTitle" role="dialog" aria-modal="true">
+    <!-- Header with Red Circular Close Button and Centered Title -->
+    <div class="drawer-header">
+      <button type="button" class="drawer-close-circle" id="drawerCloseBtn" onclick="closeExportDrawer()" aria-label="Close">&times;</button>
+      <h2 id="exportDrawerTitle" class="drawer-title">Export Incidents</h2>
+    </div>
+
+    <div class="drawer-body">
+      <!-- 1. Export Format: -->
+      <div class="drawer-section">
+        <div class="drawer-section-heading">
+          <iconify-icon icon="solar:document-add-bold" class="heading-icon"></iconify-icon>
+          <span>Export Format:</span>
+        </div>
+        <div class="drawer-format-row" role="radiogroup" aria-label="Export Format">
+          <button type="button" class="format-pill active" data-format="pdf" id="formatPillPdf" onclick="selectExportFormat('pdf')" role="radio" aria-checked="true">
+            <span class="pill-radio-dot"></span>
+            <iconify-icon icon="solar:file-text-bold" class="pill-icon format-pdf-icon"></iconify-icon>
+            <span class="pill-label">PDF</span>
+          </button>
+          <button type="button" class="format-pill" data-format="excel" id="formatPillExcel" onclick="selectExportFormat('excel')" role="radio" aria-checked="false">
+            <span class="pill-radio-dot"></span>
+            <iconify-icon icon="solar:document-medicine-bold" class="pill-icon format-excel-icon"></iconify-icon>
+            <span class="pill-label">Excel</span>
+          </button>
+          <button type="button" class="format-pill" data-format="print" id="formatPillPrint" onclick="selectExportFormat('print')" role="radio" aria-checked="false">
+            <span class="pill-radio-dot"></span>
+            <iconify-icon icon="solar:printer-bold" class="pill-icon format-print-icon"></iconify-icon>
+            <span class="pill-label">Print</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Report Type: Box -->
+      <div class="drawer-card-box">
+        <div class="drawer-section-heading">
+          <iconify-icon icon="solar:document-text-bold" class="heading-icon"></iconify-icon>
+          <span>Report Type:</span>
+        </div>
+        <div class="drawer-report-type-grid" role="radiogroup" aria-label="Report Type">
+          <div class="report-type-card active" data-type="just" id="reportTypeCardJust" onclick="selectReportType('just')" role="radio" aria-checked="true" tabindex="0">
+            <span class="type-radio-dot"></span>
+            <iconify-icon icon="solar:file-text-bold" class="type-card-icon type-icon-red"></iconify-icon>
+            <strong class="type-card-title">Just Report</strong>
+            <span class="type-card-desc">Standard incidents</span>
+          </div>
+          <div class="report-type-card" data-type="resolved" id="reportTypeCardResolved" onclick="selectReportType('resolved')" role="radio" aria-checked="false" tabindex="0">
+            <span class="type-radio-dot"></span>
+            <iconify-icon icon="solar:check-circle-bold" class="type-card-icon type-icon-green"></iconify-icon>
+            <strong class="type-card-title">Resolved Report</strong>
+            <span class="type-card-desc">Resolution summaries</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Filters: Box -->
+      <div class="drawer-card-box">
+        <div class="drawer-section-heading">
+          <iconify-icon icon="solar:filter-bold" class="heading-icon"></iconify-icon>
+          <span>Filters:</span>
+        </div>
+
+        <div class="drawer-filter-group">
+          <label for="drawerStatusSelect">Status:</label>
+          <div class="drawer-select-wrapper">
+            <select id="drawerStatusSelect" class="drawer-select">
+              <option value="all">All Status</option>
+              <option value="Active">Active</option>
+              <option value="On Going">On Going</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="drawer-filter-group">
+          <label for="drawerCategorySelect">Category:</label>
+          <div class="drawer-select-wrapper">
+            <select id="drawerCategorySelect" class="drawer-select">
+              <option value="all">All Categories</option>
+              <option value="Medical">Medical</option>
+              <option value="Security">Security</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="drawer-filter-group">
+          <label for="drawerSearchInput">Search:</label>
+          <input type="text" id="drawerSearchInput" class="drawer-input" placeholder="Search by incident ID, student name, or reporter...">
+        </div>
+
+        <div class="drawer-filter-group">
+          <label for="drawerSortSelect">Sort Order:</label>
+          <div class="drawer-select-wrapper">
+            <select id="drawerSortSelect" class="drawer-select">
+              <option value="desc">Most Recent First</option>
+              <option value="asc">Oldest First</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="drawer-filter-group">
+          <label>Date Range:</label>
+          <div class="drawer-date-grid">
+            <div class="drawer-date-col">
+              <span class="drawer-date-sublabel">Start Date</span>
+              <input type="date" id="drawerStartDate" class="drawer-input drawer-date-input">
+            </div>
+            <div class="drawer-date-col">
+              <span class="drawer-date-sublabel">End Date</span>
+              <input type="date" id="drawerEndDate" class="drawer-input drawer-date-input">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Note Box -->
+      <div class="drawer-note-box">
+        <iconify-icon icon="solar:info-circle-bold" class="drawer-note-icon"></iconify-icon>
+        <div class="drawer-note-text">
+          <strong>Note:</strong> PDF and Excel-compatible CSV download automatically. Print opens the print dialog.
+        </div>
+      </div>
+
+      <!-- 5. Generate & Export Action Button -->
+      <div class="drawer-action-container">
+        <button type="button" class="btn-drawer-generate" id="btnDrawerGenerateExport" onclick="handleDrawerExport()">
+          <iconify-icon icon="solar:download-minimalistic-bold"></iconify-icon>
+          <span>Generate &amp; Export</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Export Teams Sidebar Pop-up / Drawer -->
+  <div id="exportTeamsOverlay" class="drawer-overlay" onclick="closeTeamsExportDrawer()"></div>
+  <aside id="exportTeamsDrawer" class="export-incidents-drawer" aria-labelledby="exportTeamsDrawerTitle" role="dialog" aria-modal="true">
+    <div class="drawer-header">
+      <button type="button" class="drawer-close-circle" id="teamsDrawerCloseBtn" onclick="closeTeamsExportDrawer()" aria-label="Close">&times;</button>
+      <h2 id="exportTeamsDrawerTitle" class="drawer-title">Export Teams</h2>
+    </div>
+
+    <div class="drawer-body">
+      <!-- 1. Export Format: -->
+      <div class="drawer-section">
+        <div class="drawer-section-heading">
+          <iconify-icon icon="solar:document-add-bold" class="heading-icon"></iconify-icon>
+          <span>Export Format:</span>
+        </div>
+        <div class="drawer-format-row" role="radiogroup" aria-label="Export Format">
+          <button type="button" class="format-pill active" data-format="pdf" id="teamsFormatPillPdf" onclick="selectTeamsExportFormat('pdf')" role="radio" aria-checked="true">
+            <span class="pill-radio-dot"></span>
+            <iconify-icon icon="solar:file-text-bold" class="pill-icon format-pdf-icon"></iconify-icon>
+            <span class="pill-label">PDF</span>
+          </button>
+          <button type="button" class="format-pill" data-format="excel" id="teamsFormatPillExcel" onclick="selectTeamsExportFormat('excel')" role="radio" aria-checked="false">
+            <span class="pill-radio-dot"></span>
+            <iconify-icon icon="solar:document-medicine-bold" class="pill-icon format-excel-icon"></iconify-icon>
+            <span class="pill-label">Excel</span>
+          </button>
+          <button type="button" class="format-pill" data-format="print" id="teamsFormatPillPrint" onclick="selectTeamsExportFormat('print')" role="radio" aria-checked="false">
+            <span class="pill-radio-dot"></span>
+            <iconify-icon icon="solar:printer-bold" class="pill-icon format-print-icon"></iconify-icon>
+            <span class="pill-label">Print</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Filters Box -->
+      <div class="drawer-card-box">
+        <div class="drawer-section-heading">
+          <iconify-icon icon="solar:filter-bold" class="heading-icon"></iconify-icon>
+          <span>Filters:</span>
+        </div>
+
+        <div class="drawer-filter-group">
+          <label for="teamsDrawerRoleSelect">Role:</label>
+          <div class="drawer-select-wrapper">
+            <select id="teamsDrawerRoleSelect" class="drawer-select">
+              <option value="all">All Roles</option>
+              <option value="System Admin">System Admin</option>
+              <option value="HEAD">HEAD</option>
+              <option value="Responder">Responder</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="drawer-filter-group">
+          <label for="teamsDrawerStatusSelect">Status:</label>
+          <div class="drawer-select-wrapper">
+            <select id="teamsDrawerStatusSelect" class="drawer-select">
+              <option value="all">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Disapproved">Disapproved</option>
+              <option value="Suspended">Suspended</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="drawer-filter-group">
+          <label for="teamsDrawerSearchInput">Search:</label>
+          <input type="text" id="teamsDrawerSearchInput" class="drawer-input" placeholder="Search by name, role or email...">
+        </div>
+      </div>
+
+      <!-- 3. Note Box -->
+      <div class="drawer-note-box">
+        <iconify-icon icon="solar:info-circle-bold" class="drawer-note-icon"></iconify-icon>
+        <div class="drawer-note-text">
+          <strong>Note:</strong> PDF and Excel-compatible CSV download automatically. Print opens the print dialog.
+        </div>
+      </div>
+
+      <!-- 4. Generate & Export Action Button -->
+      <div class="drawer-action-container">
+        <button type="button" class="btn-drawer-generate" id="btnDrawerGenerateTeamsExport" onclick="handleTeamsDrawerExport()">
+          <iconify-icon icon="solar:download-minimalistic-bold"></iconify-icon>
+          <span>Generate &amp; Export</span>
+        </button>
+      </div>
+    </div>
+  </aside>
 
   <!-- Global Toast Notification Banner -->
   <div class="toast" id="toast" role="status">Welcome to Heron's Emergency Alert Dashboard.</div>
 
   <!-- Leaflet Map JS and Dashboard Logic -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="/dashboard.js?v=1"></script>
+  <script src="/dashboard.js?v=13"></script>
 </body>
 </html>

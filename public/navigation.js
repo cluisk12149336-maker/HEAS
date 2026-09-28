@@ -55,6 +55,14 @@
       roles: ['System Admin', 'HEAD']
     },
     {
+      id: 'audit',
+      view: 'audit',
+      href: '#audit',
+      label: 'Audit Logs',
+      icon: 'solar:history-bold-duotone',
+      roles: ['System Admin', 'HEAD']
+    },
+    {
       id: 'reports',
       view: 'reports',
       href: '#reports',
@@ -63,12 +71,13 @@
       roles: ['System Admin', 'HEAD']
     },
     {
-      id: 'audit',
-      view: 'audit',
-      href: '#audit',
-      label: 'Audit Logs',
-      icon: 'solar:history-bold-duotone',
-      roles: ['System Admin', 'HEAD']
+      id: 'profile',
+      view: 'profile',
+      href: '#profile',
+      label: 'Account Profile',
+      icon: 'solar:user-circle-bold-duotone',
+      roles: ['System Admin', 'HEAD', 'Responder'],
+      isBottom: true
     }
   ];
 
@@ -89,9 +98,10 @@
         const isActive = item.view === activeView;
         const isAllowed = this._isRoleAllowed(item.roles, userRole);
         const displayStyle = isAllowed ? '' : 'style="display:none;"';
+        const bottomClass = (item.isBottom || item.view === 'profile' || item.id === 'profile') ? ' nav-bottom' : '';
 
         return `
-          <a class="${isActive ? 'active' : ''}" 
+          <a class="${isActive ? 'active' : ''}${bottomClass}" 
              href="${item.href}" 
              data-view="${item.view}" 
              data-roles="${item.roles.join(',')}" 
@@ -129,6 +139,8 @@
     bindEvents(container) {
       const links = container.querySelectorAll('a[data-view]');
       links.forEach(link => {
+        if (link.dataset.navBound) return;
+        link.dataset.navBound = 'true';
         link.addEventListener('click', (e) => {
           e.preventDefault();
           const targetView = link.getAttribute('data-view');
@@ -184,8 +196,18 @@
 
     _isRoleAllowed(allowedRoles, role) {
       if (!role) return true;
-      if (role === 'System Administrator' || role === 'System Admin') return true;
-      return allowedRoles.includes(role);
+      const cleanRole = this._normalizeRole(role);
+      if (cleanRole === 'system admin') return true;
+      if (!Array.isArray(allowedRoles)) return true;
+      return allowedRoles.some(r => this._normalizeRole(r) === cleanRole);
+    }
+
+    _normalizeRole(role) {
+      const cleanRole = String(role || '').trim().toLowerCase();
+      if (cleanRole === 'admin' || (cleanRole.includes('system') && cleanRole.includes('admin'))) return 'system admin';
+      if (cleanRole.includes('head')) return 'head';
+      if (cleanRole.includes('responder')) return 'responder';
+      return cleanRole;
     }
 
     _notifyChange(view, linkEl) {

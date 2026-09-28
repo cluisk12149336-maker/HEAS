@@ -1,0 +1,44 @@
+{
+  "ADM-ADM00001": {
+    "username": "admin_joleh",
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_ADM-ADM00001_1790444876780.png",
+    "department": "System Administrator",
+    "last_activity": "2026-09-26T17:47:57.286Z"
+  },
+  "EMP-1788237801709-GLW10U": {
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1788237801709-GLW10U_1790581024597.png",
+    "last_activity": "2026-09-28T07:37:04.937Z",
+    "username": "admin_joleh"
+  },
+  "EMP-1790497637380-TXDC8F": {
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790497637380-TXDC8F_1790581855117.png",
+    "last_activity": "2026-09-28T07:50:55.500Z",
+    "username": "admin_joleh"
+  },
+  "EMP-1790531306652-ILKBLT": {
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790531306652-ILKBLT_1790589423432.png",
+    "last_activity": "2026-09-28T09:57:03.771Z",
+    "employee_phone": "0917-888-5053",
+    "phone": "0917-888-5053",
+    "assigned_emergency_type": "Medical",
+    "last_assigned_incident_id": "23050caa-6259-48f9-bba5-cc4385efd0cc",
+    "last_assigned_at": "2026-09-28T09:55:04.701Z",
+    "username": "admin_joleh"
+  },
+  "EMP-1790582871579-JGERNC": {
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790582871579-JGERNC_1790583160932.jpg",
+    "last_activity": "2026-09-28T08:12:41.785Z"
+  },
+  "EMP-1790589689662-GEYNKU": {
+    "username": "sbantay.k12150533",
+    "last_activity": "2026-09-28T11:45:45.527Z",
+    "assigned_emergency_type": "Medical",
+    "last_assigned_incident_id": "e16637d6-bf5f-44c0-84d2-7f63deccf279",
+    "last_assigned_at": "2026-09-28T18:40:26.738Z"
+  },
+  "EMP-1790578455764-9NMNDE": {
+    "username": "admin_joleh",
+    "last_activity": "2026-09-28T15:08:54.649Z",
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790578455764-9NMNDE_1790608134074.png"
+  }
+}
