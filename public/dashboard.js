@@ -4305,29 +4305,29 @@ async function loadDashboardData() {
 }
 
 function renderOverviewUsers(users) {
-  // Check what ID you actually use in your HTML for this specific dashboard table
-  const tbody = document.querySelector('#overviewUsersTableBody'); // Adjust this ID if yours is different
-  
+  const tbody = document.querySelector('#overviewUsersTableBody');
   if (!tbody) return;
 
-  // 1. ADD THIS LINE: Wipe out the hardcoded HTML dummy data
   tbody.innerHTML = '';
 
-  // 2. Only show the top 5 most recent active admins on the dashboard
-  const displayUsers = users.slice(0, 5);
+  const displayUsers = (users || []).slice(0, 5);
 
-  // 3. Loop and render the real data
-  displayUsers.forEach(user => {
+  tbody.innerHTML = displayUsers.map(u => {
     const isOnline = u.employee_status === 'Active';
-    const statusClass = isOnline ? 'online' : (u.employee_status === 'Pending' ? 'away' : 'offline');
+    const statusClass = isOnline ? 'status-active' : (u.employee_status === 'Pending' ? 'status-pending' : 'status-inactive');
     const statusText = u.employee_status || 'Active';
     const timeAgo = formatTimeAgo(u.employee_created_at || u.employee_last_login);
 
     return `
       <tr>
-        <td><strong>${escapeHtml(u.employee_name || 'Unnamed')}</strong></td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <img src="${escapeHtml(u.avatar_url || '/images/default-avatar.png')}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;" onerror="this.src='/images/default-avatar.png'">
+            <strong>${escapeHtml(u.employee_name || 'Unnamed')}</strong>
+          </div>
+        </td>
         <td>${escapeHtml(u.employee_role || 'Staff')}</td>
-        <td class="${statusClass}">${escapeHtml(statusText)}</td>
+        <td><span class="status-badge ${statusClass}">${escapeHtml(statusText)}</span></td>
         <td>${timeAgo}</td>
       </tr>
     `;
@@ -4986,6 +4986,8 @@ function initProfileModule() {
       const sessionId = getSessionId();
 
       try {
+        const sessionId = getSessionId();
+        const storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('currentUser') || '{}');
         const response = await fetch('/api/profile', {
           method: 'PUT',
           headers: {
@@ -5174,6 +5176,7 @@ function initProfileModule() {
 async function loadProfileData() {
   try {
     const sessionId = getSessionId();
+    const storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('currentUser') || '{}');
     const response = await fetch('/api/profile', {
       headers: {
         'x-session-id': sessionId || '',
