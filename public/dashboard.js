@@ -3772,7 +3772,7 @@ async function loadIncidentsData() {
       renderOverviewAlertNotifications(data.incidents);
       updateIncidentFilterCounts(data.incidents);
 
-      updateDynamicMapMarkers(data.incidents);
+      updateDynamicMapMarkers(currentEmergencyIncidents);
     }
   } catch (err) {
     console.warn('Failed to load emergency incidents from Supabase:', err.message);
@@ -4276,16 +4276,26 @@ async function loadDashboardData() {
     // D. Render Emergency Incidents from Supabase emergency_alerts
     if (Array.isArray(data.incidents)) {
       currentEmergencyIncidents = data.incidents;
+      
+      // STRICT GLOBAL LOCK: Instantly erase unassigned incidents from the Responder's memory on dashboard load
+      if (typeof isResponderRole === 'function' && isResponderRole()) {
+        currentEmergencyIncidents = currentEmergencyIncidents.filter(i => isIncidentAssignedToCurrentResponder(i));
+      }
+
       currentEmergencyIncidentsMap = new Map();
-      assignIncidentDisplayIds(data.incidents);
-      data.incidents.forEach(inc => {
+      
+      // Use the filtered array (currentEmergencyIncidents) for EVERYTHING below
+      assignIncidentDisplayIds(currentEmergencyIncidents);
+      currentEmergencyIncidents.forEach(inc => {
         if (inc.id) currentEmergencyIncidentsMap.set(String(inc.id), inc);
         if (inc.display_id) currentEmergencyIncidentsMap.set(String(inc.display_id), inc);
       });
-      renderFullIncidentsTable(data.incidents);
-      renderOverviewIncidents(data.incidents);
-      renderOverviewAlertNotifications(data.incidents);
-      updateIncidentFilterCounts(data.incidents);
+      
+      renderFullIncidentsTable(currentEmergencyIncidents);
+      renderOverviewIncidents(currentEmergencyIncidents);
+      renderOverviewAlertNotifications(currentEmergencyIncidents);
+      updateIncidentFilterCounts(currentEmergencyIncidents);
+      updateDynamicMapMarkers(currentEmergencyIncidents);
     } else {
       loadIncidentsData();
     }
@@ -4295,16 +4305,19 @@ async function loadDashboardData() {
 }
 
 function renderOverviewUsers(users) {
-  const tbody = document.getElementById('overviewUsersTableBody');
+  // Check what ID you actually use in your HTML for this specific dashboard table
+  const tbody = document.querySelector('#overviewUsersTableBody'); // Adjust this ID if yours is different
+  
   if (!tbody) return;
 
-  if (!users || users.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:20px;">No administrative accounts found in Supabase.</td></tr>';
-    return;
-  }
+  // 1. ADD THIS LINE: Wipe out the hardcoded HTML dummy data
+  tbody.innerHTML = '';
 
-  const previewUsers = users.slice(0, 5);
-  tbody.innerHTML = previewUsers.map((u) => {
+  // 2. Only show the top 5 most recent active admins on the dashboard
+  const displayUsers = users.slice(0, 5);
+
+  // 3. Loop and render the real data
+  displayUsers.forEach(user => {
     const isOnline = u.employee_status === 'Active';
     const statusClass = isOnline ? 'online' : (u.employee_status === 'Pending' ? 'away' : 'offline');
     const statusText = u.employee_status || 'Active';
@@ -5080,7 +5093,11 @@ function initProfileModule() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'x-session-id': sessionId || ''
+                'x-session-id': sessionId || '',
+                'x-employee-id': storedUser.employee_id || storedUser.id || '',
+                'x-employee-email': storedUser.email || '',
+                'x-employee-role': storedUser.role || ''
+
               },
               body: JSON.stringify({
                 imageBase64: dataUrl,
@@ -5158,10 +5175,11 @@ async function loadProfileData() {
   try {
     const sessionId = getSessionId();
     const response = await fetch('/api/profile', {
-      headers: { 'x-session-id': sessionId || '',
-            'x-employee-id': storedUser.employee_id || storedUser.id || '',
-            'x-employee-email': storedUser.email || '',
-            'x-employee-role': storedUser.role || ''
+      headers: {
+        'x-session-id': sessionId || '',
+        'x-employee-id': storedUser.employee_id || storedUser.id || '',
+        'x-employee-email': storedUser.email || '',
+        'x-employee-role': storedUser.role || ''
       }
     });
     if (!response.ok) return;
@@ -6337,33 +6355,44 @@ function exportTeamsExcel() {
 
 
 function updateDynamicMapMarkers(incidents) {
-  if (!incidentMap || !liveIncidentMap) return;
-
-  // Clear existing markers from both maps
-  overviewMapMarkers.forEach(m => incidentMap.removeLayer(m.marker));
-  liveMapMarkers.forEach(m => liveIncidentMap.removeLayer(m.marker));
-  overviewMapMarkers = [];
-  liveMapMarkers = [];
-
   const list = incidents || currentEmergencyIncidents || [];
+  
+  // 1. Role Filter: Sandboxes Responders, but lets HEAD/Admin see everything
+  let mapIncidents = list;
+  if (isResponderRole()) {
+    mapIncidents = mapIncidents.filter(i => isIncidentAssignedToCurrentResponder(i));
+  }
 
-  list.forEach(incident => {
-    // Only plot if coordinates exist
+  // 2. Safely Clear the Overview Map (if it is currently loaded on screen)
+  if (typeof incidentMap !== 'undefined' && incidentMap !== null) {
+    if (!window.overviewMapMarkers) window.overviewMapMarkers = [];
+    window.overviewMapMarkers.forEach(m => incidentMap.removeLayer(m.marker));
+    window.overviewMapMarkers = [];
+  }
+
+  // 3. Safely Clear the Live Incident Map (if it is currently loaded on screen)
+  if (typeof liveIncidentMap !== 'undefined' && liveIncidentMap !== null) {
+    if (!window.liveMapMarkers) window.liveMapMarkers = [];
+    window.liveMapMarkers.forEach(m => liveIncidentMap.removeLayer(m.marker));
+    window.liveMapMarkers = [];
+  }
+
+  // 4. Plot the New Markers
+  mapIncidents.forEach(incident => {
+    // Only plot if coordinates actually exist in the database
     if (!incident.latitude || !incident.longitude) return;
-
-    // Determine color and icon based on category/status
+    
     const catLower = (incident.assistance_type || incident.category || '').toLowerCase();
     const statLower = (incident.status || '').toLowerCase().replace(/[^a-z]/g, '');
-
-    // Don't plot cancelled/resolved incidents by default unless you want to
-    if (statLower === 'cancelled' || statLower === 'canceled') return;
+    
+    // Hide resolved/cancelled incidents from the active maps
+    if (statLower === 'cancelled' || statLower === 'canceled' || statLower === 'resolved') return;
 
     let color = '#ed3942'; // Default Red (Medical/Active)
     let iconLabel = '!';
-
+    
     if (catLower.includes('sec')) { color = '#eab308'; iconLabel = '🛡️'; }
     if (catLower.includes('vicin') || catLower.includes('campus')) { color = '#2563eb'; iconLabel = '📍'; }
-    if (statLower === 'resolved') { color = '#16a34a'; iconLabel = '✓'; }
 
     const popupContent = `
       <div class="incident-popup-card">
@@ -6371,42 +6400,47 @@ function updateDynamicMapMarkers(incidents) {
           <div class="status-tag" style="background:${color}20;border-left:3px solid ${color}">
             <span class="pulse-dot" style="background:${color}"></span> ${incident.status || 'Active'}
           </div>
-          <span class="incident-id">${incident.display_id || incident.id}</span>
+          <span class="incident-id">${incident.display_id || incident.id.slice(0,8)}</span>
         </div>
         <div class="popup-content">
-          <div class="content-header">
+          <div class="content-header" style="margin-bottom: 8px;">
             <strong>${incident.incident || incident.assistance_type || 'Emergency'}</strong>
-            <small>${formatTimeAgo(incident.created_at)}</small>
           </div>
           <div class="details-table">
-            <div class="detail-row"><span class="label">Location:</span><span class="value">${incident.location_address || 'UMak Campus'}</span></div>
-            <div class="detail-row"><span class="label">Student:</span><span class="value">${incident.student_name || incident.accounts_student?.student_name || 'Reporter'}</span></div>
-            <div class="detail-row"><span class="label">Team:</span><span class="value" style="color:#159653;font-weight:bold;">${incident.responder_name || 'Unassigned'}</span></div>
+            <div class="detail-row" style="font-size: 11px; margin-bottom: 4px;"><span class="label">Loc:</span> <span class="value">${incident.location_address || 'UMak Campus'}</span></div>
+            <div class="detail-row" style="font-size: 11px; margin-bottom: 8px;"><span class="label">Team:</span> <span class="value" style="color:#159653;font-weight:bold;">${incident.responder_name || 'Unassigned'}</span></div>
           </div>
           <div class="popup-action">
-            <button type="button" onclick="openIncidentDetails('${incident.id}')">View Details &rarr;</button>
+            <button type="button" onclick="openIncidentDetails('${incident.id}')" style="width: 100%; background: #0f172a; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 12px;">View Details &rarr;</button>
           </div>
         </div>
       </div>
     `;
 
-    // Create marker for Overview Map
-    const overviewIcon = L.divIcon({
+    // Create the physical HTML pin
+    const customIcon = L.divIcon({
       className: 'incident-pin',
-      html: `<div class="incident-marker-badge" style="--pin-color:${color}"><span class="pin-label">${iconLabel}</span></div>`,
-      iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -35]
+      html: `<div style="background-color: ${color}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.4);"><span style="font-size: 14px;">${iconLabel}</span></div>`,
+      iconSize: [28, 28], 
+      iconAnchor: [14, 28], 
+      popupAnchor: [0, -25]
     });
-    const oMarker = L.marker([incident.latitude, incident.longitude], { icon: overviewIcon }).addTo(incidentMap).bindPopup(popupContent, { maxWidth: 280 });
-    overviewMapMarkers.push({ marker: oMarker, status: statLower, data: incident });
 
-    // Create marker for Live Map
-    const liveIcon = L.divIcon({
-      className: 'incident-pin',
-      html: `<div class="incident-marker-badge" style="--pin-color:${color}"><span class="pin-label">${iconLabel}</span></div>`,
-      iconSize: [40, 40], iconAnchor: [20, 40], popupAnchor: [0, -35]
-    });
-    const lMarker = L.marker([incident.latitude, incident.longitude], { icon: liveIcon }).addTo(liveIncidentMap).bindPopup(popupContent, { maxWidth: 280 });
-    liveMapMarkers.push({ marker: lMarker, status: statLower, data: incident });
+    // Safely add to Overview Map
+    if (typeof incidentMap !== 'undefined' && incidentMap !== null) {
+      const oMarker = L.marker([incident.latitude, incident.longitude], { icon: customIcon })
+        .addTo(incidentMap)
+        .bindPopup(popupContent, { maxWidth: 250 });
+      window.overviewMapMarkers.push({ marker: oMarker, data: incident });
+    }
+
+    // Safely add to Live Map
+    if (typeof liveIncidentMap !== 'undefined' && liveIncidentMap !== null) {
+      const lMarker = L.marker([incident.latitude, incident.longitude], { icon: customIcon })
+        .addTo(liveIncidentMap)
+        .bindPopup(popupContent, { maxWidth: 250 });
+      window.liveMapMarkers.push({ marker: lMarker, data: incident });
+    }
   });
 }
 
