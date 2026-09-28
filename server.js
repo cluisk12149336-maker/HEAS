@@ -3843,19 +3843,31 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  // ==========================================
-  // Profile Module API Endpoints
-  // ==========================================
   function getAuthenticatedSession(req) {
-    const headerSessionId = req.headers['x-session-id'];
-    const cookieSessionId = (req.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
-    const sessionId = headerSessionId || cookieSessionId;
-    if (sessionId && sessions.has(sessionId)) {
-      return sessions.get(sessionId);
-    }
-    return null;
+  const headerSessionId = req.headers['x-session-id'];
+  const cookieSessionId = (req.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
+  const sessionId = headerSessionId || cookieSessionId;
+  
+  // 1. Check in-memory session first
+  if (sessionId && sessions.has(sessionId)) {
+    return sessions.get(sessionId);
+  }
+  
+  // 2. Serverless fallback: Read identity from client headers
+  const employeeId = req.headers['x-employee-id'];
+  const employeeEmail = req.headers['x-employee-email'];
+  const employeeRole = req.headers['x-employee-role'];
+
+  if (employeeId || employeeEmail) {
+    return {
+      employee_id: employeeId || null,
+      employee_email: employeeEmail || null,
+      employee_role: employeeRole || null
+    };
   }
 
+  return null;
+}
   // 1. GET /api/profile - Fetch current user profile details
   if (request.method === 'GET' && request.url === '/api/profile') {
     (async () => {
@@ -3878,26 +3890,10 @@ const server = http.createServer((request, response) => {
           if (!error && data) account = data;
         }
 
-        // Fallback: look up default Administrator (ADM-ADM00001) or active admin account
+        // If no user account matches, return 401 Unauthorized instead of defaulting to Admin!
         if (!account) {
-          const { data: defaultAcc } = await supabase
-            .from('employee_accounts')
-            .select('*')
-            .eq('employee_id', 'ADM-ADM00001')
-            .maybeSingle();
-          
-          if (defaultAcc) {
-            account = defaultAcc;
-          } else {
-            const { data: fallbackAcc } = await supabase
-              .from('employee_accounts')
-              .select('*')
-              .eq('employee_status', 'Active')
-              .order('admin_id', { ascending: true })
-              .limit(1)
-              .maybeSingle();
-            account = fallbackAcc;
-          }
+          sendJson(response, 401, { error: 'Session expired or account not found. Please log in again.' });
+          return;
         }
 
         if (!account) {

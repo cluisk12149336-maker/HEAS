@@ -4977,7 +4977,10 @@ function initProfileModule() {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'x-session-id': sessionId || ''
+            'x-session-id': sessionId || '',
+            'x-employee-id': storedUser.employee_id || storedUser.id || '',
+            'x-employee-email': storedUser.email || '',
+            'x-employee-role': storedUser.role || ''
           },
           body: JSON.stringify({ name, username, email })
         });
@@ -5155,7 +5158,11 @@ async function loadProfileData() {
   try {
     const sessionId = getSessionId();
     const response = await fetch('/api/profile', {
-      headers: { 'x-session-id': sessionId || '' }
+      headers: { 'x-session-id': sessionId || '',
+            'x-employee-id': storedUser.employee_id || storedUser.id || '',
+            'x-employee-email': storedUser.email || '',
+            'x-employee-role': storedUser.role || ''
+      }
     });
     if (!response.ok) return;
     const data = await response.json();
