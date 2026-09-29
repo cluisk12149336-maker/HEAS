@@ -2861,8 +2861,17 @@ async function handleAssignResponderSubmit(event) {
         const headers = { 'Content-Type': 'application/json' };
         const sessionId = typeof getSessionId === 'function' ? getSessionId() : '';
         if (sessionId) headers['x-session-id'] = sessionId;
+        
+        // Grab the user data
         const role = getCurrentUserRole();
+        const name = getCurrentUserName();
+        const empId = getCurrentUserEmployeeId();
+        
+        // Send it to the Vercel backend
         if (role) headers['x-employee-role'] = role;
+        if (name) headers['x-employee-name'] = name;
+        if (empId) headers['x-employee-id'] = empId;
+        
         return headers;
       })(),
       body: JSON.stringify(payload)
@@ -6180,8 +6189,8 @@ function updateDynamicMapMarkers(incidents) {
     let color = '#ed3942'; // Default Red (Active)
     if (statLower === 'ongoing' || statLower === 'pending') {
       color = '#eab308'; // Yellow for On Going
-    } else if (catLower.includes('vicin') || catLower.includes('campus')) {
-      color = '#2563eb'; // Blue for Vicinity
+    } else if (statLower === 'resolved') {
+      color = '#25eb35'; 
     }
 
     const popupContent = `
