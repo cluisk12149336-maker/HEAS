@@ -4156,14 +4156,9 @@ const server = http.createServer((request, response) => {
         const ext = extMap[detectedMime.toLowerCase()] || 'png';
         const fileBaseName = `avatar_${account.employee_id.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}.${ext}`;
 
-        // 1. Save locally in images/avatars/
-        const avatarDir = path.join(__dirname, 'images', 'avatars');
-        if (!fs.existsSync(avatarDir)) fs.mkdirSync(avatarDir, { recursive: true });
-        const localAvatarPath = path.join(avatarDir, fileBaseName);
-        fs.writeFileSync(localAvatarPath, buffer);
-        let finalAvatarUrl = `/images/avatars/${fileBaseName}`;
+        let finalAvatarUrl = '';
 
-        // 2. Upload to Supabase Storage bucket 'employee-avatars'
+        // 1. Upload directly to Supabase Storage bucket 'employee-avatars' (Safe for Vercel)
         try {
           const { data: uploadData, error: uploadErr } = await supabase.storage
             .from('employee-avatars')
@@ -4180,10 +4175,24 @@ const server = http.createServer((request, response) => {
               finalAvatarUrl = pubData.publicUrl;
             }
           } else {
-            console.warn('[Avatar Upload] Supabase storage note:', uploadErr.message);
+            console.warn('[Avatar Upload] Supabase storage error:', uploadErr.message);
           }
         } catch (storageErr) {
-          console.warn('[Avatar Upload] Storage fallback to local:', storageErr.message);
+          console.warn('[Avatar Upload] Supabase exception:', storageErr.message);
+        }
+
+        // 2. Fallback to local storage ONLY if running locally (not on Vercel) and Supabase failed
+        if (!finalAvatarUrl && !process.env.VERCEL) {
+          const avatarDir = path.join(__dirname, 'images', 'avatars');
+          if (!fs.existsSync(avatarDir)) fs.mkdirSync(avatarDir, { recursive: true });
+          const localAvatarPath = path.join(avatarDir, fileBaseName);
+          fs.writeFileSync(localAvatarPath, buffer);
+          finalAvatarUrl = `/images/avatars/${fileBaseName}`;
+        }
+
+        if (!finalAvatarUrl) {
+          sendJson(response, 500, { error: 'Failed to upload avatar to storage bucket.' });
+          return;
         }
 
         // 3. Update Supabase employee_accounts (if column exists)
