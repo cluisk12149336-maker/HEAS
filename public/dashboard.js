@@ -1128,21 +1128,33 @@ function initAlertDetails() {
     
     let html = '';
     
+    const supabaseStorageBase = 'https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/emergency-alert-media/';
+
     // Render Images
     images.forEach(img => {
-      // Assuming storage_path is a full URL. If it's a Supabase bucket path, 
-      // you may need to prepend your Supabase storage URL here.
-      const url = escapeHtml(img.storage_path);
+      let rawUrl = img.storage_path;
+      // If it's just a path, attach the Supabase domain. If it's already a full link, leave it alone.
+      if (!rawUrl.startsWith('http')) {
+        // Remove leading slashes just in case, then combine
+        rawUrl = supabaseStorageBase + rawUrl.replace(/^\/+/, ''); 
+      }
+      
+      const url = escapeHtml(rawUrl);
       html += `
-        <a href="${url}" target="_blank" style="display:block; aspect-ratio:1; border-radius:6px; overflow:hidden; border:1px solid #cbd5e1;">
-          <img src="${url}" style="width:100%; height:100%; object-fit:cover;" alt="Incident Photo">
+        <a href="${url}" target="_blank" style="display:block; aspect-ratio:1; border-radius:6px; overflow:hidden; border:1px solid #cbd5e1; background:#f1f5f9;">
+          <img src="${url}" style="width:100%; height:100%; object-fit:cover;" alt="Incident Photo" onerror="this.style.display='none'">
         </a>
       `;
     });
 
     // Render Videos
     videos.forEach(vid => {
-      const url = escapeHtml(vid.storage_path);
+      let rawUrl = vid.storage_path;
+      if (!rawUrl.startsWith('http')) {
+        rawUrl = supabaseStorageBase + rawUrl.replace(/^\/+/, '');
+      }
+      
+      const url = escapeHtml(rawUrl);
       html += `
         <a href="${url}" target="_blank" style="display:flex; align-items:center; justify-content:center; aspect-ratio:1; border-radius:6px; overflow:hidden; background:#1e293b; color:white; text-decoration:none; border:1px solid #cbd5e1; position:relative;">
           <iconify-icon icon="solar:play-circle-bold" width="32" height="32" style="position:absolute; pointer-events:none;"></iconify-icon>
@@ -1150,7 +1162,6 @@ function initAlertDetails() {
         </a>
       `;
     });
-
     chatMediaGallery.innerHTML = html;
     
     // Reset to closed state when opening a new chat
