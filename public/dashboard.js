@@ -6615,6 +6615,18 @@ function stopResponderLocationTracking() {
   }
 }
 
+
+// Global 404 Image Error Interceptor (Stops local missing asset spam permanently)
+document.addEventListener('error', function(event) {
+  const target = event.target;
+  if (target && target.tagName === 'IMG') {
+    // If any image on the page fails to load (like a missing local PNG), swap it to a clean vector icon
+    if (!target.src.includes('iconify.design') && !target.src.startsWith('data:')) {
+      target.src = 'https://api.iconify.design/solar:user-circle-bold-duotone.svg?color=%2364748b';
+    }
+  }
+}, true);
+
 window.startResponderLocationTracking = startResponderLocationTracking;
 window.stopResponderLocationTracking = stopResponderLocationTracking;
 
