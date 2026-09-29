@@ -64,7 +64,7 @@ function getRequestSession(request) {
   const cookieSessionId = (request.headers.cookie || '').match(/sessionId=([^;]+)/)?.[1];
   const sessionId = headerSessionId || cookieSessionId;
   let session = sessionId ? sessions.get(sessionId) : null;
-  
+
   // VERCEL SERVERLESS FIX: Reconstruct the session from headers if memory was cleared
   if (!session) {
     const role = request.headers['x-employee-role'] || request.headers['x-user-role'];
@@ -111,8 +111,8 @@ function parseTeamPayload(body = {}) {
   const status = String(body.status || '').trim();
 
   if (!teamName || teamName.length > 120 || !leaderName || leaderName.length > 150 ||
-      !coverageArea || coverageArea.length > 255 || !Number.isInteger(memberCount) || memberCount < 1 || memberCount > 500 ||
-      activeAssignment.length > 500 || !['Head', 'System Admin', 'Responder', 'Pending', 'Disapproved', 'On Patrol', 'Active Call', 'Standby'].includes(status)) {
+    !coverageArea || coverageArea.length > 255 || !Number.isInteger(memberCount) || memberCount < 1 || memberCount > 500 ||
+    activeAssignment.length > 500 || !['Head', 'System Admin', 'Responder', 'Pending', 'Disapproved', 'On Patrol', 'Active Call', 'Standby'].includes(status)) {
     return { error: 'Enter a team name, leader, member count, coverage area, and valid team status.' };
   }
 
@@ -476,7 +476,7 @@ function syncStudentStatusInDb(supabaseClient, student, normalizedStatus) {
       .from('accounts_student')
       .update({ student_status: normalizedStatus })
       .eq('user_id', student.user_id)
-      .then(() => {})
+      .then(() => { })
       .catch((err) => console.warn('Background sync student status notice:', err.message));
   }
 }
@@ -486,7 +486,7 @@ async function linkGoogleIdentityToAccount(googleSub, employeeId) {
   if (!supabase) {
     throw new Error('Supabase not configured');
   }
-  
+
   const { error, data } = await supabase
     .from('oauth_identities')
     .insert({
@@ -495,7 +495,7 @@ async function linkGoogleIdentityToAccount(googleSub, employeeId) {
       employee_id: employeeId,
       linked_by: 'oauth'
     });
-  
+
   if (error) {
     if (error.code === '23505') {
       // Unique constraint violation - this Google sub is already linked
@@ -515,7 +515,7 @@ async function linkGoogleIdentityToAccount(googleSub, employeeId) {
 
     throw error;
   }
-  
+
   return data;
 }
 
@@ -524,9 +524,9 @@ async function provisionNewOAuthAccount(email, name, googleSub) {
   if (!supabase) {
     throw new Error('Supabase not configured');
   }
-  
+
   const employeeId = `EMP-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  
+
   // Create account with placeholder password (OAuth-only).
   // New Google accounts must wait for admin approval before they can enter the dashboard.
   const { data: newAccount, error: insertError } = await supabase
@@ -540,11 +540,11 @@ async function provisionNewOAuthAccount(email, name, googleSub) {
       employee_status: 'Pending'
     })
     .select();
-  
+
   if (insertError) {
     throw insertError;
   }
-  
+
   // Link Google identity when the table exists.
   // If the migration has not been applied yet, continue the login flow anyway.
   try {
@@ -553,7 +553,7 @@ async function provisionNewOAuthAccount(email, name, googleSub) {
     console.error('Failed to link Google identity:', linkError);
     throw linkError;
   }
-  
+
   // Send admin notification (asynchronous, don't wait)
   try {
     await deliverAdminNotification(email, name, 'Responder', employeeId);
@@ -561,7 +561,7 @@ async function provisionNewOAuthAccount(email, name, googleSub) {
     console.error('Admin notification email failed:', emailError.message);
     // Don't throw - account was created successfully
   }
-  
+
   return newAccount?.[0];
 }
 
@@ -571,7 +571,7 @@ async function deliverAdminNotification(userEmail, userName, userRole, employeeI
     console.log(`[Admin notification demo] New OAuth account pending approval: ${userEmail} (${employeeId})`);
     return false;
   }
-  
+
   const sent = await sendSystemEmail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: process.env.SMTP_FROM || process.env.SMTP_USER,
@@ -635,7 +635,7 @@ async function deliverApprovalNotification(userEmail, userName) {
     console.log(`[Approval notification demo] Account approved for ${userEmail}`);
     return false;
   }
-  
+
   const sent = await sendSystemEmail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: userEmail,
@@ -685,7 +685,7 @@ async function deliverDisapprovalNotification(userEmail, userName, reason = '') 
     console.log(`[Disapproval notification demo] Account disapproved for ${userEmail}`);
     return false;
   }
-  
+
   const reasonText = reason ? `Reason provided: ${reason}\n\n` : '';
   const reasonHtml = reason ? `<p style="margin:0 0 16px;font-size:14px;color:#64748b;background:#f8fafc;padding:12px;border-left:4px solid #ef4444;border-radius:4px;"><strong>Reason provided:</strong> ${reason}</p>` : '';
 
@@ -735,7 +735,7 @@ function decodeJWT(token) {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) throw new Error('Invalid token format');
-    
+
     // Decode payload (base64url)
     const decoded = Buffer.from(parts[1], 'base64').toString('utf8');
     return JSON.parse(decoded);
@@ -1056,13 +1056,13 @@ const server = http.createServer((request, response) => {
       sendJson(response, 503, { error: 'Google OAuth is not configured.' });
       return;
     }
-    
+
     const state = generateStateToken();
     oauth_sessions.set(state, {
       timestamp: Date.now(),
       expires: Date.now() + 10 * 60 * 1000  // 10 minutes
     });
-    
+
     const params = new URLSearchParams({
       client_id: GOOGLE_OAUTH_CLIENT_ID,
       redirect_uri: GOOGLE_OAUTH_CALLBACK_URL,
@@ -1071,7 +1071,7 @@ const server = http.createServer((request, response) => {
       state: state,
       hd: 'umak.edu.ph'  // Restrict to UMak Google Workspace domain
     });
-    
+
     response.writeHead(302, {
       'Location': `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
     });
@@ -1085,7 +1085,7 @@ const server = http.createServer((request, response) => {
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     const error = url.searchParams.get('error');
-    
+
     if (error) {
       // User cancelled or error occurred
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -1103,7 +1103,7 @@ const server = http.createServer((request, response) => {
       `);
       return;
     }
-    
+
     // Return HTML that posts the code to our callback handler
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     response.end(`
@@ -1182,23 +1182,23 @@ const server = http.createServer((request, response) => {
           sendJson(response, 503, { error: 'Google OAuth is not configured.' });
           return;
         }
-        
+
         // Validate state token (CSRF protection)
         if (!state || !oauth_sessions.has(state)) {
           console.error('[SECURITY] Invalid OAuth state token');
           sendJson(response, 403, { error: 'Invalid OAuth state. Please try again.' });
           return;
         }
-        
+
         const stateData = oauth_sessions.get(state);
         oauth_sessions.delete(state);
-        
+
         if (stateData.expires < Date.now()) {
           console.error('[SECURITY] OAuth state token expired');
           sendJson(response, 403, { error: 'OAuth state expired. Please try again.' });
           return;
         }
-        
+
         // Exchange authorization code for tokens
         const tokenParams = new URLSearchParams({
           client_id: GOOGLE_OAUTH_CLIENT_ID,
@@ -1207,10 +1207,10 @@ const server = http.createServer((request, response) => {
           grant_type: 'authorization_code',
           redirect_uri: GOOGLE_OAUTH_CALLBACK_URL
         });
-        
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30000);  // 30-second timeout
-        
+
         try {
           const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
@@ -1218,24 +1218,24 @@ const server = http.createServer((request, response) => {
             body: tokenParams.toString(),
             signal: controller.signal
           });
-          
+
           clearTimeout(timeout);
-          
+
           if (!tokenResponse.ok) {
             console.error('[OAuth] Token exchange failed:', tokenResponse.status, tokenResponse.statusText);
             sendJson(response, 401, { error: 'Google authentication failed.' });
             return;
           }
-          
+
           const tokenData = await tokenResponse.json();
           const idToken = tokenData.id_token;
-          
+
           if (!idToken) {
             console.error('[OAuth] No ID token in response');
             sendJson(response, 401, { error: 'Google authentication failed.' });
             return;
           }
-          
+
           // Decode ID token to extract claims
           let idTokenClaims;
           try {
@@ -1245,17 +1245,17 @@ const server = http.createServer((request, response) => {
             sendJson(response, 401, { error: 'Google authentication failed.' });
             return;
           }
-          
+
           const googleEmail = idTokenClaims.email;
           const googleSub = idTokenClaims.sub;
           const googleName = idTokenClaims.name || googleEmail.split('@')[0];
-          
+
           if (!googleEmail || !googleSub) {
             console.error('[OAuth] Missing email or sub in ID token');
             sendJson(response, 401, { error: 'Google authentication failed.' });
             return;
           }
-          
+
           // Domain validation
           if (!validateEmailDomain(googleEmail)) {
             console.log('[SECURITY] OAuth domain rejection:', {
@@ -1266,16 +1266,16 @@ const server = http.createServer((request, response) => {
             sendJson(response, 403, { error: 'Only @umak.edu.ph email addresses are allowed.' });
             return;
           }
-          
+
           if (!supabase) {
             sendJson(response, 503, { error: 'Database is not configured.' });
             return;
           }
-          
+
           // IMPORTANT: Check oauth_identities FIRST to handle duplicate accounts
           // OAuth identity (Google sub) is the source of truth for OAuth accounts
           let account = null;
-          
+
           // Step 1: Check if this Google sub is already linked to an account
           try {
             const { data: oauthLink, error: oauthError } = await supabase
@@ -1284,7 +1284,7 @@ const server = http.createServer((request, response) => {
               .eq('provider', 'google')
               .eq('provider_sub', googleSub)
               .maybeSingle();
-            
+
             if (!oauthError && oauthLink) {
               // Google sub is already linked - use that account
               const { data: linkedEmp, error: linkedError } = await supabase
@@ -1292,7 +1292,7 @@ const server = http.createServer((request, response) => {
                 .select('*')
                 .eq('employee_id', oauthLink.employee_id)
                 .maybeSingle();
-              
+
               if (!linkedError && linkedEmp) {
                 account = linkedEmp;
                 console.log('[OAuth] Using existing account linked via Google sub:', linkedEmp.employee_id);
@@ -1301,7 +1301,7 @@ const server = http.createServer((request, response) => {
           } catch (oauthCheckError) {
             console.error('[OAuth] Error checking oauth_identities:', oauthCheckError);
           }
-          
+
           // Step 2: If not linked by Google sub, check if account exists by email
           if (!account) {
             const { data: existingAccount, error: queryError } = await supabase
@@ -1309,21 +1309,21 @@ const server = http.createServer((request, response) => {
               .select('*')
               .eq('employee_email', googleEmail)
               .maybeSingle();
-            
+
             if (queryError) {
               console.error('Database query error:', queryError);
               sendJson(response, 500, { error: 'Authentication service error. Please try again later.' });
               return;
             }
-            
+
             if (existingAccount) {
               // Account exists by email - check authentication method enforcement
               // If account has a real password hash (not 'oauth_only_'), it's a traditional account
               // and should not be allowed to use Google OAuth
-              const hasRealPasswordHash = existingAccount.employee_pass && 
+              const hasRealPasswordHash = existingAccount.employee_pass &&
                 !String(existingAccount.employee_pass).startsWith('oauth_only_') &&
                 existingAccount.employee_pass.length > 20;  // bcrypt hashes are ~60 chars
-              
+
               if (hasRealPasswordHash) {
                 console.log('[SECURITY] OAuth method rejection: Traditional account attempted Google sign-in', {
                   email: googleEmail,
@@ -1332,7 +1332,7 @@ const server = http.createServer((request, response) => {
                 sendJson(response, 403, { error: 'This account uses email and password authentication. Please use the standard login form to sign in.' });
                 return;
               }
-              
+
               // Link Google identity to the OAuth account
               try {
                 await linkGoogleIdentityToAccount(googleSub, existingAccount.employee_id);
@@ -1345,7 +1345,7 @@ const server = http.createServer((request, response) => {
                 }
                 return;
               }
-              
+
               account = existingAccount;
             } else {
               // Step 3: No existing account - provision new one
@@ -1362,7 +1362,7 @@ const server = http.createServer((request, response) => {
               }
             }
           }
-          
+
           // Create session
           await updateEmployeeAccountTimestamp(account.employee_id, 'employee_last_login');
           const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1391,7 +1391,7 @@ const server = http.createServer((request, response) => {
             status: account.employee_status === 'Pending' ? 'pending' : 'active',
             auth_method: 'oauth_google'
           };
-          
+
           sendJson(response, 200, responseData);
         } catch (fetchError) {
           clearTimeout(timeout);
@@ -1440,7 +1440,7 @@ const server = http.createServer((request, response) => {
           if (identities) {
             identities.forEach(i => oauthSet.add(i.employee_id));
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const users = (accounts || []).map(acc => ({
           ...acc,
@@ -1809,7 +1809,7 @@ const server = http.createServer((request, response) => {
           if (identities) {
             identities.forEach(i => oauthSet.add(i.employee_id));
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const users = (accounts || []).map(acc => {
           const userMeta = allMeta[acc.employee_id] || {};
@@ -1869,12 +1869,12 @@ const server = http.createServer((request, response) => {
               const dispId = `${prefix}_${String(counters[prefix]).padStart(4, '0')}`;
               let code = 'ICD' + String(a.id).replace(/-/g, '').slice(-5).toUpperCase();
               return dispId.toUpperCase() === incidentId.toUpperCase() ||
-                     code.toUpperCase() === incidentId.toUpperCase() ||
-                     String(a.id).toUpperCase().startsWith(incidentId.toUpperCase());
+                code.toUpperCase() === incidentId.toUpperCase() ||
+                String(a.id).toUpperCase().startsWith(incidentId.toUpperCase());
             });
             if (match) targetAlertId = match.id;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetAlertId)) {
@@ -2092,7 +2092,7 @@ const server = http.createServer((request, response) => {
       if (fs.existsSync(RESOLUTION_SUMMARIES_FILE)) {
         return JSON.parse(fs.readFileSync(RESOLUTION_SUMMARIES_FILE, 'utf8'));
       }
-    } catch (e) {}
+    } catch (e) { }
     return {};
   }
 
@@ -2103,7 +2103,7 @@ const server = http.createServer((request, response) => {
       const current = getResolutionSummaries();
       current[String(incidentId)] = { summary, resolved_at: resolvedAt };
       fs.writeFileSync(RESOLUTION_SUMMARIES_FILE, JSON.stringify(current, null, 2), 'utf8');
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // GET /api/incidents - Fetch live emergency incidents from Supabase public.emergency_alerts
@@ -2261,7 +2261,7 @@ const server = http.createServer((request, response) => {
           if (identities) {
             identities.forEach(i => oauthSet.add(i.employee_id));
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const adminRoles = new Set(['HEAD', 'System Admin', 'Responder']);
         let filteredUsers = (accounts || [])
@@ -2532,22 +2532,22 @@ const server = http.createServer((request, response) => {
     const cookieSessionId = (request.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
     const sessionId = headerSessionId || cookieSessionId;
     const session = sessionId ? sessions.get(sessionId) : null;
-    
+
     if (process.env.NODE_ENV === 'production' && (!session || session.employee_status !== 'Active')) {
       sendJson(response, 401, { error: 'Unauthorized. Admin access required.' });
       return;
     }
-    
+
     if (!supabase) {
       sendJson(response, 503, { error: 'Database is not configured.' });
       return;
     }
-    
+
     // Parse pagination parameters
     const url = new URL(request.url, `http://${request.headers.host}`);
     const limit = parseInt(url.searchParams.get('limit') || '10', 10);
     const offset = parseInt(url.searchParams.get('offset') || '0', 10);
-    
+
     (async () => {
       try {
         const { data: accounts, error } = await supabase
@@ -2556,11 +2556,11 @@ const server = http.createServer((request, response) => {
           .eq('employee_status', 'Pending')
           .order('employee_created_at', { ascending: false })
           .range(offset, offset + limit - 1);
-        
+
         if (error) {
           throw error;
         }
-        
+
         // Get auth method from oauth_identities for each account
         const accountsWithAuth = await Promise.all(
           accounts.map(async (account) => {
@@ -2569,7 +2569,7 @@ const server = http.createServer((request, response) => {
               .select('provider')
               .eq('employee_id', account.employee_id)
               .maybeSingle();
-            
+
             return {
               employee_id: account.employee_id,
               employee_email: account.employee_email,
@@ -2580,7 +2580,7 @@ const server = http.createServer((request, response) => {
             };
           })
         );
-        
+
         sendJson(response, 200, { accounts: accountsWithAuth });
       } catch (error) {
         console.error('Pending accounts query error:', error);
@@ -2596,26 +2596,26 @@ const server = http.createServer((request, response) => {
     const cookieSessionId = (request.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
     const sessionId = headerSessionId || cookieSessionId;
     const session = sessionId ? sessions.get(sessionId) : null;
-    
+
     if (process.env.NODE_ENV === 'production' && (!session || session.employee_status !== 'Active')) {
       sendJson(response, 401, { error: 'Unauthorized. Admin access required.' });
       return;
     }
-    
+
     const employeeId = request.url.split('/')[4];
-    
+
     readJson(request).then(async ({ status }) => {
       if (!supabase) {
         sendJson(response, 503, { error: 'Database is not configured.' });
         return;
       }
-      
+
       const validStatuses = ['Active', 'Inactive', 'Suspended', 'Pending'];
       if (!validStatuses.includes(status)) {
         sendJson(response, 400, { error: 'Invalid status.' });
         return;
       }
-      
+
       try {
         // Get the account first
         const { data: account, error: queryError } = await supabase
@@ -2623,7 +2623,7 @@ const server = http.createServer((request, response) => {
           .select('*')
           .eq('employee_id', employeeId)
           .maybeSingle();
-        
+
         if (queryError || !account) {
           sendJson(response, 404, { error: 'Account not found.' });
           return;
@@ -2634,17 +2634,17 @@ const server = http.createServer((request, response) => {
           sendJson(response, 403, { error: 'Only an active HEAD or System Admin can reactivate this account.' });
           return;
         }
-        
+
         // Update status
         const { error: updateError } = await supabase
           .from('employee_accounts')
           .update({ employee_status: status })
           .eq('employee_id', employeeId);
-        
+
         if (updateError) {
           throw updateError;
         }
-        
+
         // Send approval email if being activated
         if (status === 'Active' && account.employee_status === 'Pending') {
           try {
@@ -2660,7 +2660,7 @@ const server = http.createServer((request, response) => {
             console.error('Disapproval notification email failed:', emailError.message);
           }
         }
-        
+
         // Log audit event
         console.log('[AUDIT] Account status changed:', {
           employee_id: employeeId,
@@ -2669,7 +2669,7 @@ const server = http.createServer((request, response) => {
           changed_by: session?.employee_email || 'System Admin',
           timestamp: new Date().toISOString()
         });
-        
+
         sendJson(response, 200, {
           ok: true,
           message: `Account status updated to ${status}`,
@@ -2693,47 +2693,47 @@ const server = http.createServer((request, response) => {
     const cookieSessionId = (request.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
     const sessionId = headerSessionId || cookieSessionId;
     const session = sessionId ? sessions.get(sessionId) : null;
-    
+
     if (process.env.NODE_ENV === 'production' && (!session || session.employee_status !== 'Active')) {
       sendJson(response, 401, { error: 'Unauthorized. Admin access required.' });
       return;
     }
-    
+
     const employeeId = request.url.split('/')[4];
-    
+
     readJson(request).then(async (body = {}) => {
       if (!supabase) {
         sendJson(response, 503, { error: 'Database is not configured.' });
         return;
       }
-      
+
       const reason = body.reason || '';
-      
+
       try {
         const { data: account, error: queryError } = await supabase
           .from('employee_accounts')
           .select('*')
           .eq('employee_id', employeeId)
           .maybeSingle();
-        
+
         if (queryError || !account) {
           sendJson(response, 404, { error: 'Account not found.' });
           return;
         }
-        
+
         // Update status to Inactive (Disapproved)
         const { error: updateError } = await supabase
           .from('employee_accounts')
           .update({ employee_status: 'Inactive' })
           .eq('employee_id', employeeId);
-        
+
         if (updateError) throw updateError;
-        
+
         // Send email notification asynchronously without blocking response
         deliverDisapprovalNotification(account.employee_email, account.employee_name, reason).catch((emailError) => {
           console.error('Disapproval notification email failed:', emailError.message);
         });
-        
+
         console.log('[AUDIT] Account disapproved:', {
           employee_id: employeeId,
           email: account.employee_email,
@@ -2741,7 +2741,7 @@ const server = http.createServer((request, response) => {
           changed_by: session?.employee_email || 'System Admin',
           timestamp: new Date().toISOString()
         });
-        
+
         sendJson(response, 200, {
           ok: true,
           message: `Account request for ${account.employee_name || employeeId} has been disapproved.`,
@@ -2765,34 +2765,34 @@ const server = http.createServer((request, response) => {
     const cookieSessionId = (request.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
     const sessionId = headerSessionId || cookieSessionId;
     const session = sessionId ? sessions.get(sessionId) : null;
-    
+
     if (process.env.NODE_ENV === 'production' && (!session || session.employee_status !== 'Active')) {
       sendJson(response, 401, { error: 'Unauthorized. Admin access required.' });
       return;
     }
-    
+
     const employeeId = request.url.split('/')[4];
-    
+
     if (!supabase) {
       sendJson(response, 503, { error: 'Database is not configured.' });
       return;
     }
-    
+
     (async () => {
       try {
         const { error: delError } = await supabase
           .from('employee_accounts')
           .delete()
           .eq('employee_id', employeeId);
-        
+
         if (delError) throw delError;
-        
+
         console.log('[AUDIT] Account deleted:', {
           employee_id: employeeId,
           deleted_by: session?.employee_email || 'System Admin',
           timestamp: new Date().toISOString()
         });
-        
+
         sendJson(response, 200, {
           ok: true,
           message: 'Account deleted successfully.',
@@ -2817,7 +2817,7 @@ const server = http.createServer((request, response) => {
         const raw = fs.readFileSync(ARCHIVED_INCIDENTS_FILE, 'utf8');
         return new Set(JSON.parse(raw));
       }
-    } catch (e) {}
+    } catch (e) { }
     return new Set();
   }
 
@@ -2826,7 +2826,7 @@ const server = http.createServer((request, response) => {
       const dir = path.dirname(ARCHIVED_INCIDENTS_FILE);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(ARCHIVED_INCIDENTS_FILE, JSON.stringify([...set]), 'utf8');
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Task: GET /api/reports/incidents - List, filter, and summarize incident reports
@@ -3012,14 +3012,14 @@ const server = http.createServer((request, response) => {
           if (searchQuery) {
             const queryClean = searchQuery.replace(/[^a-z0-9]/gi, '');
             const matchId = (a.incident_code && a.incident_code.toLowerCase().includes(searchQuery)) ||
-                            (a.incident_code && a.incident_code.replace(/[^a-z0-9]/gi, '').toLowerCase().includes(queryClean)) ||
-                            (a.id && String(a.id).toLowerCase().includes(searchQuery));
+              (a.incident_code && a.incident_code.replace(/[^a-z0-9]/gi, '').toLowerCase().includes(queryClean)) ||
+              (a.id && String(a.id).toLowerCase().includes(searchQuery));
             const matchName = String(a.student_name || '').toLowerCase().includes(searchQuery);
             const matchStudentId = String(a.student_id || '').toLowerCase().includes(searchQuery);
             const matchType = String(a.category || '').toLowerCase().includes(searchQuery) ||
-                              String(a.assistance_type || '').toLowerCase().includes(searchQuery) ||
-                              String(a.incident_detail || '').toLowerCase().includes(searchQuery) ||
-                              String(a.incident || '').toLowerCase().includes(searchQuery);
+              String(a.assistance_type || '').toLowerCase().includes(searchQuery) ||
+              String(a.incident_detail || '').toLowerCase().includes(searchQuery) ||
+              String(a.incident || '').toLowerCase().includes(searchQuery);
             const matchLoc = String(a.location_address || '').toLowerCase().includes(searchQuery);
             if (!matchId && !matchName && !matchStudentId && !matchType && !matchLoc) {
               return false;
@@ -3139,8 +3139,8 @@ const server = http.createServer((request, response) => {
               const dispId = `${prefix}_${String(counters[prefix]).padStart(4, '0')}`;
               const legacyDispId = `VAC_${String(counters[prefix]).padStart(4, '0')}`;
               return dispId.toUpperCase() === incidentId.toUpperCase() ||
-                     legacyDispId.toUpperCase() === incidentId.toUpperCase() ||
-                     String(a.id).toUpperCase().startsWith(incidentId.toUpperCase());
+                legacyDispId.toUpperCase() === incidentId.toUpperCase() ||
+                String(a.id).toUpperCase().startsWith(incidentId.toUpperCase());
             });
             if (match) {
               targetAlertId = match.id;
@@ -3231,7 +3231,7 @@ const server = http.createServer((request, response) => {
               resolved_at: status === 'Resolved' ? updatePayload.resolved_at : null
             })
             .or(`incident_id.eq.${incidentId},incident_id.eq.${targetAlertId}`);
-        } catch (_) {}
+        } catch (_) { }
 
         console.log(`[AUDIT] Emergency incident ${incidentId} (ID: ${targetAlertId}) status changed to ${status}`);
         sendJson(response, 200, {
@@ -3252,13 +3252,13 @@ const server = http.createServer((request, response) => {
     });
     return;
   }
-   // ==========================================
+  // ==========================================
   // PUT /api/incidents/{id}/location - Live GPS Tracking
   // ==========================================
   const locationUpdateMatch = request.url.match(/^\/api\/incidents\/([^/?]+)\/location(?:\?.*)?$/);
   if (request.method === 'PUT' && locationUpdateMatch) {
     const incidentId = decodeURIComponent(locationUpdateMatch[1]).trim();
-    
+
     readJson(request).then(async (body = {}) => {
       const { responder_lat, responder_lng } = body;
 
@@ -3275,17 +3275,17 @@ const server = http.createServer((request, response) => {
       try {
         const { error } = await supabase
           .from('emergency_alerts')
-          .update({ 
-            responder_lat: parseFloat(responder_lat), 
-            responder_lng: parseFloat(responder_lng) 
+          .update({
+            responder_lat: parseFloat(responder_lat),
+            responder_lng: parseFloat(responder_lng)
           })
           .eq('id', incidentId);
 
         if (error) {
           if (error.code === 'PGRST204' || error.code === '42703') {
-             console.warn('GPS tracking requires responder_lat and responder_lng columns in emergency_alerts table.');
-             sendJson(response, 503, { error: 'Database needs GPS columns added.' });
-             return;
+            console.warn('GPS tracking requires responder_lat and responder_lng columns in emergency_alerts table.');
+            sendJson(response, 503, { error: 'Database needs GPS columns added.' });
+            return;
           }
           throw error;
         }
@@ -3358,9 +3358,9 @@ const server = http.createServer((request, response) => {
               const legacyDispId = `VAC_${String(counters[prefix]).padStart(4, '0')}`;
               let code = 'ICD' + String(a.id).replace(/-/g, '').slice(-5).toUpperCase();
               return dispId.toUpperCase() === incidentId.toUpperCase() ||
-                     legacyDispId.toUpperCase() === incidentId.toUpperCase() ||
-                     code.toUpperCase() === incidentId.toUpperCase() ||
-                     String(a.id).toUpperCase().startsWith(incidentId.toUpperCase());
+                legacyDispId.toUpperCase() === incidentId.toUpperCase() ||
+                code.toUpperCase() === incidentId.toUpperCase() ||
+                String(a.id).toUpperCase().startsWith(incidentId.toUpperCase());
             });
             if (match) targetAlertId = match.id;
           }
@@ -3429,7 +3429,7 @@ const server = http.createServer((request, response) => {
               incident_status: (updatePayload.status || 'Pending').toLowerCase()
             })
             .or(`incident_id.eq.${incidentId},incident_id.eq.${targetAlertId}`);
-        } catch (_) {}
+        } catch (_) { }
 
         // Record assigned emergency type and rescue mission in responder profile metadata
         try {
@@ -3614,13 +3614,13 @@ const server = http.createServer((request, response) => {
             if (a.incident && a.incident.includes('Medication Assistance')) code = 'ICD00106';
 
             const matchId = code.toLowerCase().includes(searchQuery) ||
-                            code.replace(/[^a-z0-9]/gi, '').toLowerCase().includes(queryClean) ||
-                            String(a.id || '').toLowerCase().includes(searchQuery);
+              code.replace(/[^a-z0-9]/gi, '').toLowerCase().includes(queryClean) ||
+              String(a.id || '').toLowerCase().includes(searchQuery);
             const matchName = String(s.student_name || '').toLowerCase().includes(searchQuery) ||
-                              String(s.student_id || '').toLowerCase().includes(searchQuery);
+              String(s.student_id || '').toLowerCase().includes(searchQuery);
             const matchType = String(a.assistance_type || '').toLowerCase().includes(searchQuery) ||
-                              String(a.category || '').toLowerCase().includes(searchQuery) ||
-                              String(a.incident || '').toLowerCase().includes(searchQuery);
+              String(a.category || '').toLowerCase().includes(searchQuery) ||
+              String(a.incident || '').toLowerCase().includes(searchQuery);
             const matchLoc = String(a.location_address || '').toLowerCase().includes(searchQuery);
 
             return matchId || matchName || matchType || matchLoc;
@@ -3845,30 +3845,30 @@ const server = http.createServer((request, response) => {
   }
 
   function getAuthenticatedSession(req) {
-  const headerSessionId = req.headers['x-session-id'];
-  const cookieSessionId = (req.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
-  const sessionId = headerSessionId || cookieSessionId;
-  
-  // 1. Check in-memory session first
-  if (sessionId && sessions.has(sessionId)) {
-    return sessions.get(sessionId);
-  }
-  
-  // 2. Serverless fallback: Read identity from client headers
-  const employeeId = req.headers['x-employee-id'];
-  const employeeEmail = req.headers['x-employee-email'];
-  const employeeRole = req.headers['x-employee-role'];
+    const headerSessionId = req.headers['x-session-id'];
+    const cookieSessionId = (req.headers['cookie'] || '').match(/sessionId=([^;]+)/)?.[1];
+    const sessionId = headerSessionId || cookieSessionId;
 
-  if (employeeId || employeeEmail) {
-    return {
-      employee_id: employeeId || null,
-      employee_email: employeeEmail || null,
-      employee_role: employeeRole || null
-    };
-  }
+    // 1. Check in-memory session first
+    if (sessionId && sessions.has(sessionId)) {
+      return sessions.get(sessionId);
+    }
 
-  return null;
-}
+    // 2. Serverless fallback: Read identity from client headers
+    const employeeId = req.headers['x-employee-id'];
+    const employeeEmail = req.headers['x-employee-email'];
+    const employeeRole = req.headers['x-employee-role'];
+
+    if (employeeId || employeeEmail) {
+      return {
+        employee_id: employeeId || null,
+        employee_email: employeeEmail || null,
+        employee_role: employeeRole || null
+      };
+    }
+
+    return null;
+  }
   // 1. GET /api/profile - Fetch current user profile details
   if (request.method === 'GET' && request.url === '/api/profile') {
     (async () => {
@@ -3911,7 +3911,7 @@ const server = http.createServer((request, response) => {
             .eq('employee_id', account.employee_id)
             .maybeSingle();
           if (oauth) isOAuth = true;
-        } catch (e) {}
+        } catch (e) { }
 
         const allMeta = readProfileMetadata();
         const userMeta = allMeta[account.employee_id] || {};
@@ -4032,7 +4032,7 @@ const server = http.createServer((request, response) => {
                 employee_email: newEmail
               })
               .eq('employee_id', account.employee_id);
-            
+
             if (fallbackUpdate.error) {
               throw fallbackUpdate.error;
             }
@@ -4225,8 +4225,52 @@ const server = http.createServer((request, response) => {
     });
     return;
   }
+const requestedPath = request.url === '/' ? '/index.html' : request.url.split('?')[0];
+  
+  // ==========================================
+  // GET /api/media/signed-url?path=... - Secure Media Endpoint
+  // ==========================================
+  if (request.method === 'GET' && request.url.startsWith('/api/media/signed-url')) {
+    const session = getRequestSession(request);
+    const role = String(session?.employee_role || '').trim().toLowerCase();
 
-  const requestedPath = request.url === '/' ? '/index.html' : request.url.split('?')[0];
+    // Ensure only authenticated staff can access private emergency media
+    if (!session || session.employee_status !== 'Active' || (!role.includes('head') && !role.includes('responder'))) {
+      sendJson(response, 403, { error: 'Unauthorized to view emergency media.' });
+      return;
+    }
+
+    const urlObj = new URL(request.url, `http://${request.headers.host}`);
+    const filePath = urlObj.searchParams.get('path');
+
+    if (!filePath) {
+      sendJson(response, 400, { error: 'Missing file path.' });
+      return;
+    }
+
+    (async () => {
+      try {
+        let cleanPath = filePath;
+        if (cleanPath.includes('/object/public/') || cleanPath.includes('/object/sign/')) {
+          const parts = cleanPath.split('/emergency-alert-media/');
+          cleanPath = parts[1] || cleanPath;
+        }
+
+        const { data, error } = await supabase.storage
+          .from('emergency-alert-media')
+          .createSignedUrl(cleanPath, 3600);
+
+        if (error) throw error;
+
+        sendJson(response, 200, { ok: true, signedUrl: data.signedUrl });
+      } catch (err) {
+        console.error('Signed URL generation error:', err);
+        sendJson(response, 500, { error: 'Failed to generate secure file access.' });
+      }
+    })();
+    return;
+  }
+
   const assetDirectory = requestedPath.startsWith('/images/') ? path.join(__dirname, 'images') : publicDirectory;
   const filePath = path.normalize(path.join(assetDirectory, requestedPath.startsWith('/images/') ? requestedPath.slice('/images/'.length) : requestedPath));
 
@@ -4262,45 +4306,3 @@ if (!process.env.VERCEL) {
 module.exports = (request, response) => {
   server.emit('request', request, response);
 };
-
-// GET /api/media/signed-url?path=... - Generate a secure temporary URL for private emergency media
-  if (request.method === 'GET' && request.url.startsWith('/api/media/signed-url')) {
-    const session = getRequestSession(request);
-    const role = String(session?.employee_role || '').trim().toLowerCase();
-    
-    // Ensure only authenticated staff can access private emergency media
-    if (!session || session.employee_status !== 'Active' || (!role.includes('head') && !role.includes('responder'))) {
-      sendJson(response, 403, { error: 'Unauthorized to view emergency media.' });
-      return;
-    }
-
-    const urlObj = new URL(request.url, `http://${request.headers.host}`);
-    const filePath = urlObj.searchParams.get('path');
-
-    if (!filePath) {
-      sendJson(response, 400, { error: 'Missing file path.' });
-      return;
-    }
-
-    try {
-      // Clean the file path if it accidentally contains the full URL string
-      let cleanPath = filePath;
-      if (cleanPath.includes('/object/public/') || cleanPath.includes('/object/sign/')) {
-        const parts = cleanPath.split('/emergency-alert-media/');
-        cleanPath = parts[1] || cleanPath;
-      }
-
-      // Generate a signed URL valid for 60 minutes (3600 seconds)
-      const { data, error } = await supabase.storage
-        .from('emergency-alert-media')
-        .createSignedUrl(cleanPath, 3600);
-
-      if (error) throw error;
-
-      sendJson(response, 200, { ok: true, signedUrl: data.signedUrl });
-    } catch (err) {
-      console.error('Signed URL generation error:', err);
-      sendJson(response, 500, { error: 'Failed to generate secure file access.' });
-    }
-    return;
-  }
