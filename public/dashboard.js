@@ -1128,7 +1128,8 @@ function initAlertDetails() {
 
     let html = '';
 
-    const supabaseStorageBase = 'https://clxpbcnoziynboqhglih.supabase.co/storage/files/object/emergency-alert-media/';
+    // The correct Supabase public storage base URL format for your bucket:
+    const supabaseStorageBase = 'https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/emergency-alert-media/';
 
     // Render Images
     images.forEach(img => {
