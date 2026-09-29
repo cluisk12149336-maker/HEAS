@@ -5027,6 +5027,12 @@ function loadSavedAvatar() {
     
     avatarSelectors.forEach(selector => {
       document.querySelectorAll(selector).forEach(img => {
+
+        if (img.src.includes('default-avatar.png')) {
+          img.src = userAvatar;
+        } else if (storedUser.avatar_url && img.src !== storedUser.avatar_url && !img.src.startsWith('data:')) {
+          img.src = storedUser.avatar_url;
+        }
         // If the image is trying to load the missing default asset, force it to use the user avatar or icon vector
         if (img.id !== 'siteLogo' && img.className !== 'brand-logo' && !img.src.includes('logo')) {
           if (img.src !== userAvatar) {
