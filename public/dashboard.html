@@ -1247,6 +1247,26 @@
         </div>
         <button type="button" id="closeAlertChat" aria-label="Close chat">&times;</button>
       </header>
+
+      <!-- Attached Media Dropdown -->
+      <div id="alertChatMediaSection" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;" hidden>
+        <button type="button" id="btnToggleChatMedia"
+          style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: transparent; border: none; font-weight: 600; color: #0f172a; cursor: pointer;">
+          <span style="display: flex; align-items: center; gap: 8px;">
+            <iconify-icon icon="solar:gallery-bold-duotone" style="color: #3b82f6;"></iconify-icon>
+            Additional Info from Student
+          </span>
+          <span id="chatMediaCountBadge"
+            style="background: #e2e8f0; color: #475569; font-size: 11px; padding: 2px 8px; border-radius: 9999px;">0
+            items</span>
+        </button>
+
+        <div id="alertChatMediaGallery"
+          style="padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; border-top: 1px solid #e2e8f0;"
+          hidden>
+          <!-- Images and Videos will be injected here via JavaScript -->
+        </div>
+      </div>
       <p class="alert-chat-delivery" id="alertChatDeliveryNotice" aria-live="polite" hidden></p>
       <div class="alert-chat-messages" id="alertChatMessages" role="log" aria-live="polite"
         aria-relevant="additions text">

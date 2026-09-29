@@ -431,7 +431,7 @@ function applyRoleBasedAccessControl(userRole) {
   }
   const isSysAdmin = isSystemAdminRole(activeRole);
 
- const isResponder = isResponderRole(activeRole);
+  const isResponder = isResponderRole(activeRole);
 
   // 1. Hide the entire Admin Users Panel for Responders
   const usersPanel = document.getElementById('usersPanel');
@@ -958,6 +958,11 @@ function initAlertDetails() {
   const scrollContainer = document.querySelector('.alert-details-main');
   const alertItems = document.querySelectorAll('.alert-item');
   const chatOpenButton = document.querySelector('#openAlertChat');
+  const chatMediaSection = document.querySelector('#alertChatMediaSection');
+  const chatMediaToggleBtn = document.querySelector('#btnToggleChatMedia');
+  const chatMediaGallery = document.querySelector('#alertChatMediaGallery');
+  const chatMediaCountBadge = document.querySelector('#chatMediaCountBadge');
+
   const chatOverlay = document.querySelector('#alertChatOverlay');
   const chatCloseButton = document.querySelector('#closeAlertChat');
   const chatReference = document.querySelector('#alertChatReference');
@@ -980,7 +985,7 @@ function initAlertDetails() {
   if (!overlay || !closeButton) return;
   const updateAlertChatAccess = () => {
     const allowed = canUseAlertChat();
-    if (chatOpenButton) chatOpenButton.hidden = !canUseAlertChat();
+    if (chatOpenButton) chatOpenButton.hidden = !allowed;
     const btn = document.querySelector('#openAlertChat') || chatOpenButton;
     if (btn) {
       if (allowed) {
@@ -1099,6 +1104,60 @@ function initAlertDetails() {
     setChatEnabled(false);
   };
 
+  const renderChatMedia = (incident) => {
+    if (!chatMediaSection || !chatMediaGallery) return;
+
+    // Supabase will attach the joined table data as an array. 
+    // We check a few common naming conventions depending on how your backend alias is setup.
+    const mediaList = incident.emergency_alert_media || incident.media || [];
+
+    // Filter out the images and videos based on your schema's media_type column
+    const images = mediaList.filter(m => m.media_type === 'image');
+    const videos = mediaList.filter(m => m.media_type === 'video');
+    const totalMedia = images.length + videos.length;
+
+    if (totalMedia === 0) {
+      chatMediaSection.hidden = true;
+      return;
+    }
+
+    chatMediaSection.hidden = false;
+    if (chatMediaCountBadge) {
+      chatMediaCountBadge.textContent = `${totalMedia} item${totalMedia > 1 ? 's' : ''}`;
+    }
+    
+    let html = '';
+    
+    // Render Images
+    images.forEach(img => {
+      // Assuming storage_path is a full URL. If it's a Supabase bucket path, 
+      // you may need to prepend your Supabase storage URL here.
+      const url = escapeHtml(img.storage_path);
+      html += `
+        <a href="${url}" target="_blank" style="display:block; aspect-ratio:1; border-radius:6px; overflow:hidden; border:1px solid #cbd5e1;">
+          <img src="${url}" style="width:100%; height:100%; object-fit:cover;" alt="Incident Photo">
+        </a>
+      `;
+    });
+
+    // Render Videos
+    videos.forEach(vid => {
+      const url = escapeHtml(vid.storage_path);
+      html += `
+        <a href="${url}" target="_blank" style="display:flex; align-items:center; justify-content:center; aspect-ratio:1; border-radius:6px; overflow:hidden; background:#1e293b; color:white; text-decoration:none; border:1px solid #cbd5e1; position:relative;">
+          <iconify-icon icon="solar:play-circle-bold" width="32" height="32" style="position:absolute; pointer-events:none;"></iconify-icon>
+          <video src="${url}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;"></video>
+        </a>
+      `;
+    });
+
+    chatMediaGallery.innerHTML = html;
+    
+    // Reset to closed state when opening a new chat
+    chatMediaGallery.hidden = true;
+    chatMediaGallery.style.display = 'none';
+  };
+
   const openAlertChat = () => {
     const record = currentAlertDetailRecord;
     if (!canUseAlertChat()) {
@@ -1126,6 +1185,7 @@ function initAlertDetails() {
     currentChatAuthId = '';
     setChatEnabled(false);
     showChatState('Loading real-time messages...');
+    renderChatMedia(record.rawIncident || {});
     chatOverlay.removeAttribute('hidden');
     chatOverlay.hidden = false;
     chatOverlay.style.display = 'flex';
@@ -1141,6 +1201,14 @@ function initAlertDetails() {
   chatOverlay?.addEventListener('click', (event) => {
     if (event.target === chatOverlay) closeAlertChat();
   });
+
+  if (chatMediaToggleBtn) {
+    chatMediaToggleBtn.addEventListener('click', () => {
+      const isHidden = chatMediaGallery.hidden;
+      chatMediaGallery.hidden = !isHidden;
+      chatMediaGallery.style.display = isHidden ? 'grid' : 'none';
+    });
+  }
   chatForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const message = chatInput?.value.trim();
@@ -2202,7 +2270,7 @@ function renderIncidentModal(record) {
       cancelBtn.style.cursor = 'pointer';
       cancelBtn.title = 'Cancel this incident alert';
       cancelBtn.innerHTML = '&#10005; Mark as Cancelled';
-      
+
       // ADD THIS LINE TO FORCE THE MODAL TO OPEN:
       cancelBtn.setAttribute('onclick', 'openCancelConfirmModal()');
     }
@@ -2889,17 +2957,17 @@ async function handleAssignResponderSubmit(event) {
         const headers = { 'Content-Type': 'application/json' };
         const sessionId = typeof getSessionId === 'function' ? getSessionId() : '';
         if (sessionId) headers['x-session-id'] = sessionId;
-        
+
         // Grab the user data
         const role = getCurrentUserRole();
         const name = getCurrentUserName();
         const empId = getCurrentUserEmployeeId();
-        
+
         // Send it to the Vercel backend
         if (role) headers['x-employee-role'] = role;
         if (name) headers['x-employee-name'] = name;
         if (empId) headers['x-employee-id'] = empId;
-        
+
         return headers;
       })(),
       body: JSON.stringify(payload)
@@ -3324,7 +3392,7 @@ function initAlertDetailMap(coords = [14.5628, 121.0561]) {
     alertDetailMap.removeLayer(responderCurrentMarker);
     responderCurrentMarker = null;
   }
-  
+
   // 2. Reset the Navigate button text
   const navBtn = document.getElementById('btnInAppNavigate');
   if (navBtn) {
@@ -3346,7 +3414,7 @@ function initAlertDetailMap(coords = [14.5628, 121.0561]) {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(alertDetailMap);
-  
+
   alertDetailMarker = L.marker(coords).addTo(alertDetailMap);
   L.circle(coords, { radius: 350, color: '#2d7fc1', fillColor: '#79aee0', fillOpacity: 0.25 }).addTo(alertDetailMap);
 }
@@ -3386,7 +3454,7 @@ async function startInAppNavigation() {
   if (typeof L.Routing === 'undefined') {
     showToast('Failed to download routing engine. Check connection.', 'error');
     if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; }
-    return; 
+    return;
   }
 
   if (btn) btn.innerHTML = '📍 Acquiring GPS...';
@@ -3407,25 +3475,25 @@ async function startInAppNavigation() {
       responderCurrentMarker.setLatLng([rLat, rLng]);
     } else {
       responderCurrentMarker = L.circleMarker([rLat, rLng], {
-          radius: 8,
-          fillColor: "#16a34a",
-          color: "#fff",
-          weight: 2,
-          fillOpacity: 1
+        radius: 8,
+        fillColor: "#16a34a",
+        color: "#fff",
+        weight: 2,
+        fillOpacity: 1
       }).addTo(alertDetailMap).bindPopup("Your Live Location").openPopup();
     }
 
     // B. Recalculate the blue path if it exists, otherwise create it
     if (routingControl) {
       routingControl.setWaypoints([
-        L.latLng(rLat, rLng), 
+        L.latLng(rLat, rLng),
         L.latLng(incidentCoords[0], incidentCoords[1])
       ]);
     } else {
       routingControl = L.Routing.control({
         waypoints: [
-          L.latLng(rLat, rLng), 
-          L.latLng(incidentCoords[0], incidentCoords[1]) 
+          L.latLng(rLat, rLng),
+          L.latLng(incidentCoords[0], incidentCoords[1])
         ],
         routeWhileDragging: false,
         addWaypoints: false,
@@ -3433,21 +3501,21 @@ async function startInAppNavigation() {
         lineOptions: {
           styles: [{ color: '#3b82f6', weight: 5, opacity: 0.9 }]
         },
-        createMarker: function() { return null; }, 
-        fitSelectedRoutes: true 
+        createMarker: function () { return null; },
+        fitSelectedRoutes: true
       }).addTo(alertDetailMap);
     }
-    
+
     if (btn) {
       btn.innerHTML = '📍 Live Navigation Active';
-      btn.style.background = '#16a34a'; 
+      btn.style.background = '#16a34a';
     }
   }, (error) => {
     showToast('GPS error or signal lost.', 'warning');
-  }, { 
-    enableHighAccuracy: true, 
+  }, {
+    enableHighAccuracy: true,
     maximumAge: 0, // Forces the browser to get fresh data, not cached
-    timeout: 10000 
+    timeout: 10000
   });
 }
 window.startInAppNavigation = startInAppNavigation;
@@ -4221,21 +4289,21 @@ async function loadDashboardData() {
     // D. Render Emergency Incidents from Supabase emergency_alerts
     if (Array.isArray(data.incidents)) {
       currentEmergencyIncidents = data.incidents;
-      
+
       // STRICT GLOBAL LOCK: Instantly erase unassigned incidents from the Responder's memory on dashboard load
       if (typeof isResponderRole === 'function' && isResponderRole()) {
         currentEmergencyIncidents = currentEmergencyIncidents.filter(i => isIncidentAssignedToCurrentResponder(i));
       }
 
       currentEmergencyIncidentsMap = new Map();
-      
+
       // Use the filtered array (currentEmergencyIncidents) for EVERYTHING below
       assignIncidentDisplayIds(currentEmergencyIncidents);
       currentEmergencyIncidents.forEach(inc => {
         if (inc.id) currentEmergencyIncidentsMap.set(String(inc.id), inc);
         if (inc.display_id) currentEmergencyIncidentsMap.set(String(inc.display_id), inc);
       });
-      
+
       renderFullIncidentsTable(currentEmergencyIncidents);
       renderOverviewIncidents(currentEmergencyIncidents);
       renderOverviewAlertNotifications(currentEmergencyIncidents);
@@ -4264,7 +4332,7 @@ function renderOverviewUsers(users) {
     const status = u.employee_status || 'Pending';
     const isOnline = status.toLowerCase() === 'active';
     const statusClass = isOnline ? 'status-active' : (status.toLowerCase() === 'pending' ? 'status-pending' : 'status-inactive');
-    
+
     // Fallbacks for missing data
     const timeAgo = formatTimeAgo(u.employee_created_at || u.employee_last_login || new Date().toISOString());
     const avatar = u.avatar_url || '/images/default-avatar.png';
@@ -6312,7 +6380,7 @@ function exportTeamsExcel() {
 
 function updateDynamicMapMarkers(incidents) {
   const list = incidents || currentEmergencyIncidents || [];
-  
+
   // 1. Role Filter: Sandboxes Responders, but lets HEAD/Admin see everything
   let mapIncidents = list;
   if (isResponderRole()) {
@@ -6336,10 +6404,10 @@ function updateDynamicMapMarkers(incidents) {
   // 4. Plot the New Markers
   mapIncidents.forEach(incident => {
     if (!incident.latitude || !incident.longitude) return;
-    
+
     const catLower = (incident.assistance_type || incident.category || '').toLowerCase();
     const statLower = (incident.status || '').toLowerCase().replace(/[^a-z]/g, '');
-    
+
     // Hide resolved/cancelled incidents from the active maps
     if (statLower === 'cancelled' || statLower === 'canceled' || statLower === 'resolved') return;
 
@@ -6355,7 +6423,7 @@ function updateDynamicMapMarkers(incidents) {
     if (statLower === 'ongoing' || statLower === 'pending') {
       color = '#eab308'; // Yellow for On Going
     } else if (statLower === 'resolved') {
-      color = '#25eb35'; 
+      color = '#25eb35';
     }
 
     const popupContent = `
@@ -6364,7 +6432,7 @@ function updateDynamicMapMarkers(incidents) {
           <div class="status-tag" style="background:${color}20;border-left:3px solid ${color}">
             <span class="pulse-dot" style="background:${color}"></span> ${incident.status || 'Active'}
           </div>
-          <span class="incident-id">${incident.display_id || incident.id.slice(0,8)}</span>
+          <span class="incident-id">${incident.display_id || incident.id.slice(0, 8)}</span>
         </div>
         <div class="popup-content">
           <div class="content-header" style="margin-bottom: 8px;">
@@ -6384,8 +6452,8 @@ function updateDynamicMapMarkers(incidents) {
     const customIcon = L.divIcon({
       className: 'incident-pin',
       html: `<div style="background-color: ${color}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.4);"><span style="font-size: 14px;">${iconLabel}</span></div>`,
-      iconSize: [28, 28], 
-      iconAnchor: [14, 28], 
+      iconSize: [28, 28],
+      iconAnchor: [14, 28],
       popupAnchor: [0, -25]
     });
 
