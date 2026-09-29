@@ -1,33 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Heron's Emergency Alert System - Administrator Command Dashboard for the University of Makati community.">
+  <meta name="description"
+    content="Heron's Emergency Alert System - Administrator Command Dashboard for the University of Makati community.">
   <title>HERON'S EMERGENCY ALERT SYSTEM - Administrator Dashboard</title>
   <link rel="icon" type="image/png" href="/images/LOGO.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,700;1,700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/navigation.css">
   <link rel="stylesheet" href="/dashboard.css?v=3">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+  <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
   <script src="/iconify-icon.min.js"></script>
   <script src="/nav-icons.js"></script>
   <script src="/navigation.js"></script>
-  
+
 </head>
+
 <body>
   <div class="dashboard" id="dashboard">
     <!-- Top Command Header -->
     <header class="dashboard-header">
-      <a class="dashboard-brand" href="#dashboard" data-view="overview" aria-label="Heron's Emergency Alert System Dashboard">
+      <a class="dashboard-brand" href="#dashboard" data-view="overview"
+        aria-label="Heron's Emergency Alert System Dashboard">
         <img src="/images/LOGO.png" alt="Heron's Emergency Alert System">
         <span>HERON'S EMERGENCY ALERT SYSTEM<small>Administrator Access</small></span>
       </a>
       <div class="dashboard-actions">
-        <div class="user-menu" id="headerUserMenu" role="button" tabindex="0" title="Click to view Account / Profile" aria-label="Account Profile">
+        <div class="user-menu" id="headerUserMenu" role="button" tabindex="0" title="Click to view Account / Profile"
+          aria-label="Account Profile">
           <span class="user-avatar" id="headerAvatarWrap">
             <img id="headerAvatarImg" src="/images/default-avatar.png" alt="Profile Avatar">
           </span>
@@ -42,7 +51,8 @@
     <!-- Dashboard Main Layout -->
     <div class="dashboard-layout">
       <!-- Global Sidebar Navigation Component (/navigation.js) -->
-      <aside class="dashboard-sidebar" id="dashboardSidebar" data-component="navigation" aria-label="Dashboard navigation">
+      <aside class="dashboard-sidebar" id="dashboardSidebar" data-component="navigation"
+        aria-label="Dashboard navigation">
         <!-- Dynamically rendered and managed by GlobalNavigation -->
       </aside>
 
@@ -68,14 +78,17 @@
               <span class="metric-status people-status green-line" aria-hidden="true"></span>
             </article>
 
-            <article style="cursor: pointer;" onclick="navigateToIncidentsView('active_ongoing');" title="Click to view Active and On Going incidents">
+            <article style="cursor: pointer;" onclick="navigateToIncidentsView('active_ongoing');"
+              title="Click to view Active and On Going incidents">
               <span class="metric-icon red alert-icon" aria-hidden="true">
                 <iconify-icon icon="solar:bell-bing-bold-duotone" width="22" height="22"></iconify-icon>
               </span>
               <div>
                 <small>ACTIVE ALERTS &amp; ON GOING</small>
                 <strong id="metricActiveAlerts">2</strong>
-                <p><a href="#incidents" onclick="event.stopPropagation(); navigateToIncidentsView('active_ongoing'); return false;" style="color:inherit;text-decoration:underline;">View all</a></p>
+                <p><a href="#incidents"
+                    onclick="event.stopPropagation(); navigateToIncidentsView('active_ongoing'); return false;"
+                    style="color:inherit;text-decoration:underline;">View all</a></p>
               </div>
               <span class="metric-status alert-status red-line" aria-hidden="true"></span>
             </article>
@@ -84,7 +97,7 @@
               <span class="metric-icon green shield-icon" aria-hidden="true">
                 <iconify-icon icon="solar:shield-check-bold-duotone" width="22" height="22"></iconify-icon>
               </span>
-              <div >
+              <div>
                 <small>ADMIN ACCOUNTS</small>
                 <strong id="metricAdminUsers">--</strong>
                 <p id="metricAdminSub">Active employee accounts</p>
@@ -99,7 +112,8 @@
               <div>
                 <small>ACTIVE STUDENT ACCOUNTS</small>
                 <strong id="metricActiveStudentAccounts">--</strong>
-                <p><a href="#users" onclick="navigateToStudentAccounts('Active'); return false;" style="color:inherit;text-decoration:underline;">Review accounts</a></p>
+                <p><a href="#users" onclick="navigateToStudentAccounts('Active'); return false;"
+                    style="color:inherit;text-decoration:underline;">Review accounts</a></p>
               </div>
               <span class="metric-status history-status green-line" aria-hidden="true"></span>
             </article>
@@ -116,7 +130,8 @@
                     <p>Real-time monitoring of incidents and campus responders</p>
                   </div>
                   <div class="map-menu">
-                    <button class="map-menu-toggle" type="button" aria-label="Map filters" aria-expanded="false">&#8942;</button>
+                    <button class="map-menu-toggle" type="button" aria-label="Map filters"
+                      aria-expanded="false">&#8942;</button>
                     <div class="map-menu-list" role="menu">
                       <button type="button" role="menuitem" data-map-filter="center">&#9673; Center</button>
                       <button type="button" role="menuitem" data-map-filter="all">&#9673; All</button>
@@ -154,7 +169,8 @@
                       <h2>ADMIN USERS</h2>
                       <p>Manage system administrators</p>
                     </div>
-                    <button type="button" onclick="document.querySelector('a[data-view=teams]').click();">View All</button>
+                    <button type="button" onclick="document.querySelector('a[data-view=teams]').click();">View
+                      All</button>
                   </div>
                   <table>
                     <thead>
@@ -189,7 +205,8 @@
                     </thead>
                     <tbody id="overviewIncidentsTableBody">
                       <tr>
-                        <td colspan="4" style="text-align:center;padding:16px;color:#64748b;">Loading recent incidents from Supabase...</td>
+                        <td colspan="4" style="text-align:center;padding:16px;color:#64748b;">Loading recent incidents
+                          from Supabase...</td>
                       </tr>
                     </tbody>
                   </table>
@@ -209,11 +226,13 @@
                 <h2>&#9830; ALERT NOTIFICATIONS</h2>
               </div>
               <div class="alert-tabs" id="overviewAlertsFilters" role="tablist" aria-label="Alert filters">
-                <button class="active" type="button" role="tab" aria-selected="true" data-alert-filter="all">All</button>
+                <button class="active" type="button" role="tab" aria-selected="true"
+                  data-alert-filter="all">All</button>
                 <button type="button" role="tab" aria-selected="false" data-alert-filter="urgent">Urgent</button>
                 <button type="button" role="tab" aria-selected="false" data-alert-filter="medical">Medical</button>
                 <button type="button" role="tab" aria-selected="false" data-alert-filter="security">Security</button>
-                <button type="button" role="tab" aria-selected="false" data-alert-filter="vicinity">Campus Vicinity</button>
+                <button type="button" role="tab" aria-selected="false" data-alert-filter="vicinity">Campus
+                  Vicinity</button>
               </div>
 
               <div id="overviewAlertsContainer" class="overview-alerts-container">
@@ -222,7 +241,8 @@
                 </div>
               </div>
 
-              <a class="all-alerts" id="overviewAlertsViewAll" href="#alerts" onclick="switchView('alerts');">View All Notifications &rsaquo;</a>
+              <a class="all-alerts" id="overviewAlertsViewAll" href="#alerts" onclick="switchView('alerts');">View All
+                Notifications &rsaquo;</a>
             </aside>
           </div>
         </section>
@@ -273,8 +293,11 @@
         <section class="dashboard-view" id="view-incidents">
           <div class="view-header">
             <div>
-              <h1><span>&#9888;</span> Campus Emergency Incidents <span class="role-view-badge" id="incidentsRoleBadge" style="display:none; font-size:12px; font-weight:600; padding:3px 10px; border-radius:9999px; vertical-align:middle; margin-left:10px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">System Admin Access</span></h1>
-              <p id="incidentsSubtitle">Full incident audit log, active SOS alerts, dispatch statuses, and resolution archives.</p>
+              <h1><span>&#9888;</span> Campus Emergency Incidents <span class="role-view-badge" id="incidentsRoleBadge"
+                  style="display:none; font-size:12px; font-weight:600; padding:3px 10px; border-radius:9999px; vertical-align:middle; margin-left:10px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">System
+                  Admin Access</span></h1>
+              <p id="incidentsSubtitle">Full incident audit log, active SOS alerts, dispatch statuses, and resolution
+                archives.</p>
             </div>
           </div>
 
@@ -282,7 +305,8 @@
           <div id="responderScopeBanner" class="responder-scope-banner" style="display:none;"></div>
 
           <!-- Notification Container for Responder Rescue Missions -->
-          <div id="responderRescueNotificationContainer" class="responder-rescue-notification-container" style="display:none;"></div>
+          <div id="responderRescueNotificationContainer" class="responder-rescue-notification-container"
+            style="display:none;"></div>
 
           <div class="dashboard-panel" id="incidentDirectoryPanel">
             <div class="panel-toolbar">
@@ -291,12 +315,18 @@
                 <input id="incidentSearchInput" type="text" placeholder="Search by Incident ID, Type, or Location...">
               </div>
               <div class="filter-tags" id="incidentFilterTags">
-                <button class="filter-btn incidents-filter-btn active" data-status-filter="all" type="button">All (<span id="countIncidentsAll">0</span>)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="active_ongoing" type="button">Active &amp; On Going (<span id="countIncidentsActiveOngoing">0</span>)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="ongoing" type="button">On Going (<span id="countIncidentsPending">0</span>)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="active" type="button">Active (<span id="countIncidentsActive">0</span>)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="resolved" type="button">Resolved (<span id="countIncidentsResolved">0</span>)</button>
-                <button class="filter-btn incidents-filter-btn" data-status-filter="cancelled" type="button">Cancelled (<span id="countIncidentsCancelled">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn active" data-status-filter="all" type="button">All (<span
+                    id="countIncidentsAll">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="active_ongoing" type="button">Active
+                  &amp; On Going (<span id="countIncidentsActiveOngoing">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="ongoing" type="button">On Going
+                  (<span id="countIncidentsPending">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="active" type="button">Active (<span
+                    id="countIncidentsActive">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="resolved" type="button">Resolved
+                  (<span id="countIncidentsResolved">0</span>)</button>
+                <button class="filter-btn incidents-filter-btn" data-status-filter="cancelled" type="button">Cancelled
+                  (<span id="countIncidentsCancelled">0</span>)</button>
               </div>
             </div>
             <table id="fullIncidentsTable">
@@ -313,7 +343,8 @@
               </thead>
               <tbody id="fullIncidentsTableBody">
                 <tr>
-                  <td colspan="7" style="text-align:center;padding:28px;color:#64748b;">Loading emergency incidents from Supabase...</td>
+                  <td colspan="7" style="text-align:center;padding:28px;color:#64748b;">Loading emergency incidents from
+                    Supabase...</td>
                 </tr>
               </tbody>
             </table>
@@ -328,17 +359,20 @@
               <p>Campus-wide safety broadcast alerts and high-priority distress signals.</p>
             </div>
             <div class="view-actions">
-              <button class="filter-btn active" type="button" onclick="showToast('Broadcast dialog opened.')">+ Send Broadcast Alert</button>
+              <button class="filter-btn active" type="button" onclick="showToast('Broadcast dialog opened.')">+ Send
+                Broadcast Alert</button>
             </div>
           </div>
 
           <div class="dashboard-panel" style="max-width: 800px;">
             <div class="alert-tabs" role="tablist">
-              <button class="active" type="button" role="tab" aria-selected="true" data-alert-filter="all">All Alerts</button>
+              <button class="active" type="button" role="tab" aria-selected="true" data-alert-filter="all">All
+                Alerts</button>
               <button type="button" role="tab" aria-selected="false" data-alert-filter="urgent">Urgent</button>
               <button type="button" role="tab" aria-selected="false" data-alert-filter="medical">Medical</button>
               <button type="button" role="tab" aria-selected="false" data-alert-filter="security">Security</button>
-              <button type="button" role="tab" aria-selected="false" data-alert-filter="vicinity">Campus Vicinity</button>
+              <button type="button" role="tab" aria-selected="false" data-alert-filter="vicinity">Campus
+                Vicinity</button>
             </div>
 
             <article class="alert-item ongoing" style="margin: 14px;" data-status="ongoing" data-alert-type="medical">
@@ -351,7 +385,8 @@
               <footer class="ongoing">&clubs; Awaiting Unit Assignment <b>&rsaquo;</b></footer>
             </article>
 
-            <article class="alert-item active urgent" style="margin: 14px;" data-status="active" data-alert-type="security">
+            <article class="alert-item active urgent" style="margin: 14px;" data-status="active"
+              data-alert-type="security">
               <div>
                 <strong class="security">&#9670; Campus Perimeter Alert</strong>
                 <small>Today &bull; 12:50:38</small>
@@ -371,7 +406,8 @@
               <footer class="active">&#9888; Activity near campus boundary <b>&rsaquo;</b></footer>
             </article>
 
-            <article class="alert-item ongoing responder" style="margin: 14px;" data-status="ongoing" data-alert-type="security">
+            <article class="alert-item ongoing responder" style="margin: 14px;" data-status="ongoing"
+              data-alert-type="security">
               <div>
                 <strong class="security">&#9673; Patrol Unit Deployment</strong>
                 <small>Today &bull; 11:15:20</small>
@@ -407,15 +443,23 @@
             <div class="panel-toolbar">
               <div class="search-box">
                 <span>&#128269;</span>
-                <input id="studentSearchInput" type="text" placeholder="Search by student ID, name, email or college...">
+                <input id="studentSearchInput" type="text"
+                  placeholder="Search by student ID, name, email or college...">
               </div>
               <div class="filter-tags" id="studentFilterTags">
-                <button class="filter-btn active" type="button" data-student-filter="all">All Students (<span id="countAllStudents">0</span>)</button>
-                <button class="filter-btn" type="button" data-student-filter="Active">Active (<span id="countActiveStudents">0</span>)</button>
-                <button class="filter-btn" type="button" data-student-filter="Pending" style="color: #b45309; font-weight: 600;">Pending (<span id="countPendingStudents">0</span>)</button>
-                <button class="filter-btn" type="button" data-student-filter="Disapproved" style="color: #b91c1c; font-weight: 600;">Disapproved (<span id="countDisapprovedStudents">0</span>)</button>
-                <button class="filter-btn" type="button" data-student-filter="Inactive" style="color: #64748b;">Inactive (<span id="countInactiveStudents">0</span>)</button>
-                <button class="filter-btn" type="button" data-student-filter="Suspended" style="color: #b91c1c;">Suspended (<span id="countSuspendedStudents">0</span>)</button>
+                <button class="filter-btn active" type="button" data-student-filter="all">All Students (<span
+                    id="countAllStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Active">Active (<span
+                    id="countActiveStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Pending"
+                  style="color: #b45309; font-weight: 600;">Pending (<span id="countPendingStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Disapproved"
+                  style="color: #b91c1c; font-weight: 600;">Disapproved (<span
+                    id="countDisapprovedStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Inactive" style="color: #64748b;">Inactive
+                  (<span id="countInactiveStudents">0</span>)</button>
+                <button class="filter-btn" type="button" data-student-filter="Suspended"
+                  style="color: #b91c1c;">Suspended (<span id="countSuspendedStudents">0</span>)</button>
               </div>
             </div>
             <div style="width: 100%; overflow-x: auto;">
@@ -435,7 +479,8 @@
                 </thead>
                 <tbody id="studentUsersTableBody">
                   <tr>
-                    <td colspan="9" style="text-align:center;padding:24px;color:#64748b;">Loading student records from Supabase...</td>
+                    <td colspan="9" style="text-align:center;padding:24px;color:#64748b;">Loading student records from
+                      Supabase...</td>
                   </tr>
                 </tbody>
               </table>
@@ -456,15 +501,23 @@
             <div class="panel-toolbar team-toolbar">
               <div class="search-box">
                 <span>&#128269;</span>
-                <input id="teamSearchInput" type="search" placeholder="Search by name, role or email..." aria-label="Search administrator accounts">
+                <input id="teamSearchInput" type="search" placeholder="Search by name, role or email..."
+                  aria-label="Search administrator accounts">
               </div>
               <div class="filter-tags" id="teamStatusFilters" aria-label="Filter administrator accounts">
-                <button class="filter-btn active" type="button" data-team-filter="all">All (<span id="teamCountAll">0</span>)</button>
-                <button class="filter-btn" type="button" data-team-filter="System Admin">System Admin (<span id="teamCountAdmin">0</span>)</button>
-                <button class="filter-btn" type="button" data-team-filter="HEAD">HEAD (<span id="teamCountHead">0</span>)</button>
-                <button class="filter-btn" type="button" data-team-filter="Responder">Responders (<span id="teamCountResponder">0</span>)</button>
-                <button class="filter-btn" type="button" data-team-filter="Disapproved" style="color: #b91c1c; font-weight: 600;">Disapproved (<span id="teamCountDisapproved">0</span>)</button>
-                <button class="filter-btn" type="button" data-team-filter="Suspended" style="color: #b91c1c; font-weight: 600;">Suspended (<span id="teamCountSuspended">0</span>)</button>
+                <button class="filter-btn active" type="button" data-team-filter="all">All (<span
+                    id="teamCountAll">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="System Admin">System Admin (<span
+                    id="teamCountAdmin">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="HEAD">HEAD (<span
+                    id="teamCountHead">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="Responder">Responders (<span
+                    id="teamCountResponder">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="Disapproved"
+                  style="color: #b91c1c; font-weight: 600;">Disapproved (<span
+                    id="teamCountDisapproved">0</span>)</button>
+                <button class="filter-btn" type="button" data-team-filter="Suspended"
+                  style="color: #b91c1c; font-weight: 600;">Suspended (<span id="teamCountSuspended">0</span>)</button>
               </div>
             </div>
             <div class="team-table-wrap">
@@ -480,7 +533,9 @@
                   </tr>
                 </thead>
                 <tbody id="teamsAdminUsersTableBody">
-                  <tr><td colspan="6" class="team-table-message">Loading administrative users...</td></tr>
+                  <tr>
+                    <td colspan="6" class="team-table-message">Loading administrative users...</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -722,7 +777,9 @@
                 </tr>
               </thead>
               <tbody id="auditAccountsTableBody">
-                <tr><td colspan="6">Loading employee accounts...</td></tr>
+                <tr>
+                  <td colspan="6">Loading employee accounts...</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -737,7 +794,8 @@
               <p>Configure emergency radius thresholds, automated SMS broadcasts, and dispatch routing.</p>
             </div>
             <div class="view-actions">
-              <button class="filter-btn active" type="button" onclick="showToast('Configuration settings saved.')">Save Changes</button>
+              <button class="filter-btn active" type="button" onclick="showToast('Configuration settings saved.')">Save
+                Changes</button>
             </div>
           </div>
 
@@ -879,7 +937,8 @@
               <div class="profile-card">
                 <div class="profile-card-header">
                   <div class="card-title-wrap">
-                    <iconify-icon icon="solar:user-bold-duotone" width="20" height="20" class="text-blue"></iconify-icon>
+                    <iconify-icon icon="solar:user-bold-duotone" width="20" height="20"
+                      class="text-blue"></iconify-icon>
                     <h3>Profile Information</h3>
                   </div>
                   <span class="verified-pill">
@@ -890,19 +949,23 @@
                   <div class="profile-form-grid">
                     <div class="form-group">
                       <label for="profileFullName">Full Name</label>
-                      <input type="text" id="profileFullName" name="fullName" value="Jolehmeh Billones" required placeholder="Enter full name">
+                      <input type="text" id="profileFullName" name="fullName" value="Jolehmeh Billones" required
+                        placeholder="Enter full name">
                     </div>
                     <div class="form-group">
                       <label for="profileUsername">Username</label>
-                      <input type="text" id="profileUsername" name="username" value="admin_joleh" required placeholder="Enter username">
+                      <input type="text" id="profileUsername" name="username" value="admin_joleh" required
+                        placeholder="Enter username">
                     </div>
                     <div class="form-group">
                       <label for="profileEmail">Email Address</label>
-                      <input type="email" id="profileEmail" name="email" value="juliemay1917@gmail.com" required placeholder="Enter email address">
+                      <input type="email" id="profileEmail" name="email" value="juliemay1917@gmail.com" required
+                        placeholder="Enter email address">
                     </div>
                     <div class="form-group">
                       <label for="profileRole">Department Role</label>
-                      <input type="text" id="profileRole" name="role" value="System Administrator" readonly disabled class="input-disabled">
+                      <input type="text" id="profileRole" name="role" value="System Administrator" readonly disabled
+                        class="input-disabled">
                       <span class="form-helper-text">
                         <iconify-icon icon="solar:lock-keyhole-bold-duotone" width="13" height="13"></iconify-icon>
                         Managed by system administrators
@@ -922,7 +985,8 @@
               <div class="profile-card mt-4">
                 <div class="profile-card-header">
                   <div class="card-title-wrap">
-                    <iconify-icon icon="solar:shield-warning-bold-duotone" width="20" height="20" class="text-red"></iconify-icon>
+                    <iconify-icon icon="solar:shield-warning-bold-duotone" width="20" height="20"
+                      class="text-red"></iconify-icon>
                     <h3>Account Security</h3>
                   </div>
                 </div>
@@ -944,7 +1008,8 @@
                     </div>
                     <div class="notice-content">
                       <h4>Session Information</h4>
-                      <p>Your session will automatically expire after 30 minutes of inactivity for security purposes.</p>
+                      <p>Your session will automatically expire after 30 minutes of inactivity for security purposes.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -957,7 +1022,8 @@
               <div class="profile-card">
                 <div class="profile-card-header">
                   <div class="card-title-wrap">
-                    <iconify-icon icon="solar:camera-bold-duotone" width="20" height="20" class="text-purple"></iconify-icon>
+                    <iconify-icon icon="solar:camera-bold-duotone" width="20" height="20"
+                      class="text-purple"></iconify-icon>
                     <h3>Profile Picture</h3>
                   </div>
                 </div>
@@ -966,7 +1032,8 @@
                     <img id="profilePicturePreview" src="/images/default-avatar.png" alt="Profile Picture Preview">
                   </div>
                   <p class="upload-heading">Upload New Picture</p>
-                  <input type="file" id="profileAvatarFileInput" accept="image/png, image/jpeg, image/gif, image/webp" style="display:none;">
+                  <input type="file" id="profileAvatarFileInput" accept="image/png, image/jpeg, image/gif, image/webp"
+                    style="display:none;">
                   <button type="button" id="btnChooseImage" class="btn-choose-file">
                     <iconify-icon icon="solar:gallery-wide-bold-duotone" width="18" height="18"></iconify-icon>
                     Choose Image
@@ -983,17 +1050,20 @@
               <div class="profile-card mt-4">
                 <div class="profile-card-header">
                   <div class="card-title-wrap">
-                    <iconify-icon icon="solar:bolt-bold-duotone" width="20" height="20" class="text-amber"></iconify-icon>
+                    <iconify-icon icon="solar:bolt-bold-duotone" width="20" height="20"
+                      class="text-amber"></iconify-icon>
                     <h3>Quick Actions</h3>
                   </div>
                 </div>
                 <div class="quick-actions-list">
                   <button type="button" id="btnProfileReturnDashboard" class="quick-action-btn">
-                    <iconify-icon icon="solar:arrow-left-circle-bold-duotone" width="18" height="18" class="text-blue"></iconify-icon>
+                    <iconify-icon icon="solar:arrow-left-circle-bold-duotone" width="18" height="18"
+                      class="text-blue"></iconify-icon>
                     <span>Return to Dashboard</span>
                   </button>
                   <button type="button" id="btnProfileUserManagement" class="quick-action-btn">
-                    <iconify-icon icon="solar:users-group-two-rounded-bold-duotone" width="18" height="18" class="text-green"></iconify-icon>
+                    <iconify-icon icon="solar:users-group-two-rounded-bold-duotone" width="18" height="18"
+                      class="text-green"></iconify-icon>
                     <span>User Management</span>
                   </button>
                   <button type="button" id="btnProfileSecureLogout" class="quick-action-btn btn-logout-action">
@@ -1012,8 +1082,11 @@
 
   <div class="alert-details-overlay" id="alertDetailsOverlay" hidden>
     <section class="alert-details-dialog" role="dialog" aria-modal="true" aria-labelledby="alertDetailsTitle">
-      <button class="alert-details-close" id="closeAlertDetails" type="button" aria-label="Close alert details">&times;</button>
-      <div class="alert-details-header"><h2>Alert Details</h2></div>
+      <button class="alert-details-close" id="closeAlertDetails" type="button"
+        aria-label="Close alert details">&times;</button>
+      <div class="alert-details-header">
+        <h2>Alert Details</h2>
+      </div>
       <div class="alert-detail-assignee" id="alertDetailAssignee"></div>
       <div class="alert-details-grid">
         <div class="alert-details-main">
@@ -1032,14 +1105,38 @@
             <article class="alert-detail-card">
               <h3>Incident Information</h3>
               <dl>
-                <div><dt>Category:</dt><dd id="alertDetailsCategory"></dd></div>
-                <div><dt>Type:</dt><dd id="alertDetailsType"></dd></div>
-                <div><dt>Status:</dt><dd id="alertDetailsStatusValue"></dd></div>
-                <div><dt>Reported:</dt><dd id="alertDetailsReported"></dd></div>
-                <div><dt>Location:</dt><dd id="alertDetailsLocation"></dd></div>
-                <div><dt>Floor:</dt><dd id="alertDetailsFloor">2nd Floor</dd></div>
-                <div><dt>Room:</dt><dd id="alertDetailsRoom">Common Plaza / Facility</dd></div>
-                <div><dt>User ID:</dt><dd id="alertDetailsUserId">10000056</dd></div>
+                <div>
+                  <dt>Category:</dt>
+                  <dd id="alertDetailsCategory"></dd>
+                </div>
+                <div>
+                  <dt>Type:</dt>
+                  <dd id="alertDetailsType"></dd>
+                </div>
+                <div>
+                  <dt>Status:</dt>
+                  <dd id="alertDetailsStatusValue"></dd>
+                </div>
+                <div>
+                  <dt>Reported:</dt>
+                  <dd id="alertDetailsReported"></dd>
+                </div>
+                <div>
+                  <dt>Location:</dt>
+                  <dd id="alertDetailsLocation"></dd>
+                </div>
+                <div>
+                  <dt>Floor:</dt>
+                  <dd id="alertDetailsFloor">2nd Floor</dd>
+                </div>
+                <div>
+                  <dt>Room:</dt>
+                  <dd id="alertDetailsRoom">Common Plaza / Facility</dd>
+                </div>
+                <div>
+                  <dt>User ID:</dt>
+                  <dd id="alertDetailsUserId">10000056</dd>
+                </div>
               </dl>
             </article>
             <article class="alert-detail-card alert-detail-description">
@@ -1048,7 +1145,8 @@
             </article>
           </div>
           <section class="alert-student-information" id="alertStudentSection">
-            <button type="button" class="alert-student-toggle" id="alertStudentToggle" aria-expanded="false" aria-controls="alertStudentFields">
+            <button type="button" class="alert-student-toggle" id="alertStudentToggle" aria-expanded="false"
+              aria-controls="alertStudentFields">
               <span class="student-toggle-title"><strong>&#9679;</strong> Student Information</span>
               <span class="student-toggle-badge" id="studentToggleAction">
                 <span class="action-text">Show More</span>
@@ -1062,24 +1160,29 @@
                 <div><span>Year Level:</span><strong id="alertStudentYear">2nd Year</strong></div>
                 <div><span>College:</span><strong id="alertStudentCollege">College of Health Sciences</strong></div>
                 <div><span>Contact Number:</span><strong id="alertStudentContact">0917 123 4567</strong></div>
-                <div><span>Address:</span><strong id="alertStudentAddress">University of Makati Campus Residence</strong></div>
+                <div><span>Address:</span><strong id="alertStudentAddress">University of Makati Campus
+                    Residence</strong></div>
                 <div class="alert-contact-group">
                   <h4>Primary Emergency Contact</h4>
                   <div><span>Name:</span><strong id="alertStudentPrimaryName">Maria Billones</strong></div>
                   <div><span>Contact Number:</span><strong id="alertStudentPrimaryContact">0918 234 5678</strong></div>
-                  <div><span>Address:</span><strong id="alertStudentPrimaryAddress">Taguig City, Metro Manila</strong></div>
+                  <div><span>Address:</span><strong id="alertStudentPrimaryAddress">Taguig City, Metro Manila</strong>
+                  </div>
                 </div>
                 <div class="alert-contact-group">
                   <h4>Secondary Emergency Contact</h4>
                   <div><span>Name:</span><strong id="alertStudentSecondaryName">Jose Billones</strong></div>
-                  <div><span>Contact Number:</span><strong id="alertStudentSecondaryContact">0920 345 6789</strong></div>
-                  <div><span>Address:</span><strong id="alertStudentSecondaryAddress">Makati City, Metro Manila</strong></div>
+                  <div><span>Contact Number:</span><strong id="alertStudentSecondaryContact">0920 345 6789</strong>
+                  </div>
+                  <div><span>Address:</span><strong id="alertStudentSecondaryAddress">Makati City, Metro Manila</strong>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
           <section class="alert-history-information" id="alertHistorySection">
-            <button type="button" class="alert-history-toggle" id="alertHistoryToggle" aria-expanded="false" aria-controls="alertHistoryFields">
+            <button type="button" class="alert-history-toggle" id="alertHistoryToggle" aria-expanded="false"
+              aria-controls="alertHistoryFields">
               <span class="history-toggle-title"><strong>&#9679;</strong> Incident History &amp; Timeline</span>
               <span class="history-toggle-badge" id="historyToggleAction">
                 <span class="action-text">Show More</span>
@@ -1089,9 +1192,12 @@
             <div class="alert-history-fields" id="alertHistoryFields">
               <div class="alert-history-content">
                 <div class="alert-track-list" id="alertTrackList">
-                  <div class="track-step complete"><i></i><strong>Reported</strong><time>Dec 03, 2025 04:42:44 PM</time></div>
-                  <div class="track-step complete"><i></i><strong>Acknowledged</strong><time>Dec 03, 2025 04:50:09 PM</time></div>
-                  <div class="track-step complete"><i></i><strong>In Progress</strong><time>Dec 03, 2025 04:50:09 PM</time></div>
+                  <div class="track-step complete"><i></i><strong>Reported</strong><time>Dec 03, 2025 04:42:44 PM</time>
+                  </div>
+                  <div class="track-step complete"><i></i><strong>Acknowledged</strong><time>Dec 03, 2025 04:50:09
+                      PM</time></div>
+                  <div class="track-step complete"><i></i><strong>In Progress</strong><time>Dec 03, 2025 04:50:09
+                      PM</time></div>
                   <div class="track-step"><i></i><strong>Resolved</strong><time>&mdash;</time></div>
                 </div>
               </div>
@@ -1101,11 +1207,25 @@
         <div class="alert-detail-map" id="alertDetailMap" aria-label="Alert location map"></div>
       </div>
       <div class="alert-details-footer">
-        <span id="alertDetailsViewOnlyNotice" style="display:none; font-size:12px; color:#64748b; font-weight:600; margin-right:auto; padding-left:4px;">&#128065; System Admin access</span>
-        <button type="button" class="assign-action" id="openAssignResponderBtn" onclick="window.openAssignResponderModal && window.openAssignResponderModal(this.dataset.incidentId || undefined)" title="Assign a responder unit to rescue this incident">&#128657; Assign Responder</button>
-        <button type="button" class="finish-task-action" id="responderFinishTaskBtn" onclick="openResponderFinishModal()" title="Submit rescue completion report or cancel the response" hidden>&#10003; Done Rescue</button>
-        <button type="button" class="cancel-action" id="markAlertCancelledBtn" onclick="openCancelConfirmModal()" title="Cancel this incident alert">&#10005; Mark as Cancelled</button>
-        <button type="button" class="resolve-action" id="openResolutionSummary" onclick="window.openResolutionSummary && window.openResolutionSummary()" title="Complete and resolve emergency incident">&#10003; Resolve</button>
+        <span id="alertDetailsViewOnlyNotice"
+          style="display:none; font-size:12px; color:#64748b; font-weight:600; margin-right:auto; padding-left:4px;">&#128065;
+          System Admin access</span>
+        <button type="button" class="assign-action" id="openAssignResponderBtn"
+          onclick="window.openAssignResponderModal && window.openAssignResponderModal(this.dataset.incidentId || undefined)"
+          title="Assign a responder unit to rescue this incident">&#128657; Assign Responder</button>
+        <button type="button" class="finish-task-action" id="responderFinishTaskBtn"
+          onclick="openResponderFinishModal()" title="Submit rescue completion report or cancel the response"
+          hidden>&#10003; Done Rescue</button>
+        <button type="button" id="btnInAppNavigate" class="filter-btn"
+          style="background:#0f172a; color:white; border-radius:6px; padding:8px 12px; border:none; cursor:pointer; font-weight:bold;"
+          onclick="startInAppNavigation()">
+          🗺️ Start Navigation
+        </button>
+        <button type="button" class="cancel-action" id="markAlertCancelledBtn" onclick="openCancelConfirmModal()"
+          title="Cancel this incident alert">&#10005; Mark as Cancelled</button>
+        <button type="button" class="resolve-action" id="openResolutionSummary"
+          onclick="window.openResolutionSummary && window.openResolutionSummary()"
+          title="Complete and resolve emergency incident">&#10003; Resolve</button>
       </div>
     </section>
   </div>
@@ -1121,11 +1241,13 @@
         <button type="button" id="closeAlertChat" aria-label="Close chat">&times;</button>
       </header>
       <p class="alert-chat-delivery" id="alertChatDeliveryNotice" aria-live="polite" hidden></p>
-      <div class="alert-chat-messages" id="alertChatMessages" role="log" aria-live="polite" aria-relevant="additions text">
+      <div class="alert-chat-messages" id="alertChatMessages" role="log" aria-live="polite"
+        aria-relevant="additions text">
         <p class="alert-chat-state">Loading messages...</p>
       </div>
       <form class="alert-chat-composer" id="alertChatForm">
-        <input id="alertChatInput" type="text" maxlength="4000" placeholder="Type your message" aria-label="Type your message" autocomplete="off" disabled>
+        <input id="alertChatInput" type="text" maxlength="4000" placeholder="Type your message"
+          aria-label="Type your message" autocomplete="off" disabled>
         <button type="submit" id="alertChatSend" aria-label="Send message" disabled>&#10148;</button>
       </form>
     </section>
@@ -1171,7 +1293,8 @@
             <p id="responderReportText"></p>
           </section>
           <label class="resolution-summary-field" for="resolutionSummaryText">Final Summary <span>*</span></label>
-          <textarea id="resolutionSummaryText" name="resolution_summary" maxlength="2000" required placeholder="Example: Coordinated with the campus clinic to stabilize the student, escorted to medical care, incident closed after confirming full recovery."></textarea>
+          <textarea id="resolutionSummaryText" name="resolution_summary" maxlength="2000" required
+            placeholder="Example: Coordinated with the campus clinic to stabilize the student, escorted to medical care, incident closed after confirming full recovery."></textarea>
           <div class="resolution-summary-field-footer">
             <span id="resolutionSummaryError" role="alert"></span>
             <span><span id="resolutionCharacterCount">0</span> / 2000 characters</span>
@@ -1191,14 +1314,16 @@
     <div class="resolution-success-dialog" role="dialog" aria-modal="true" aria-labelledby="resolutionSuccessTitle">
       <div class="resolution-success-icon-wrap">
         <div class="resolution-success-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </div>
       </div>
       <h2 id="resolutionSuccessTitle" class="resolution-success-title">Successfully Resolved</h2>
       <p class="resolution-success-message">
-        Incident <strong id="resolutionSuccessIncidentId">MED_0001</strong> has been marked as <strong>Resolved</strong> and archived in the safety records.
+        Incident <strong id="resolutionSuccessIncidentId">MED_0001</strong> has been marked as <strong>Resolved</strong>
+        and archived in the safety records.
       </p>
       <div class="resolution-success-details">
         <div class="success-detail-row">
@@ -1211,25 +1336,31 @@
         </div>
         <div class="success-detail-row">
           <span>Status:</span>
-          <span style="background-color: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 9999px;">Resolved</span>
+          <span
+            style="background-color: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 9999px;">Resolved</span>
         </div>
         <div class="success-detail-row">
           <span>Resolved At:</span>
           <strong id="successModalTime">—</strong>
         </div>
-        <div class="success-detail-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px;">
+        <div class="success-detail-row"
+          style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px;">
           <span style="color:#64748b; font-size:11px;">Resolution Summary:</span>
-          <div id="successModalSummaryText" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; width:100%; font-size:12px; color:#1e293b; line-height:1.45; word-break: break-word;"></div>
+          <div id="successModalSummaryText"
+            style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; width:100%; font-size:12px; color:#1e293b; line-height:1.45; word-break: break-word;">
+          </div>
         </div>
       </div>
       <div class="resolution-success-actions">
-        <button type="button" class="btn-success-modal-close" id="btnResolutionSuccessClose" onclick="closeSuccessfullyResolvedModal()">OK</button>
+        <button type="button" class="btn-success-modal-close" id="btnResolutionSuccessClose"
+          onclick="closeSuccessfullyResolvedModal()">OK</button>
       </div>
     </div>
   </div>
 
   <!-- Responder Done Helping / Finish Rescue Task Modal -->
-  <div class="responder-finish-overlay" id="responderFinishOverlay" hidden onclick="if(event.target===this)closeResponderFinishModal()">
+  <div class="responder-finish-overlay" id="responderFinishOverlay" hidden
+    onclick="if(event.target===this)closeResponderFinishModal()">
     <div class="responder-finish-modal" role="dialog" aria-modal="true" aria-labelledby="responderFinishTitle">
       <div class="finish-modal-header">
         <div class="finish-header-icon">
@@ -1240,7 +1371,8 @@
           <h2 id="responderFinishTitle">Done Helping &bull; Finish Emergency Task</h2>
           <p>Confirm conclusion of on-site rescue assistance for this emergency.</p>
         </div>
-        <button type="button" class="close-finish-modal" onclick="closeResponderFinishModal()" aria-label="Close dialog">&times;</button>
+        <button type="button" class="close-finish-modal" onclick="closeResponderFinishModal()"
+          aria-label="Close dialog">&times;</button>
       </div>
 
       <div class="finish-modal-body">
@@ -1274,19 +1406,23 @@
         <!-- Notes Textarea -->
         <div class="finish-textarea-group">
           <label for="finishResolutionNotes">Rescue Completion Report <span aria-hidden="true">*</span>:</label>
-          <textarea id="finishResolutionNotes" rows="3" maxlength="2000" required placeholder="Describe how you helped the student and the outcome of the rescue..."></textarea>
+          <textarea id="finishResolutionNotes" rows="3" maxlength="2000" required
+            placeholder="Describe how you helped the student and the outcome of the rescue..."></textarea>
         </div>
 
         <!-- Confirmation Notice -->
         <div class="finish-confirmation-notice">
           <iconify-icon icon="solar:info-circle-bold" width="18" height="18"></iconify-icon>
-          <span>Submitting the report notifies the HEAD that this incident is ready for final review. It does not resolve the incident.</span>
+          <span>Submitting the report notifies the HEAD that this incident is ready for final review. It does not
+            resolve the incident.</span>
         </div>
         <div class="finish-cancel-choice">
           <p>Choose an action for this ongoing rescue.</p>
           <div>
-            <button type="button" class="btn-finish-cancel-yes" onclick="openResponderCancelReasonModal()">Yes, cancel response</button>
-            <button type="button" class="btn-finish-cancel-no" id="submitRescueReportBtn" onclick="submitResponderFinishTask()">Submit Completion Report</button>
+            <button type="button" class="btn-finish-cancel-yes" onclick="openResponderCancelReasonModal()">Yes, cancel
+              response</button>
+            <button type="button" class="btn-finish-cancel-no" id="submitRescueReportBtn"
+              onclick="submitResponderFinishTask()">Submit Completion Report</button>
           </div>
         </div>
       </div>
@@ -1297,38 +1433,49 @@
     </div>
   </div>
 
-  <div class="responder-cancel-reason-overlay" id="responderCancelReasonOverlay" hidden onclick="if(event.target===this)closeResponderCancelReasonModal()">
-    <section class="responder-cancel-reason-dialog" role="dialog" aria-modal="true" aria-labelledby="responderCancelReasonTitle">
+  <div class="responder-cancel-reason-overlay" id="responderCancelReasonOverlay" hidden
+    onclick="if(event.target===this)closeResponderCancelReasonModal()">
+    <section class="responder-cancel-reason-dialog" role="dialog" aria-modal="true"
+      aria-labelledby="responderCancelReasonTitle">
       <header>
         <span>RESPONSE CANCELLATION</span>
         <h2 id="responderCancelReasonTitle">What is the reason for cancelling this rescue?</h2>
         <p>Incident <strong id="responderCancelReasonIncidentId">—</strong></p>
       </header>
       <label for="responderCancelReasonInput">Rescue cancellation reason <span aria-hidden="true">*</span></label>
-      <textarea id="responderCancelReasonInput" rows="4" maxlength="1000" required placeholder="Explain why this rescue response is being cancelled."></textarea>
+      <textarea id="responderCancelReasonInput" rows="4" maxlength="1000" required
+        placeholder="Explain why this rescue response is being cancelled."></textarea>
       <div class="responder-cancel-reason-actions">
         <button type="button" onclick="closeResponderCancelReasonModal()">Back</button>
-        <button type="button" id="submitResponderCancellationBtn" onclick="submitResponderCancellation()">Confirm Cancellation</button>
+        <button type="button" id="submitResponderCancellationBtn" onclick="submitResponderCancellation()">Confirm
+          Cancellation</button>
       </div>
     </section>
   </div>
 
-  <div class="responder-report-success-overlay" id="responderReportSuccessModal" hidden onclick="if(event.target===this)window.closeResponderReportSuccessModal && window.closeResponderReportSuccessModal()">
-    <section class="responder-report-success-dialog" role="dialog" aria-modal="true" aria-labelledby="responderReportSuccessTitle">
+  <div class="responder-report-success-overlay" id="responderReportSuccessModal" hidden
+    onclick="if(event.target===this)window.closeResponderReportSuccessModal && window.closeResponderReportSuccessModal()">
+    <section class="responder-report-success-dialog" role="dialog" aria-modal="true"
+      aria-labelledby="responderReportSuccessTitle">
       <span class="responder-report-success-icon" aria-hidden="true">&#10003;</span>
       <p class="responder-report-success-kicker">RESCUE COMPLETED</p>
       <h2 id="responderReportSuccessTitle">Incident rescued successfully</h2>
-      <p>Incident <strong id="responderReportSuccessIncidentId">—</strong> has been removed from your active rescue assignments. The HEAD account can review your report and click <strong>Resolve</strong>; the incident remains On Going until then.</p>
-      <button type="button" onclick="window.closeResponderReportSuccessModal && window.closeResponderReportSuccessModal()">Done</button>
+      <p>Incident <strong id="responderReportSuccessIncidentId">—</strong> has been removed from your active rescue
+        assignments. The HEAD account can review your report and click <strong>Resolve</strong>; the incident remains On
+        Going until then.</p>
+      <button type="button"
+        onclick="window.closeResponderReportSuccessModal && window.closeResponderReportSuccessModal()">Done</button>
     </section>
   </div>
 
   <!-- Cancel Incident Confirmation Modal (Yes / No Choice) -->
-  <div class="cancel-confirm-overlay" id="cancelConfirmModal" hidden onclick="if(event.target===this)closeCancelConfirmModal()">
+  <div class="cancel-confirm-overlay" id="cancelConfirmModal" hidden
+    onclick="if(event.target===this)closeCancelConfirmModal()">
     <div class="cancel-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="cancelConfirmTitle">
       <div class="cancel-confirm-icon-wrap">
         <div class="cancel-confirm-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
             <line x1="12" y1="9" x2="12" y2="13"></line>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -1337,7 +1484,8 @@
       </div>
       <h2 id="cancelConfirmTitle" class="cancel-confirm-title">Do you really want to cancel it?</h2>
       <p class="cancel-confirm-message">
-        Are you sure you want to cancel incident <strong id="cancelConfirmIncidentId">INCIDENT</strong>? This will update the status to <strong>Cancelled</strong> across all dashboard and incident logs.
+        Are you sure you want to cancel incident <strong id="cancelConfirmIncidentId">INCIDENT</strong>? This will
+        update the status to <strong>Cancelled</strong> across all dashboard and incident logs.
       </p>
       <div class="cancel-confirm-details">
         <div class="cancel-detail-row">
@@ -1360,21 +1508,27 @@
 
       <!-- ADD THIS TEXTAREA BLOCK -->
       <div style="margin-bottom: 18px; text-align: left;">
-        <label for="generalCancelReasonInput" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+        <label for="generalCancelReasonInput"
+          style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
           Reason for Cancellation <span style="color: #dc2626;">*</span>
         </label>
-        <textarea id="generalCancelReasonInput" rows="3" required placeholder="Explain why this incident is being cancelled..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; resize: vertical; box-sizing: border-box;"></textarea>
+        <textarea id="generalCancelReasonInput" rows="3" required
+          placeholder="Explain why this incident is being cancelled..."
+          style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; resize: vertical; box-sizing: border-box;"></textarea>
       </div>
       <!-- END TEXTAREA BLOCK -->
       <div class="cancel-confirm-actions">
-        <button type="button" class="btn-cancel-choice btn-cancel-yes" id="btnCancelConfirmYes" onclick="confirmAndExecuteCancellation()">Yes, please cancel it</button>
-        <button type="button" class="btn-cancel-choice btn-cancel-no" id="btnCancelConfirmNo" onclick="closeCancelConfirmModal()">No</button>
+        <button type="button" class="btn-cancel-choice btn-cancel-yes" id="btnCancelConfirmYes"
+          onclick="confirmAndExecuteCancellation()">Yes, please cancel it</button>
+        <button type="button" class="btn-cancel-choice btn-cancel-no" id="btnCancelConfirmNo"
+          onclick="closeCancelConfirmModal()">No</button>
       </div>
     </div>
   </div>
 
   <!-- Assign Responder to Rescue Incident Modal -->
-  <div class="assign-responder-overlay" id="assignResponderModal" hidden onclick="if(event.target===this)closeAssignResponderModal()">
+  <div class="assign-responder-overlay" id="assignResponderModal" hidden
+    onclick="if(event.target===this)closeAssignResponderModal()">
     <div class="assign-responder-dialog" role="dialog" aria-modal="true" aria-labelledby="assignResponderTitle">
       <header class="assign-responder-header">
         <div>
@@ -1382,7 +1536,8 @@
           <h2 id="assignResponderTitle">Assign Responder to Rescue</h2>
           <p id="assignResponderSubtitle">Dispatch appropriate response unit for this emergency incident</p>
         </div>
-        <button type="button" class="assign-responder-close" id="closeAssignResponderBtn" onclick="closeAssignResponderModal()" aria-label="Close">&times;</button>
+        <button type="button" class="assign-responder-close" id="closeAssignResponderBtn"
+          onclick="closeAssignResponderModal()" aria-label="Close">&times;</button>
       </header>
 
       <form id="assignResponderForm" onsubmit="handleAssignResponderSubmit(event)">
@@ -1402,7 +1557,8 @@
             <label for="assignRescueUnitSelect">
               <strong>Specialized Rescue Unit for <span id="assignIncidentTypeName">Medical</span>:</strong>
             </label>
-            <select id="assignRescueUnitSelect" class="assign-select" onchange="handleRescueUnitSelectionChange(this.value)">
+            <select id="assignRescueUnitSelect" class="assign-select"
+              onchange="handleRescueUnitSelectionChange(this.value)">
               <!-- Dynamically populated based on incident category -->
             </select>
             <small class="assign-helper">Specialized units tailored for this incident type.</small>
@@ -1413,7 +1569,8 @@
             <label for="assignResponderAccountSelect">
               <strong>Assigned Registered Responder:</strong> <span class="required" style="color:#dc2626;">*</span>
             </label>
-            <select id="assignResponderAccountSelect" class="assign-select" onchange="handleResponderAccountChange(this.value)">
+            <select id="assignResponderAccountSelect" class="assign-select"
+              onchange="handleResponderAccountChange(this.value)">
               <option value="">-- Select registered responder personnel --</option>
               <!-- Populated from database employee responders -->
             </select>
@@ -1456,7 +1613,8 @@
             <label for="assignDispatchNotes">
               <strong>Rescue Mission Notes / Dispatch Instructions:</strong>
             </label>
-            <textarea id="assignDispatchNotes" class="assign-textarea" rows="2" placeholder="e.g. Proceed with rescue equipment directly to the student location."></textarea>
+            <textarea id="assignDispatchNotes" class="assign-textarea" rows="2"
+              placeholder="e.g. Proceed with rescue equipment directly to the student location."></textarea>
           </div>
         </div>
 
@@ -1471,11 +1629,13 @@
   </div>
 
   <!-- Responder Assigned Success Pop-up Modal -->
-  <div class="assign-success-overlay" id="assignSuccessModal" hidden onclick="if(event.target===this)closeAssignSuccessModal()">
+  <div class="assign-success-overlay" id="assignSuccessModal" hidden
+    onclick="if(event.target===this)closeAssignSuccessModal()">
     <div class="assign-success-dialog" role="dialog" aria-modal="true" aria-labelledby="assignSuccessTitle">
       <div class="assign-success-icon-wrap">
         <div class="assign-success-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </div>
@@ -1499,7 +1659,9 @@
         </div>
         <div class="success-detail-row">
           <span>Incident Status:</span>
-          <span id="assignSuccessStatus" style="background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 9999px;">On Going</span>
+          <span id="assignSuccessStatus"
+            style="background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 9999px;">On
+            Going</span>
         </div>
         <div class="success-detail-row">
           <span>Estimated Arrival:</span>
@@ -1507,33 +1669,41 @@
         </div>
       </div>
       <div class="assign-success-actions">
-        <button type="button" class="btn-assign-success-close" id="btnAssignSuccessClose" onclick="closeAssignSuccessModal()">OK</button>
+        <button type="button" class="btn-assign-success-close" id="btnAssignSuccessClose"
+          onclick="closeAssignSuccessModal()">OK</button>
       </div>
     </div>
   </div>
 
-  <div class="cancel-confirm-overlay" id="disapproveConfirmModal" hidden onclick="if(event.target===this)closeDisapproveConfirmModal()">
-    <div class="cancel-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="disapproveConfirmTitle" aria-describedby="disapproveConfirmMessage">
+  <div class="cancel-confirm-overlay" id="disapproveConfirmModal" hidden
+    onclick="if(event.target===this)closeDisapproveConfirmModal()">
+    <div class="cancel-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="disapproveConfirmTitle"
+      aria-describedby="disapproveConfirmMessage">
       <div class="cancel-confirm-icon-wrap">
         <div class="cancel-confirm-icon" aria-hidden="true">!</div>
       </div>
       <h2 id="disapproveConfirmTitle" class="cancel-confirm-title">Disapprove this account?</h2>
       <p id="disapproveConfirmMessage" class="cancel-confirm-message">
-        Are you sure you want to disapprove <strong id="disapproveConfirmAccount">this account</strong>? This account will lose access.
+        Are you sure you want to disapprove <strong id="disapproveConfirmAccount">this account</strong>? This account
+        will lose access.
       </p>
       <div class="cancel-confirm-actions">
-        <button type="button" class="btn-cancel-choice btn-cancel-yes" id="btnDisapproveConfirmYes" onclick="confirmDisapproveAccount()">Yes, disapprove it</button>
-        <button type="button" class="btn-cancel-choice btn-cancel-no" onclick="closeDisapproveConfirmModal()">Cancel</button>
+        <button type="button" class="btn-cancel-choice btn-cancel-yes" id="btnDisapproveConfirmYes"
+          onclick="confirmDisapproveAccount()">Yes, disapprove it</button>
+        <button type="button" class="btn-cancel-choice btn-cancel-no"
+          onclick="closeDisapproveConfirmModal()">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- Export Incidents Sidebar Pop-up (Right Drawer matching image.png) -->
   <div id="exportIncidentsOverlay" class="drawer-overlay" onclick="closeExportDrawer()"></div>
-  <aside id="exportIncidentsDrawer" class="export-incidents-drawer" aria-labelledby="exportDrawerTitle" role="dialog" aria-modal="true">
+  <aside id="exportIncidentsDrawer" class="export-incidents-drawer" aria-labelledby="exportDrawerTitle" role="dialog"
+    aria-modal="true">
     <!-- Header with Red Circular Close Button and Centered Title -->
     <div class="drawer-header">
-      <button type="button" class="drawer-close-circle" id="drawerCloseBtn" onclick="closeExportDrawer()" aria-label="Close">&times;</button>
+      <button type="button" class="drawer-close-circle" id="drawerCloseBtn" onclick="closeExportDrawer()"
+        aria-label="Close">&times;</button>
       <h2 id="exportDrawerTitle" class="drawer-title">Export Incidents</h2>
     </div>
 
@@ -1545,17 +1715,20 @@
           <span>Export Format:</span>
         </div>
         <div class="drawer-format-row" role="radiogroup" aria-label="Export Format">
-          <button type="button" class="format-pill active" data-format="pdf" id="formatPillPdf" onclick="selectExportFormat('pdf')" role="radio" aria-checked="true">
+          <button type="button" class="format-pill active" data-format="pdf" id="formatPillPdf"
+            onclick="selectExportFormat('pdf')" role="radio" aria-checked="true">
             <span class="pill-radio-dot"></span>
             <iconify-icon icon="solar:file-text-bold" class="pill-icon format-pdf-icon"></iconify-icon>
             <span class="pill-label">PDF</span>
           </button>
-          <button type="button" class="format-pill" data-format="excel" id="formatPillExcel" onclick="selectExportFormat('excel')" role="radio" aria-checked="false">
+          <button type="button" class="format-pill" data-format="excel" id="formatPillExcel"
+            onclick="selectExportFormat('excel')" role="radio" aria-checked="false">
             <span class="pill-radio-dot"></span>
             <iconify-icon icon="solar:document-medicine-bold" class="pill-icon format-excel-icon"></iconify-icon>
             <span class="pill-label">Excel</span>
           </button>
-          <button type="button" class="format-pill" data-format="print" id="formatPillPrint" onclick="selectExportFormat('print')" role="radio" aria-checked="false">
+          <button type="button" class="format-pill" data-format="print" id="formatPillPrint"
+            onclick="selectExportFormat('print')" role="radio" aria-checked="false">
             <span class="pill-radio-dot"></span>
             <iconify-icon icon="solar:printer-bold" class="pill-icon format-print-icon"></iconify-icon>
             <span class="pill-label">Print</span>
@@ -1570,13 +1743,15 @@
           <span>Report Type:</span>
         </div>
         <div class="drawer-report-type-grid" role="radiogroup" aria-label="Report Type">
-          <div class="report-type-card active" data-type="just" id="reportTypeCardJust" onclick="selectReportType('just')" role="radio" aria-checked="true" tabindex="0">
+          <div class="report-type-card active" data-type="just" id="reportTypeCardJust"
+            onclick="selectReportType('just')" role="radio" aria-checked="true" tabindex="0">
             <span class="type-radio-dot"></span>
             <iconify-icon icon="solar:file-text-bold" class="type-card-icon type-icon-red"></iconify-icon>
             <strong class="type-card-title">Just Report</strong>
             <span class="type-card-desc">Standard incidents</span>
           </div>
-          <div class="report-type-card" data-type="resolved" id="reportTypeCardResolved" onclick="selectReportType('resolved')" role="radio" aria-checked="false" tabindex="0">
+          <div class="report-type-card" data-type="resolved" id="reportTypeCardResolved"
+            onclick="selectReportType('resolved')" role="radio" aria-checked="false" tabindex="0">
             <span class="type-radio-dot"></span>
             <iconify-icon icon="solar:check-circle-bold" class="type-card-icon type-icon-green"></iconify-icon>
             <strong class="type-card-title">Resolved Report</strong>
@@ -1619,7 +1794,8 @@
 
         <div class="drawer-filter-group">
           <label for="drawerSearchInput">Search:</label>
-          <input type="text" id="drawerSearchInput" class="drawer-input" placeholder="Search by incident ID, student name, or reporter...">
+          <input type="text" id="drawerSearchInput" class="drawer-input"
+            placeholder="Search by incident ID, student name, or reporter...">
         </div>
 
         <div class="drawer-filter-group">
@@ -1667,9 +1843,11 @@
 
   <!-- Export Teams Sidebar Pop-up / Drawer -->
   <div id="exportTeamsOverlay" class="drawer-overlay" onclick="closeTeamsExportDrawer()"></div>
-  <aside id="exportTeamsDrawer" class="export-incidents-drawer" aria-labelledby="exportTeamsDrawerTitle" role="dialog" aria-modal="true">
+  <aside id="exportTeamsDrawer" class="export-incidents-drawer" aria-labelledby="exportTeamsDrawerTitle" role="dialog"
+    aria-modal="true">
     <div class="drawer-header">
-      <button type="button" class="drawer-close-circle" id="teamsDrawerCloseBtn" onclick="closeTeamsExportDrawer()" aria-label="Close">&times;</button>
+      <button type="button" class="drawer-close-circle" id="teamsDrawerCloseBtn" onclick="closeTeamsExportDrawer()"
+        aria-label="Close">&times;</button>
       <h2 id="exportTeamsDrawerTitle" class="drawer-title">Export Teams</h2>
     </div>
 
@@ -1681,17 +1859,20 @@
           <span>Export Format:</span>
         </div>
         <div class="drawer-format-row" role="radiogroup" aria-label="Export Format">
-          <button type="button" class="format-pill active" data-format="pdf" id="teamsFormatPillPdf" onclick="selectTeamsExportFormat('pdf')" role="radio" aria-checked="true">
+          <button type="button" class="format-pill active" data-format="pdf" id="teamsFormatPillPdf"
+            onclick="selectTeamsExportFormat('pdf')" role="radio" aria-checked="true">
             <span class="pill-radio-dot"></span>
             <iconify-icon icon="solar:file-text-bold" class="pill-icon format-pdf-icon"></iconify-icon>
             <span class="pill-label">PDF</span>
           </button>
-          <button type="button" class="format-pill" data-format="excel" id="teamsFormatPillExcel" onclick="selectTeamsExportFormat('excel')" role="radio" aria-checked="false">
+          <button type="button" class="format-pill" data-format="excel" id="teamsFormatPillExcel"
+            onclick="selectTeamsExportFormat('excel')" role="radio" aria-checked="false">
             <span class="pill-radio-dot"></span>
             <iconify-icon icon="solar:document-medicine-bold" class="pill-icon format-excel-icon"></iconify-icon>
             <span class="pill-label">Excel</span>
           </button>
-          <button type="button" class="format-pill" data-format="print" id="teamsFormatPillPrint" onclick="selectTeamsExportFormat('print')" role="radio" aria-checked="false">
+          <button type="button" class="format-pill" data-format="print" id="teamsFormatPillPrint"
+            onclick="selectTeamsExportFormat('print')" role="radio" aria-checked="false">
             <span class="pill-radio-dot"></span>
             <iconify-icon icon="solar:printer-bold" class="pill-icon format-print-icon"></iconify-icon>
             <span class="pill-label">Print</span>
@@ -1732,7 +1913,8 @@
 
         <div class="drawer-filter-group">
           <label for="teamsDrawerSearchInput">Search:</label>
-          <input type="text" id="teamsDrawerSearchInput" class="drawer-input" placeholder="Search by name, role or email...">
+          <input type="text" id="teamsDrawerSearchInput" class="drawer-input"
+            placeholder="Search by name, role or email...">
         </div>
       </div>
 
@@ -1746,7 +1928,8 @@
 
       <!-- 4. Generate & Export Action Button -->
       <div class="drawer-action-container">
-        <button type="button" class="btn-drawer-generate" id="btnDrawerGenerateTeamsExport" onclick="handleTeamsDrawerExport()">
+        <button type="button" class="btn-drawer-generate" id="btnDrawerGenerateTeamsExport"
+          onclick="handleTeamsDrawerExport()">
           <iconify-icon icon="solar:download-minimalistic-bold"></iconify-icon>
           <span>Generate &amp; Export</span>
         </button>
@@ -1761,4 +1944,5 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="/dashboard.js?v=13"></script>
 </body>
+
 </html>

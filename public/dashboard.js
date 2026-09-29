@@ -431,15 +431,23 @@ function applyRoleBasedAccessControl(userRole) {
   }
   const isSysAdmin = isSystemAdminRole(activeRole);
 
-  const isResponder = isResponderRole(activeRole);
+ const isResponder = isResponderRole(activeRole);
 
-  // Tell the entire HTML body if a responder is logged in
-  if (isResponder) {
-    document.body.classList.add('responder-mode');
-  } else {
-    document.body.classList.remove('responder-mode');
+  // 1. Hide the entire Admin Users Panel for Responders
+  const usersPanel = document.getElementById('usersPanel');
+  if (usersPanel) {
+    usersPanel.style.display = isResponder ? 'none' : '';
   }
 
+  // 2. Hide the Top Metric Card for "Admin Users"
+  // (Assuming your metric card has id="metricAdminUsers" inside it)
+  const adminMetricCard = document.getElementById('metricAdminUsers');
+  if (adminMetricCard) {
+    const parentCard = adminMetricCard.closest('article') || adminMetricCard.closest('.metric-card');
+    if (parentCard) {
+      parentCard.style.display = isResponder ? 'none' : '';
+    }
+  }
   const incidentsRoleBadge = document.getElementById('incidentsRoleBadge');
   if (incidentsRoleBadge) {
     incidentsRoleBadge.style.display = isSysAdmin ? 'inline-block' : 'none';
@@ -3288,15 +3296,35 @@ function initIncidentDetails() {
   fullRows.forEach(bindRowClick);
 }
 
+let routingControl = null;
+let responderCurrentMarker = null;
+
 function initAlertDetailMap(coords = [14.5628, 121.0561]) {
   const mapElement = document.querySelector('#alertDetailMap');
   if (!mapElement || typeof L === 'undefined') return;
 
+  // 1. Wipe any previous navigation paths when opening a new incident
+  if (routingControl) {
+    alertDetailMap.removeControl(routingControl);
+    routingControl = null;
+  }
+  if (responderCurrentMarker) {
+    alertDetailMap.removeLayer(responderCurrentMarker);
+    responderCurrentMarker = null;
+  }
+  
+  // 2. Reset the Navigate button text
+  const navBtn = document.getElementById('btnInAppNavigate');
+  if (navBtn) {
+    navBtn.disabled = false;
+    navBtn.innerHTML = '🗺️ Start Navigation';
+    navBtn.style.background = '#0f172a';
+  }
+
+  // 3. Load the base map
   if (alertDetailMap) {
     alertDetailMap.setView(coords, 15);
-    if (alertDetailMarker) {
-      alertDetailMarker.setLatLng(coords);
-    }
+    if (alertDetailMarker) alertDetailMarker.setLatLng(coords);
     setTimeout(() => alertDetailMap.invalidateSize(), 50);
     return;
   }
@@ -3306,9 +3334,74 @@ function initAlertDetailMap(coords = [14.5628, 121.0561]) {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(alertDetailMap);
+  
   alertDetailMarker = L.marker(coords).addTo(alertDetailMap);
   L.circle(coords, { radius: 350, color: '#2d7fc1', fillColor: '#79aee0', fillOpacity: 0.25 }).addTo(alertDetailMap);
 }
+
+function startInAppNavigation() {
+  if (!currentAlertDetailRecord || !currentAlertDetailRecord.coords) {
+    showToast('GPS coordinates not available for this incident.', 'warning');
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    showToast('Location tracking is not supported by your browser.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnInAppNavigate');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Routing...';
+  }
+
+  // Grab the responder's live GPS coordinates
+  navigator.geolocation.getCurrentPosition((position) => {
+    const rLat = position.coords.latitude;
+    const rLng = position.coords.longitude;
+    const incidentCoords = currentAlertDetailRecord.coords;
+
+    // Plot the Responder on the map with a green dot
+    responderCurrentMarker = L.circleMarker([rLat, rLng], {
+        radius: 8,
+        fillColor: "#16a34a",
+        color: "#fff",
+        weight: 2,
+        fillOpacity: 1
+    }).addTo(alertDetailMap).bindPopup("Your Location").openPopup();
+
+    // Calculate and draw the path
+    if (typeof L.Routing !== 'undefined') {
+      routingControl = L.Routing.control({
+        waypoints: [
+          L.latLng(rLat, rLng), // Start: Responder
+          L.latLng(incidentCoords[0], incidentCoords[1]) // End: Emergency
+        ],
+        routeWhileDragging: false,
+        addWaypoints: false,
+        show: false, // Set to true if you want a white box with text directions (Turn Left, etc)
+        lineOptions: {
+          styles: [{ color: '#3b82f6', weight: 5, opacity: 0.9 }] // The blue path line
+        },
+        createMarker: function() { return null; }, // Hides default markers so it uses your custom ones
+        fitSelectedRoutes: true // Automatically zooms out so you can see the whole route
+      }).addTo(alertDetailMap);
+      
+      if (btn) {
+        btn.innerHTML = '📍 Navigation Active';
+        btn.style.background = '#16a34a'; // Turns green to show it worked
+      }
+    } else {
+      showToast('Routing library not loaded. Check your HTML tags.', 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; }
+    }
+  }, (error) => {
+    showToast('Could not get your location. Please allow GPS permissions.', 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; }
+  }, { enableHighAccuracy: true });
+}
+window.startInAppNavigation = startInAppNavigation;
 
 function openAlertsFromNotification(event) {
   event.preventDefault();
@@ -4108,30 +4201,38 @@ async function loadDashboardData() {
 }
 
 function renderOverviewUsers(users) {
-  const tbody = document.querySelector('#overviewUsersTableBody');
+  const tbody = document.getElementById('overviewUsersTableBody');
   if (!tbody) return;
 
   tbody.innerHTML = '';
+  if (!users || !Array.isArray(users)) return;
 
-  const displayUsers = (users || []).slice(0, 5);
+  // Only show the top 5
+  const displayUsers = users.slice(0, 5);
 
   tbody.innerHTML = displayUsers.map(u => {
-    const isOnline = u.employee_status === 'Active';
-    const statusClass = isOnline ? 'status-active' : (u.employee_status === 'Pending' ? 'status-pending' : 'status-inactive');
-    const statusText = u.employee_status || 'Active';
-    const timeAgo = formatTimeAgo(u.employee_created_at || u.employee_last_login);
+    // Bulletproof variable assignment
+    const status = u.employee_status || 'Pending';
+    const isOnline = status.toLowerCase() === 'active';
+    const statusClass = isOnline ? 'status-active' : (status.toLowerCase() === 'pending' ? 'status-pending' : 'status-inactive');
+    
+    // Fallbacks for missing data
+    const timeAgo = formatTimeAgo(u.employee_created_at || u.employee_last_login || new Date().toISOString());
+    const avatar = u.avatar_url || '/images/default-avatar.png';
+    const name = u.employee_name || 'Unnamed';
+    const role = u.employee_role || 'Staff';
 
     return `
       <tr>
         <td>
           <div style="display:flex; align-items:center; gap:8px;">
-            <img src="${escapeHtml(u.avatar_url || '/images/avatar-default.svg')}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;" onerror="this.src='/images/avatar-default.svg'">
-            <strong>${escapeHtml(u.employee_name || 'Unnamed')}</strong>
+            <img src="${escapeHtml(avatar)}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;" onerror="this.src='/images/default-avatar.png'">
+            <strong>${escapeHtml(name)}</strong>
           </div>
         </td>
-        <td>${escapeHtml(u.employee_role || 'Staff')}</td>
-        <td><span class="status-badge ${statusClass}">${escapeHtml(statusText)}</span></td>
-        <td>${timeAgo}</td>
+        <td>${escapeHtml(role)}</td>
+        <td><span class="status-badge ${statusClass}">${escapeHtml(status)}</span></td>
+        <td>${escapeHtml(timeAgo)}</td>
       </tr>
     `;
   }).join('');
@@ -6328,6 +6429,3 @@ window.exportTeamsPdf = exportTeamsPdf;
 window.exportTeamsExcel = exportTeamsExcel;
 window.loadTeamsAdminAccounts = loadTeamsAdminAccounts;
 window.renderTeamsAdminUsersTable = renderTeamsAdminUsersTable;
-
-
-
