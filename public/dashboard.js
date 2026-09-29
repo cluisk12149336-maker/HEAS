@@ -5027,20 +5027,12 @@ function loadSavedAvatar() {
     
     avatarSelectors.forEach(selector => {
       document.querySelectorAll(selector).forEach(img => {
-
-        if (img.src.includes('default-avatar.png')) {
+        // Only update if it's not already pointing to the correct avatar or a valid data/blob url
+        if (!img.src.includes(userAvatar) && !img.src.startsWith('data:')) {
           img.src = userAvatar;
-        } else if (storedUser.avatar_url && img.src !== storedUser.avatar_url && !img.src.startsWith('data:')) {
-          img.src = storedUser.avatar_url;
-        }
-        // If the image is trying to load the missing default asset, force it to use the user avatar or icon vector
-        if (img.id !== 'siteLogo' && img.className !== 'brand-logo' && !img.src.includes('logo')) {
-          if (img.src !== userAvatar) {
-            img.src = userAvatar;
-          }
         }
 
-        // Prevent infinite error spam loops if it fails
+        // Prevent infinite error loops if a link goes dead
         img.onerror = function() {
           this.onerror = null; 
           this.src = 'https://api.iconify.design/solar:user-circle-bold-duotone.svg?color=%2364748b';
