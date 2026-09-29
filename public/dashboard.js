@@ -439,6 +439,11 @@ function applyRoleBasedAccessControl(userRole) {
     usersPanel.style.display = isResponder ? 'none' : '';
   }
 
+  if (isResponder) {
+    document.body.classList.add('responder-mode');
+  } else {
+    document.body.classList.remove('responder-mode');
+  }
   // 2. Hide the Top Metric Card for "Admin Users"
   // (Assuming your metric card has id="metricAdminUsers" inside it)
   const adminMetricCard = document.getElementById('metricAdminUsers');
