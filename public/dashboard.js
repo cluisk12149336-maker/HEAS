@@ -3339,7 +3339,7 @@ function initAlertDetailMap(coords = [14.5628, 121.0561]) {
   L.circle(coords, { radius: 350, color: '#2d7fc1', fillColor: '#79aee0', fillOpacity: 0.25 }).addTo(alertDetailMap);
 }
 
-function startInAppNavigation() {
+async function startInAppNavigation() {
   if (!currentAlertDetailRecord || !currentAlertDetailRecord.coords) {
     showToast('GPS coordinates not available for this incident.', 'warning');
     return;
@@ -3353,10 +3353,39 @@ function startInAppNavigation() {
   const btn = document.getElementById('btnInAppNavigate');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '⏳ Routing...';
+    btn.innerHTML = '⏳ Loading Map Engine...';
   }
 
-  // Grab the responder's live GPS coordinates
+  // --- 1. DYNAMICALLY INJECT THE ROUTING LIBRARY IF MISSING ---
+  if (typeof L.Routing === 'undefined') {
+    await new Promise((resolve) => {
+      // Inject CSS
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css';
+      document.head.appendChild(link);
+
+      // Inject JS
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js';
+      script.onload = () => resolve();
+      script.onerror = () => {
+        showToast('Failed to download routing engine. Check connection.', 'error');
+        resolve();
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  // Abort if the download completely failed
+  if (typeof L.Routing === 'undefined') {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; }
+    return; 
+  }
+
+  if (btn) btn.innerHTML = '⏳ Routing...';
+
+  // --- 2. GRAB GPS AND DRAW THE PATH ---
   navigator.geolocation.getCurrentPosition((position) => {
     const rLat = position.coords.latitude;
     const rLng = position.coords.longitude;
@@ -3372,33 +3401,28 @@ function startInAppNavigation() {
     }).addTo(alertDetailMap).bindPopup("Your Location").openPopup();
 
     // Calculate and draw the path
-    if (typeof L.Routing !== 'undefined') {
-      routingControl = L.Routing.control({
-        waypoints: [
-          L.latLng(rLat, rLng), // Start: Responder
-          L.latLng(incidentCoords[0], incidentCoords[1]) // End: Emergency
-        ],
-        routeWhileDragging: false,
-        addWaypoints: false,
-        show: false, // Set to true if you want a white box with text directions (Turn Left, etc)
-        lineOptions: {
-          styles: [{ color: '#3b82f6', weight: 5, opacity: 0.9 }] // The blue path line
-        },
-        createMarker: function() { return null; }, // Hides default markers so it uses your custom ones
-        fitSelectedRoutes: true // Automatically zooms out so you can see the whole route
-      }).addTo(alertDetailMap);
-      
-      if (btn) {
-        btn.innerHTML = '📍 Navigation Active';
-        btn.style.background = '#16a34a'; // Turns green to show it worked
-      }
-    } else {
-      showToast('Routing library not loaded. Check your HTML tags.', 'error');
-      if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; }
+    routingControl = L.Routing.control({
+      waypoints: [
+        L.latLng(rLat, rLng), // Start: Responder
+        L.latLng(incidentCoords[0], incidentCoords[1]) // End: Emergency
+      ],
+      routeWhileDragging: false,
+      addWaypoints: false,
+      show: false, // Hides the bulky text directions box
+      lineOptions: {
+        styles: [{ color: '#3b82f6', weight: 5, opacity: 0.9 }] // Blue path line
+      },
+      createMarker: function() { return null; }, // Hides duplicate markers
+      fitSelectedRoutes: true // Auto-zooms to fit the route perfectly
+    }).addTo(alertDetailMap);
+    
+    if (btn) {
+      btn.innerHTML = '📍 Navigation Active';
+      btn.style.background = '#16a34a'; 
     }
   }, (error) => {
     showToast('Could not get your location. Please allow GPS permissions.', 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; btn.style.background = '#0f172a'; }
   }, { enableHighAccuracy: true });
 }
 window.startInAppNavigation = startInAppNavigation;
