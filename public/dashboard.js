@@ -431,6 +431,20 @@ function applyRoleBasedAccessControl(userRole) {
   }
   const isSysAdmin = isSystemAdminRole(activeRole);
 
+  const isResponder = isResponderRole(activeRole);
+
+  // 1. Hide the Admin Users Table Widget for Responders
+  const adminWidget = document.getElementById('dashboardAdminWidget');
+  if (adminWidget) {
+    adminWidget.style.display = isResponder ? 'none' : '';
+  }
+
+  // 2. Hide the Admin Users Metric/Number Card (if you have one)
+  const adminMetric = document.getElementById('dashboardAdminMetricCard');
+  if (adminMetric) {
+    adminMetric.style.display = isResponder ? 'none' : '';
+  }
+
   const incidentsRoleBadge = document.getElementById('incidentsRoleBadge');
   if (incidentsRoleBadge) {
     incidentsRoleBadge.style.display = isSysAdmin ? 'inline-block' : 'none';
