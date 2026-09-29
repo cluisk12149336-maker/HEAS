@@ -3298,10 +3298,17 @@ function initIncidentDetails() {
 
 let routingControl = null;
 let responderCurrentMarker = null;
+let inAppNavWatchId = null;
 
 function initAlertDetailMap(coords = [14.5628, 121.0561]) {
   const mapElement = document.querySelector('#alertDetailMap');
   if (!mapElement || typeof L === 'undefined') return;
+
+  // Stop previous live tracking if you open a new incident
+  if (inAppNavWatchId !== null) {
+    navigator.geolocation.clearWatch(inAppNavWatchId);
+    inAppNavWatchId = null;
+  }
 
   // 1. Wipe any previous navigation paths when opening a new incident
   if (routingControl) {
@@ -3338,7 +3345,6 @@ function initAlertDetailMap(coords = [14.5628, 121.0561]) {
   alertDetailMarker = L.marker(coords).addTo(alertDetailMap);
   L.circle(coords, { radius: 350, color: '#2d7fc1', fillColor: '#79aee0', fillOpacity: 0.25 }).addTo(alertDetailMap);
 }
-
 async function startInAppNavigation() {
   if (!currentAlertDetailRecord || !currentAlertDetailRecord.coords) {
     showToast('GPS coordinates not available for this incident.', 'warning');
@@ -3359,71 +3365,85 @@ async function startInAppNavigation() {
   // --- 1. DYNAMICALLY INJECT THE ROUTING LIBRARY IF MISSING ---
   if (typeof L.Routing === 'undefined') {
     await new Promise((resolve) => {
-      // Inject CSS
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css';
       document.head.appendChild(link);
 
-      // Inject JS
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js';
       script.onload = () => resolve();
-      script.onerror = () => {
-        showToast('Failed to download routing engine. Check connection.', 'error');
-        resolve();
-      };
+      script.onerror = () => resolve();
       document.head.appendChild(script);
     });
   }
 
-  // Abort if the download completely failed
   if (typeof L.Routing === 'undefined') {
+    showToast('Failed to download routing engine. Check connection.', 'error');
     if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; }
     return; 
   }
 
-  if (btn) btn.innerHTML = '⏳ Routing...';
+  if (btn) btn.innerHTML = '📍 Acquiring GPS...';
 
-  // --- 2. GRAB GPS AND DRAW THE PATH ---
-  navigator.geolocation.getCurrentPosition((position) => {
+  // Clear any existing GPS stream
+  if (inAppNavWatchId !== null) {
+    navigator.geolocation.clearWatch(inAppNavWatchId);
+  }
+
+  // --- 2. START LIVE GPS TRACKING ---
+  inAppNavWatchId = navigator.geolocation.watchPosition((position) => {
     const rLat = position.coords.latitude;
     const rLng = position.coords.longitude;
     const incidentCoords = currentAlertDetailRecord.coords;
 
-    // Plot the Responder on the map with a green dot
-    responderCurrentMarker = L.circleMarker([rLat, rLng], {
-        radius: 8,
-        fillColor: "#16a34a",
-        color: "#fff",
-        weight: 2,
-        fillOpacity: 1
-    }).addTo(alertDetailMap).bindPopup("Your Location").openPopup();
+    // A. Move the green dot if it exists, otherwise create it
+    if (responderCurrentMarker) {
+      responderCurrentMarker.setLatLng([rLat, rLng]);
+    } else {
+      responderCurrentMarker = L.circleMarker([rLat, rLng], {
+          radius: 8,
+          fillColor: "#16a34a",
+          color: "#fff",
+          weight: 2,
+          fillOpacity: 1
+      }).addTo(alertDetailMap).bindPopup("Your Live Location").openPopup();
+    }
 
-    // Calculate and draw the path
-    routingControl = L.Routing.control({
-      waypoints: [
-        L.latLng(rLat, rLng), // Start: Responder
-        L.latLng(incidentCoords[0], incidentCoords[1]) // End: Emergency
-      ],
-      routeWhileDragging: false,
-      addWaypoints: false,
-      show: false, // Hides the bulky text directions box
-      lineOptions: {
-        styles: [{ color: '#3b82f6', weight: 5, opacity: 0.9 }] // Blue path line
-      },
-      createMarker: function() { return null; }, // Hides duplicate markers
-      fitSelectedRoutes: true // Auto-zooms to fit the route perfectly
-    }).addTo(alertDetailMap);
+    // B. Recalculate the blue path if it exists, otherwise create it
+    if (routingControl) {
+      routingControl.setWaypoints([
+        L.latLng(rLat, rLng), 
+        L.latLng(incidentCoords[0], incidentCoords[1])
+      ]);
+    } else {
+      routingControl = L.Routing.control({
+        waypoints: [
+          L.latLng(rLat, rLng), 
+          L.latLng(incidentCoords[0], incidentCoords[1]) 
+        ],
+        routeWhileDragging: false,
+        addWaypoints: false,
+        show: false, // Hides the bulky text directions box
+        lineOptions: {
+          styles: [{ color: '#3b82f6', weight: 5, opacity: 0.9 }]
+        },
+        createMarker: function() { return null; }, 
+        fitSelectedRoutes: true 
+      }).addTo(alertDetailMap);
+    }
     
     if (btn) {
-      btn.innerHTML = '📍 Navigation Active';
+      btn.innerHTML = '📍 Live Navigation Active';
       btn.style.background = '#16a34a'; 
     }
   }, (error) => {
-    showToast('Could not get your location. Please allow GPS permissions.', 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '🗺️ Start Navigation'; btn.style.background = '#0f172a'; }
-  }, { enableHighAccuracy: true });
+    showToast('GPS error or signal lost.', 'warning');
+  }, { 
+    enableHighAccuracy: true, 
+    maximumAge: 0, // Forces the browser to get fresh data, not cached
+    timeout: 10000 
+  });
 }
 window.startInAppNavigation = startInAppNavigation;
 
