@@ -1125,10 +1125,10 @@ function initAlertDetails() {
     if (chatMediaCountBadge) {
       chatMediaCountBadge.textContent = `${totalMedia} item${totalMedia > 1 ? 's' : ''}`;
     }
-    
+
     let html = '';
-    
-    const supabaseStorageBase = 'https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/emergency-alert-media/';
+
+    const supabaseStorageBase = 'https://clxpbcnoziynboqhglih.supabase.co/storage/files/object/emergency-alert-media/';
 
     // Render Images
     images.forEach(img => {
@@ -1136,9 +1136,9 @@ function initAlertDetails() {
       // If it's just a path, attach the Supabase domain. If it's already a full link, leave it alone.
       if (!rawUrl.startsWith('http')) {
         // Remove leading slashes just in case, then combine
-        rawUrl = supabaseStorageBase + rawUrl.replace(/^\/+/, ''); 
+        rawUrl = supabaseStorageBase + rawUrl.replace(/^\/+/, '');
       }
-      
+
       const url = escapeHtml(rawUrl);
       html += `
         <a href="${url}" target="_blank" style="display:block; aspect-ratio:1; border-radius:6px; overflow:hidden; border:1px solid #cbd5e1; background:#f1f5f9;">
@@ -1153,7 +1153,7 @@ function initAlertDetails() {
       if (!rawUrl.startsWith('http')) {
         rawUrl = supabaseStorageBase + rawUrl.replace(/^\/+/, '');
       }
-      
+
       const url = escapeHtml(rawUrl);
       html += `
         <a href="${url}" target="_blank" style="display:flex; align-items:center; justify-content:center; aspect-ratio:1; border-radius:6px; overflow:hidden; background:#1e293b; color:white; text-decoration:none; border:1px solid #cbd5e1; position:relative;">
@@ -1163,7 +1163,7 @@ function initAlertDetails() {
       `;
     });
     chatMediaGallery.innerHTML = html;
-    
+
     // Reset to closed state when opening a new chat
     chatMediaGallery.hidden = true;
     chatMediaGallery.style.display = 'none';
@@ -5122,6 +5122,8 @@ function initProfileModule() {
         const reader = new FileReader();
         reader.onload = async (event) => {
           const dataUrl = event.target.result;
+
+          let storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
           try {
             const resp = await fetch('/api/profile/avatar', {
               method: 'POST',
@@ -5142,7 +5144,16 @@ function initProfileModule() {
 
             const resData = await resp.json();
             if (!resp.ok) throw new Error(resData.error || 'Upload failed.');
+            storedUser.avatar_url = data.avatar_url;
 
+            // 3. Save it back to session storage
+            sessionStorage.setItem('oauthUserInfo', JSON.stringify(storedUser));
+
+            // 4. Instantly update the image tag(s) on the screen
+            const profileImgs = document.querySelectorAll('#profileAvatar, .profile-img');
+            profileImgs.forEach(img => {
+              img.src = data.avatar_url;
+            });
             const newAvatarUrl = resData.avatar_url;
             if (previewImg) previewImg.src = newAvatarUrl;
             const heroAvatar = document.getElementById('profileHeroAvatarImg');
