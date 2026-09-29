@@ -6064,14 +6064,14 @@ body.modal-open {
   overflow: hidden !important; 
 }
 
-#alertDetailsOverlay {
+#alertDetailsOverlay:not([hidden]) {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
   overflow-y: auto; 
-  display: flex;
+  display: flex; /* Now it only flexes when JavaScript actually opens it! */
   align-items: flex-start; 
   justify-content: center;
   padding: 20px 0; 
