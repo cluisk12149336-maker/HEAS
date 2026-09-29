@@ -1158,11 +1158,15 @@ function initAlertDetails() {
   // Helper function to talk to your backend and get a tokenized link
   async function fetchSignedMediaUrl(storagePath) {
     try {
+      // 1. Safely retrieve session and user details right inside the function
+      const currentSessionId = sessionStorage.getItem('sessionId') || getCookie('sessionId') || '';
+      const storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
+
       const resp = await fetch(`/api/media/signed-url?path=${encodeURIComponent(storagePath)}`, {
         headers: {
-          'x-session-id': sessionId || '',
-          'x-employee-role': activeRole || '',
-          'x-employee-id': storedUser?.employee_id || ''
+          'x-session-id': currentSessionId,
+          'x-employee-role': storedUser.role || storedUser.employee_role || 'Responder',
+          'x-employee-id': storedUser.employee_id || storedUser.id || ''
         }
       });
       const data = await resp.json();
@@ -5131,7 +5135,6 @@ function initProfileModule() {
         reader.onload = async (event) => {
           const dataUrl = event.target.result;
 
-          // 1. Grab storedUser FIRST so the fetch headers can read it safely
           let storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
 
           try {
@@ -5139,7 +5142,7 @@ function initProfileModule() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'x-session-id': sessionId || '',
+                'x-session-id': sessionStorage.getItem('sessionId') || '',
                 'x-employee-id': storedUser.employee_id || storedUser.id || '',
                 'x-employee-email': storedUser.email || storedUser.employee_email || '',
                 'x-employee-role': storedUser.role || storedUser.employee_role || ''
@@ -5151,12 +5154,15 @@ function initProfileModule() {
               })
             });
 
-            // 2. Parse the response into a variable named 'result' (matching what your code expects)
             const result = await resp.json();
 
             if (!resp.ok || !result.ok) {
               throw new Error(result.error || 'Failed to upload avatar');
             }
+
+            // ==========================================
+            // PASTE THE SNIPPET RIGHT HERE:
+            // ==========================================
 
             // 3. Update the storedUser object with the new avatar url from the server
             storedUser.avatar_url = result.avatar_url;
@@ -5164,13 +5170,24 @@ function initProfileModule() {
             // 4. Save it back to session storage
             sessionStorage.setItem('oauthUserInfo', JSON.stringify(storedUser));
 
-            // 5. Instantly update the image tag(s) on the screen
-            const profileImgs = document.querySelectorAll('#profileAvatar, .profile-img');
-            profileImgs.forEach(img => {
-              img.src = result.avatar_url;
+            // 5. Universally update ALL profile picture tags on the screen
+            const avatarSelectors = [
+              '#profileAvatar',
+              '.profile-img',
+              'img[alt="Profile"]',
+              '.user-avatar img',
+              '#userAvatarImg',
+              '.sidebar-profile img'
+            ];
+
+            avatarSelectors.forEach(selector => {
+              document.querySelectorAll(selector).forEach(img => {
+                img.src = result.avatar_url;
+              });
             });
 
             showToast('Profile picture updated successfully!', 'success');
+            // ==========================================
 
           } catch (err) {
             console.error('Avatar upload error:', err);
