@@ -4338,7 +4338,7 @@ async function loadDashboardData() {
     }
 
     loadSavedAvatar();
-    
+
   } catch (error) {
     console.warn('Dashboard data fetch notification:', error.message);
   }
@@ -5011,37 +5011,42 @@ function getSessionId() {
   const cookieMatch = document.cookie.split('; ').find((row) => row.startsWith('sessionId='));
   return cookieMatch ? cookieMatch.split('=')[1] : '';
 }
-// Load and permanently enforce saved avatar across re-renders and tab switches
 function loadSavedAvatar() {
   try {
     const storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
-    if (storedUser && storedUser.avatar_url) {
-      const avatarUrl = storedUser.avatar_url;
-      const avatarSelectors = [
-        '#profileAvatar', 
-        '.profile-img', 
-        'img[alt="Profile"]', 
-        '.user-avatar img', 
-        '#userAvatarImg',
-        '.sidebar-profile img',
-        '#profileHeroAvatarImg',
-        '#headerAvatarImg',
-        '#headerAvatar',
-        '.user-menu img'
-      ];
-      
-      avatarSelectors.forEach(selector => {
-        document.querySelectorAll(selector).forEach(img => {
-          if (img.src !== avatarUrl) {
-            img.src = avatarUrl;
-          }
-          // Prevent fallback to non-existent local default-avatar.png
-          img.onerror = function() {
-            this.src = avatarUrl;
-          };
-        });
+    const userAvatar = storedUser && storedUser.avatar_url ? storedUser.avatar_url : 'https://api.iconify.design/solar:user-circle-bold-duotone.svg?color=%2364748b';
+
+    const avatarSelectors = [
+      '#profileAvatar', 
+      '.profile-img', 
+      'img[alt="Profile"]', 
+      '.user-avatar img', 
+      '#userAvatarImg',
+      '.sidebar-profile img',
+      '#profileHeroAvatarImg',
+      '#headerAvatarImg',
+      '#headerAvatar',
+      '.user-menu img',
+      'img[src*="default-avatar"]',
+      'img[src$=".png"]'
+    ];
+    
+    avatarSelectors.forEach(selector => {
+      document.querySelectorAll(selector).forEach(img => {
+        // If the image is trying to load the missing default asset, force it to use the user avatar or icon vector
+        if (img.src.includes('default-avatar.png')) {
+          img.src = userAvatar;
+        } else if (storedUser.avatar_url && img.src !== storedUser.avatar_url && !img.src.startsWith('data:')) {
+          img.src = storedUser.avatar_url;
+        }
+
+        // Prevent infinite error spam loops if it fails
+        img.onerror = function() {
+          this.onerror = null; 
+          this.src = 'https://api.iconify.design/solar:user-circle-bold-duotone.svg?color=%2364748b';
+        };
       });
-    }
+    });
   } catch (e) {
     console.error('Error enforcing saved avatar:', e);
   }
