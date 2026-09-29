@@ -6075,7 +6075,7 @@ body.modal-open {
   align-items: center; 
   justify-content: center;
   padding: 20px 0; 
-  z-index: 9999;
+  z-index: 2;
 }
 
 .alert-details-main {
