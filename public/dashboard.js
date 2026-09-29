@@ -5018,26 +5018,20 @@ function loadSavedAvatar() {
 
     const avatarSelectors = [
       '#profileAvatar', 
-      '.profile-img', 
-      'img[alt="Profile"]', 
-      '.user-avatar img', 
-      '#userAvatarImg',
-      '.sidebar-profile img',
       '#profileHeroAvatarImg',
       '#headerAvatarImg',
       '#headerAvatar',
-      '.user-menu img',
-      'img[src*="default-avatar"]',
-      'img[src$=".png"]'
+      '.user-avatar img', 
+      '.sidebar-profile img'
     ];
     
     avatarSelectors.forEach(selector => {
       document.querySelectorAll(selector).forEach(img => {
         // If the image is trying to load the missing default asset, force it to use the user avatar or icon vector
-        if (img.src.includes('default-avatar.png')) {
-          img.src = userAvatar;
-        } else if (storedUser.avatar_url && img.src !== storedUser.avatar_url && !img.src.startsWith('data:')) {
-          img.src = storedUser.avatar_url;
+        if (img.id !== 'siteLogo' && img.className !== 'brand-logo' && !img.src.includes('logo')) {
+          if (img.src !== userAvatar) {
+            img.src = userAvatar;
+          }
         }
 
         // Prevent infinite error spam loops if it fails
