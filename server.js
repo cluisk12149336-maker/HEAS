@@ -4262,3 +4262,45 @@ if (!process.env.VERCEL) {
 module.exports = (request, response) => {
   server.emit('request', request, response);
 };
+
+// GET /api/media/signed-url?path=... - Generate a secure temporary URL for private emergency media
+  if (request.method === 'GET' && request.url.startsWith('/api/media/signed-url')) {
+    const session = getRequestSession(request);
+    const role = String(session?.employee_role || '').trim().toLowerCase();
+    
+    // Ensure only authenticated staff can access private emergency media
+    if (!session || session.employee_status !== 'Active' || (!role.includes('head') && !role.includes('responder'))) {
+      sendJson(response, 403, { error: 'Unauthorized to view emergency media.' });
+      return;
+    }
+
+    const urlObj = new URL(request.url, `http://${request.headers.host}`);
+    const filePath = urlObj.searchParams.get('path');
+
+    if (!filePath) {
+      sendJson(response, 400, { error: 'Missing file path.' });
+      return;
+    }
+
+    try {
+      // Clean the file path if it accidentally contains the full URL string
+      let cleanPath = filePath;
+      if (cleanPath.includes('/object/public/') || cleanPath.includes('/object/sign/')) {
+        const parts = cleanPath.split('/emergency-alert-media/');
+        cleanPath = parts[1] || cleanPath;
+      }
+
+      // Generate a signed URL valid for 60 minutes (3600 seconds)
+      const { data, error } = await supabase.storage
+        .from('emergency-alert-media')
+        .createSignedUrl(cleanPath, 3600);
+
+      if (error) throw error;
+
+      sendJson(response, 200, { ok: true, signedUrl: data.signedUrl });
+    } catch (err) {
+      console.error('Signed URL generation error:', err);
+      sendJson(response, 500, { error: 'Failed to generate secure file access.' });
+    }
+    return;
+  }

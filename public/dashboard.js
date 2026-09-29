@@ -1104,14 +1104,10 @@ function initAlertDetails() {
     setChatEnabled(false);
   };
 
-  const renderChatMedia = (incident) => {
+  const renderChatMedia = async (incident) => {
     if (!chatMediaSection || !chatMediaGallery) return;
 
-    // Supabase will attach the joined table data as an array. 
-    // We check a few common naming conventions depending on how your backend alias is setup.
     const mediaList = incident.emergency_alert_media || incident.media || [];
-
-    // Filter out the images and videos based on your schema's media_type column
     const images = mediaList.filter(m => m.media_type === 'image');
     const videos = mediaList.filter(m => m.media_type === 'video');
     const totalMedia = images.length + videos.length;
@@ -1125,50 +1121,58 @@ function initAlertDetails() {
     if (chatMediaCountBadge) {
       chatMediaCountBadge.textContent = `${totalMedia} item${totalMedia > 1 ? 's' : ''}`;
     }
-
+    
+    chatMediaGallery.innerHTML = '<div style="grid-column: 1/-1; text-align:center; font-size:12px; color:#64748b; padding:8px;">Loading secure media...</div>';
+    
     let html = '';
-
-    // The correct Supabase public storage base URL format for your bucket:
-    const supabaseStorageBase = 'https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/emergency-alert-media/';
-
-    // Render Images
-    images.forEach(img => {
-      let rawUrl = img.storage_path;
-      // If it's just a path, attach the Supabase domain. If it's already a full link, leave it alone.
-      if (!rawUrl.startsWith('http')) {
-        // Remove leading slashes just in case, then combine
-        rawUrl = supabaseStorageBase + rawUrl.replace(/^\/+/, '');
+    
+    // Loop through and fetch a secure signed URL for each private file
+    for (const img of images) {
+      const secureUrl = await fetchSignedMediaUrl(img.storage_path);
+      if (secureUrl) {
+        html += `
+          <a href="${escapeHtml(secureUrl)}" target="_blank" style="display:block; aspect-ratio:1; border-radius:6px; overflow:hidden; border:1px solid #cbd5e1; background:#f1f5f9;">
+            <img src="${escapeHtml(secureUrl)}" style="width:100%; height:100%; object-fit:cover;" alt="Incident Photo" onerror="this.style.display='none'">
+          </a>
+        `;
       }
+    }
 
-      const url = escapeHtml(rawUrl);
-      html += `
-        <a href="${url}" target="_blank" style="display:block; aspect-ratio:1; border-radius:6px; overflow:hidden; border:1px solid #cbd5e1; background:#f1f5f9;">
-          <img src="${url}" style="width:100%; height:100%; object-fit:cover;" alt="Incident Photo" onerror="this.style.display='none'">
-        </a>
-      `;
-    });
-
-    // Render Videos
-    videos.forEach(vid => {
-      let rawUrl = vid.storage_path;
-      if (!rawUrl.startsWith('http')) {
-        rawUrl = supabaseStorageBase + rawUrl.replace(/^\/+/, '');
+    for (const vid of videos) {
+      const secureUrl = await fetchSignedMediaUrl(vid.storage_path);
+      if (secureUrl) {
+        html += `
+          <a href="${escapeHtml(secureUrl)}" target="_blank" style="display:flex; align-items:center; justify-content:center; aspect-ratio:1; border-radius:6px; overflow:hidden; background:#1e293b; color:white; text-decoration:none; border:1px solid #cbd5e1; position:relative;">
+            <iconify-icon icon="solar:play-circle-bold" width="32" height="32" style="position:absolute; pointer-events:none;"></iconify-icon>
+            <video src="${escapeHtml(secureUrl)}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;"></video>
+          </a>
+        `;
       }
+    }
 
-      const url = escapeHtml(rawUrl);
-      html += `
-        <a href="${url}" target="_blank" style="display:flex; align-items:center; justify-content:center; aspect-ratio:1; border-radius:6px; overflow:hidden; background:#1e293b; color:white; text-decoration:none; border:1px solid #cbd5e1; position:relative;">
-          <iconify-icon icon="solar:play-circle-bold" width="32" height="32" style="position:absolute; pointer-events:none;"></iconify-icon>
-          <video src="${url}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;"></video>
-        </a>
-      `;
-    });
-    chatMediaGallery.innerHTML = html;
-
-    // Reset to closed state when opening a new chat
+    chatMediaGallery.innerHTML = html || '<div style="grid-column: 1/-1; text-align:center; font-size:12px; color:#ef4444; padding:8px;">Failed to load attachments</div>';
     chatMediaGallery.hidden = true;
     chatMediaGallery.style.display = 'none';
   };
+
+  // Helper function to talk to your backend and get a tokenized link
+  async function fetchSignedMediaUrl(storagePath) {
+    try {
+      const resp = await fetch(`/api/media/signed-url?path=${encodeURIComponent(storagePath)}`, {
+        headers: {
+          'x-session-id': sessionId || '',
+          'x-employee-role': activeRole || ''
+        }
+      });
+      const data = await resp.json();
+      if (resp.ok && data.ok) {
+        return data.signedUrl;
+      }
+    } catch (e) {
+      console.error('Error getting signed media URL:', e);
+    }
+    return null;
+  }
 
   const openAlertChat = () => {
     const record = currentAlertDetailRecord;
