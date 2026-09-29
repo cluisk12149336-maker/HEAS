@@ -302,6 +302,7 @@ body, html {
   /* auto-fit makes the 3 remaining cards stretch equally to fill the empty space! */
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
   gap: 16px; /* Adjust gap to match your design */
+  margin-bottom: 14px;
 }
 
 .metric-grid article {
@@ -6092,3 +6093,8 @@ body.modal-open {
   border-radius: 10px;
 }
 
+body.responder-mode #incidentPanel {
+  grid-column: 1 / -1 !important; /* Forces it to span from the first column to the last */
+  width: 100% !important;
+  max-width: 100% !important;
+}

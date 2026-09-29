@@ -439,14 +439,11 @@ function applyRoleBasedAccessControl(userRole) {
     usersPanel.style.display = isResponder ? 'none' : '';
   }
 
-  // 2. Hide the Top Metric Card for "Admin Users"
-  // (Assuming your metric card has id="metricAdminUsers" inside it)
-  const adminMetricCard = document.getElementById('metricAdminUsers');
-  if (adminMetricCard) {
-    const parentCard = adminMetricCard.closest('article') || adminMetricCard.closest('.metric-card');
-    if (parentCard) {
-      parentCard.style.display = isResponder ? 'none' : '';
-    }
+  // 2. Add a class to the body so CSS knows to stretch the incident table
+  if (isResponder) {
+    document.body.classList.add('responder-mode');
+  } else {
+    document.body.classList.remove('responder-mode');
   }
   const incidentsRoleBadge = document.getElementById('incidentsRoleBadge');
   if (incidentsRoleBadge) {
