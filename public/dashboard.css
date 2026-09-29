@@ -6059,3 +6059,35 @@ input:checked + .slider:before {
 
 
 
+
+body.modal-open {
+  overflow: hidden !important; 
+}
+
+#alertDetailsOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow-y: auto; 
+  display: flex;
+  align-items: flex-start; 
+  justify-content: center;
+  padding: 20px 0; 
+  z-index: 9999;
+}
+
+.alert-details-main {
+  overflow-y: auto !important;
+  max-height: 65vh; 
+  padding-right: 10px; 
+}
+
+.alert-details-main::-webkit-scrollbar {
+  width: 6px;
+}
+.alert-details-main::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 10px;
+}

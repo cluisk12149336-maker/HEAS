@@ -3919,7 +3919,7 @@ const server = http.createServer((request, response) => {
 
         // Merge database columns with metadata fallback
         const username = account.username || userMeta.username || (account.employee_email ? account.employee_email.split('@')[0] : 'admin_joleh');
-        const avatarUrl = account.avatar_url || userMeta.avatar_url || '/images/default-avatar.png';
+        const avatarUrl = account.avatar_url || userMeta.avatar_url || '/images/avatar-default.svg';
         const department = account.department || userMeta.department || (account.employee_role === 'System Admin' ? 'System Administrator' : account.employee_role);
         const lastActivity = account.employee_last_login || userMeta.last_activity || '2025-12-01T22:32:37.267631+00:00';
 

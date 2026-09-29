@@ -2490,6 +2490,7 @@ const RESCUE_UNITS_BY_INCIDENT_TYPE = {
     { name: 'Emergency Quick Response Team (QRT-1)', phone: '0917-000-QRT1', eta: 3, notes: 'High-priority Quick Response Team deployed for immediate rescue.' },
     { name: 'University Fire & Evacuation Marshal Squad', phone: '0917-999-FIRE', eta: 4, notes: 'Fire and evacuation marshals actively responding.' },
     { name: 'Command Center Rapid Dispatch Unit', phone: '0917-000-DISP', eta: 4, notes: 'Central Command dispatched rapid response personnel.' },
+    { name: 'Campus Staff (OHSO)', phone: '0917-999-VIC1', eta: 5, notes: 'Perimeter security patrol verifying boundary telemetry.' },
     { name: 'Bureau of Fire Protection (BFP) Makati Central', phone: '(02) 8818-5150', eta: 8, notes: 'Makati BFP engine unit notified for fire / rescue support.' }
   ]
 };
@@ -4110,7 +4111,7 @@ function renderOverviewUsers(users) {
       <tr>
         <td>
           <div style="display:flex; align-items:center; gap:8px;">
-            <img src="${escapeHtml(u.avatar_url || '/images/default-avatar.png')}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;" onerror="this.src='/images/default-avatar.png'">
+            <img src="${escapeHtml(u.avatar_url || '/images/avatar-default.svg')}" style="width:24px; height:24px; border-radius:50%; object-fit:cover;" onerror="this.src='/images/avatar-default.svg'">
             <strong>${escapeHtml(u.employee_name || 'Unnamed')}</strong>
           </div>
         </td>
