@@ -6091,3 +6091,29 @@ body.modal-open {
   background-color: #cbd5e1;
   border-radius: 10px;
 }
+
+/* ==========================================
+   RESPONDER MODE LAYOUT ADJUSTMENTS
+   ========================================== */
+
+/* 1. Hide the Admin Users entirely */
+body.responder-mode #dashboardAdminWidget,
+body.responder-mode #dashboardAdminMetricCard {
+  display: none !important;
+}
+
+/* 2. Force the adjacent widgets (Alerts & Incidents) to expand and fill the empty gap */
+body.responder-mode .dashboard-grid,
+body.responder-mode .dashboard-widgets-container {
+  display: flex !important;
+  flex-direction: column !important; /* Stacks the remaining items on top of each other full-width */
+  width: 100% !important;
+}
+
+/* 3. Ensure the individual alert and incident panels stretch to 100% */
+body.responder-mode .dashboard-widget,
+body.responder-mode .dashboard-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  grid-column: 1 / -1 !important; /* If using CSS Grid, this forces it to span all columns */
+}

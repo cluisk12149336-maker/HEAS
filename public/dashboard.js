@@ -433,16 +433,11 @@ function applyRoleBasedAccessControl(userRole) {
 
   const isResponder = isResponderRole(activeRole);
 
-  // 1. Hide the Admin Users Table Widget for Responders
-  const adminWidget = document.getElementById('dashboardAdminWidget');
-  if (adminWidget) {
-    adminWidget.style.display = isResponder ? 'none' : '';
-  }
-
-  // 2. Hide the Admin Users Metric/Number Card (if you have one)
-  const adminMetric = document.getElementById('dashboardAdminMetricCard');
-  if (adminMetric) {
-    adminMetric.style.display = isResponder ? 'none' : '';
+  // Tell the entire HTML body if a responder is logged in
+  if (isResponder) {
+    document.body.classList.add('responder-mode');
+  } else {
+    document.body.classList.remove('responder-mode');
   }
 
   const incidentsRoleBadge = document.getElementById('incidentsRoleBadge');
@@ -2180,18 +2175,23 @@ function renderIncidentModal(record) {
       cancelBtn.style.cursor = 'not-allowed';
       cancelBtn.title = 'This incident is already cancelled';
       cancelBtn.innerHTML = '&#10005; Already Cancelled';
+      cancelBtn.removeAttribute('onclick'); // Remove click if disabled
     } else if (normStatus === 'resolved') {
       cancelBtn.disabled = true;
       cancelBtn.style.opacity = '0.6';
       cancelBtn.style.cursor = 'not-allowed';
       cancelBtn.title = 'Cannot cancel an incident that is already resolved';
       cancelBtn.innerHTML = '&#10005; Mark as Cancelled';
+      cancelBtn.removeAttribute('onclick'); // Remove click if disabled
     } else {
       cancelBtn.disabled = false;
       cancelBtn.style.opacity = '1';
       cancelBtn.style.cursor = 'pointer';
       cancelBtn.title = 'Cancel this incident alert';
       cancelBtn.innerHTML = '&#10005; Mark as Cancelled';
+      
+      // ADD THIS LINE TO FORCE THE MODAL TO OPEN:
+      cancelBtn.setAttribute('onclick', 'openCancelConfirmModal()');
     }
   }
 
