@@ -368,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initReportsModule();
   handleHashRouting();
   loadDashboardData();
+  loadSavedAvatar();
   setInterval(loadDashboardData, 30000); // Synchronize with Supabase every 30 seconds
 });
 
@@ -1158,8 +1159,8 @@ function initAlertDetails() {
   // Helper function to talk to your backend and get a tokenized link
   async function fetchSignedMediaUrl(storagePath) {
     try {
-      // 1. Safely retrieve session and user details right inside the function
-      const currentSessionId = sessionStorage.getItem('sessionId') || getCookie('sessionId') || '';
+      // 1. Safely retrieve session ID directly from sessionStorage
+      const currentSessionId = sessionStorage.getItem('sessionId') || '';
       const storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
 
       const resp = await fetch(`/api/media/signed-url?path=${encodeURIComponent(storagePath)}`, {
@@ -5007,7 +5008,33 @@ function getSessionId() {
   const cookieMatch = document.cookie.split('; ').find((row) => row.startsWith('sessionId='));
   return cookieMatch ? cookieMatch.split('=')[1] : '';
 }
-
+// Load saved avatar from sessionStorage immediately upon page load
+function loadSavedAvatar() {
+  try {
+    const storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
+    if (storedUser && storedUser.avatar_url) {
+      const avatarSelectors = [
+        '#profileAvatar', 
+        '.profile-img', 
+        'img[alt="Profile"]', 
+        '.user-avatar img', 
+        '#userAvatarImg',
+        '.sidebar-profile img',
+        '#profileHeroAvatarImg',
+        '#headerAvatarImg'
+      ];
+      
+      avatarSelectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(img => {
+          img.src = storedUser.avatar_url;
+        });
+      });
+    }
+  } catch (e) {
+    console.error('Error loading saved avatar:', e);
+  }
+}
+window.loadSavedAvatar = loadSavedAvatar;
 function initProfileModule() {
   loadProfileData();
 
