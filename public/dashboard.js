@@ -1121,11 +1121,11 @@ function initAlertDetails() {
     if (chatMediaCountBadge) {
       chatMediaCountBadge.textContent = `${totalMedia} item${totalMedia > 1 ? 's' : ''}`;
     }
-    
+
     chatMediaGallery.innerHTML = '<div style="grid-column: 1/-1; text-align:center; font-size:12px; color:#64748b; padding:8px;">Loading secure media...</div>';
-    
+
     let html = '';
-    
+
     // Loop through and fetch a secure signed URL for each private file
     for (const img of images) {
       const secureUrl = await fetchSignedMediaUrl(img.storage_path);
@@ -1161,15 +1161,18 @@ function initAlertDetails() {
       const resp = await fetch(`/api/media/signed-url?path=${encodeURIComponent(storagePath)}`, {
         headers: {
           'x-session-id': sessionId || '',
-          'x-employee-role': activeRole || ''
+          'x-employee-role': activeRole || '',
+          'x-employee-id': storedUser?.employee_id || ''
         }
       });
       const data = await resp.json();
       if (resp.ok && data.ok) {
         return data.signedUrl;
+      } else {
+        console.warn('Signed URL API rejected:', data.error || resp.statusText);
       }
     } catch (e) {
-      console.error('Error getting signed media URL:', e);
+      console.error('Error fetching signed media URL network exception:', e);
     }
     return null;
   }
@@ -5128,7 +5131,9 @@ function initProfileModule() {
         reader.onload = async (event) => {
           const dataUrl = event.target.result;
 
+          // 1. Grab storedUser FIRST so the fetch headers can read it safely
           let storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
+
           try {
             const resp = await fetch('/api/profile/avatar', {
               method: 'POST',
@@ -5136,9 +5141,8 @@ function initProfileModule() {
                 'Content-Type': 'application/json',
                 'x-session-id': sessionId || '',
                 'x-employee-id': storedUser.employee_id || storedUser.id || '',
-                'x-employee-email': storedUser.email || '',
-                'x-employee-role': storedUser.role || ''
-
+                'x-employee-email': storedUser.email || storedUser.employee_email || '',
+                'x-employee-role': storedUser.role || storedUser.employee_role || ''
               },
               body: JSON.stringify({
                 imageBase64: dataUrl,
@@ -5147,40 +5151,35 @@ function initProfileModule() {
               })
             });
 
-            const resData = await resp.json();
-            if (!resp.ok) throw new Error(resData.error || 'Upload failed.');
-            storedUser.avatar_url = data.avatar_url;
+            // 2. Parse the response into a variable named 'result' (matching what your code expects)
+            const result = await resp.json();
 
-            // 3. Save it back to session storage
+            if (!resp.ok || !result.ok) {
+              throw new Error(result.error || 'Failed to upload avatar');
+            }
+
+            // 3. Update the storedUser object with the new avatar url from the server
+            storedUser.avatar_url = result.avatar_url;
+
+            // 4. Save it back to session storage
             sessionStorage.setItem('oauthUserInfo', JSON.stringify(storedUser));
 
-            // 4. Instantly update the image tag(s) on the screen
+            // 5. Instantly update the image tag(s) on the screen
             const profileImgs = document.querySelectorAll('#profileAvatar, .profile-img');
             profileImgs.forEach(img => {
-              img.src = data.avatar_url;
+              img.src = result.avatar_url;
             });
-            const newAvatarUrl = resData.avatar_url;
-            if (previewImg) previewImg.src = newAvatarUrl;
-            const heroAvatar = document.getElementById('profileHeroAvatarImg');
-            if (heroAvatar) heroAvatar.src = newAvatarUrl;
-            const headerAvatar = document.getElementById('headerAvatarImg');
-            if (headerAvatar) headerAvatar.src = newAvatarUrl;
 
-            selectedAvatarFile = null;
-            if (fileInput) fileInput.value = '';
-            showToast('Profile picture uploaded successfully!');
-          } catch (uploadErr) {
-            showToast(uploadErr.message || 'Failed to upload picture.', 'error');
-          } finally {
-            uploadBtn.disabled = false;
-            uploadBtn.innerHTML = originalText;
+            showToast('Profile picture updated successfully!', 'success');
+
+          } catch (err) {
+            console.error('Avatar upload error:', err);
+            showToast(err.message || 'Failed to upload picture.', 'error');
           }
         };
         reader.readAsDataURL(selectedAvatarFile);
-      } catch (err) {
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = originalText;
-        showToast('Could not read image file.', 'error');
+      } catch (e) {
+        console.error('FileReader error:', e);
       }
     });
   }
