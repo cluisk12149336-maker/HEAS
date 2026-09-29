@@ -4336,6 +4336,9 @@ async function loadDashboardData() {
     } else {
       loadIncidentsData();
     }
+
+    loadSavedAvatar();
+    
   } catch (error) {
     console.warn('Dashboard data fetch notification:', error.message);
   }
@@ -5008,11 +5011,12 @@ function getSessionId() {
   const cookieMatch = document.cookie.split('; ').find((row) => row.startsWith('sessionId='));
   return cookieMatch ? cookieMatch.split('=')[1] : '';
 }
-// Load saved avatar from sessionStorage immediately upon page load
+// Load and permanently enforce saved avatar across re-renders and tab switches
 function loadSavedAvatar() {
   try {
     const storedUser = JSON.parse(sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('activeUser') || '{}');
     if (storedUser && storedUser.avatar_url) {
+      const avatarUrl = storedUser.avatar_url;
       const avatarSelectors = [
         '#profileAvatar', 
         '.profile-img', 
@@ -5021,20 +5025,29 @@ function loadSavedAvatar() {
         '#userAvatarImg',
         '.sidebar-profile img',
         '#profileHeroAvatarImg',
-        '#headerAvatarImg'
+        '#headerAvatarImg',
+        '#headerAvatar',
+        '.user-menu img'
       ];
       
       avatarSelectors.forEach(selector => {
         document.querySelectorAll(selector).forEach(img => {
-          img.src = storedUser.avatar_url;
+          if (img.src !== avatarUrl) {
+            img.src = avatarUrl;
+          }
+          // Prevent fallback to non-existent local default-avatar.png
+          img.onerror = function() {
+            this.src = avatarUrl;
+          };
         });
       });
     }
   } catch (e) {
-    console.error('Error loading saved avatar:', e);
+    console.error('Error enforcing saved avatar:', e);
   }
 }
 window.loadSavedAvatar = loadSavedAvatar;
+
 function initProfileModule() {
   loadProfileData();
 
