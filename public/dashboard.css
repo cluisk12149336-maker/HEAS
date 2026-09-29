@@ -6072,7 +6072,7 @@ body.modal-open {
   height: 100vh;
   overflow-y: auto; 
   display: flex; /* Now it only flexes when JavaScript actually opens it! */
-  align-items: flex-start; 
+  align-items: center; 
   justify-content: center;
   padding: 20px 0; 
   z-index: 9999;
