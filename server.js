@@ -1413,7 +1413,154 @@ const server = http.createServer((request, response) => {
     });
     return;
   }
+  // ====================================================================
+  // TRAINING CENTER API (Course & Booking Management)
+  // ====================================================================
 
+  // 1. GET /api/training/courses - Fetch all courses
+  if (request.method === 'GET' && (request.url === '/api/training/courses' || request.url.startsWith('/api/training/courses?'))) {
+    (async () => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const { data, error } = await supabase
+          .from('training_courses')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        sendJson(response, 200, { ok: true, courses: data || [] });
+      } catch (err) {
+        console.error('Error fetching courses:', err.message);
+        sendJson(response, 500, { error: 'Failed to retrieve courses.' });
+      }
+    })();
+    return;
+  }
+
+  // 2. POST /api/training/courses - Create a new course
+  if (request.method === 'POST' && request.url === '/api/training/courses') {
+    if (!authorizeTeamManagement(request, response)) return;
+    readJson(request).then(async (body) => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const name = String(body.name || '').trim();
+        const category = body.category || 'Medical';
+        const location = String(body.location || 'UMak Campus').trim();
+        const duration = String(body.duration || '4 Hours').trim();
+        const studentPrice = parseInt(body.student_price, 10) || 0;
+        const batchPrice = parseInt(body.batch_price, 10) || 0;
+        const description = String(body.description || '').trim();
+        const audience = String(body.audience || 'Students & Community Members').trim();
+        const requirements = String(body.requirements || 'Valid UMak ID').trim();
+        const certification = String(body.certification || 'Certificate of Completion').trim();
+
+        if (!name) return sendJson(response, 400, { error: 'Course name is required.' });
+
+        // Generate unique slug
+        const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+        const slug = `${baseSlug}-${Date.now().toString().slice(-5)}`;
+
+        const { data, error } = await supabase
+          .from('training_courses')
+          .insert({
+            name,
+            slug,
+            category,
+            location,
+            duration,
+            student_price: studentPrice,
+            batch_price: batchPrice,
+            description,
+            audience,
+            requirements,
+            certification,
+            is_published: true
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        sendJson(response, 201, { ok: true, course: data });
+      } catch (err) {
+        console.error('Error creating course:', err.message);
+        sendJson(response, 500, { error: err.message || 'Failed to create training course.' });
+      }
+    }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+
+  // 3. DELETE /api/training/courses/:id - Delete a course
+  const tcDeleteMatch = request.url.match(/^\/api\/training\/courses\/([a-f0-9\-]+)$/i);
+  if (request.method === 'DELETE' && tcDeleteMatch) {
+    if (!authorizeTeamManagement(request, response)) return;
+    const courseId = tcDeleteMatch[1];
+    (async () => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const { error } = await supabase.from('training_courses').delete().eq('id', courseId);
+        if (error) throw error;
+        sendJson(response, 200, { ok: true, message: 'Course deleted successfully.' });
+      } catch (err) {
+        console.error('Error deleting course:', err.message);
+        sendJson(response, 500, { error: 'Failed to delete course.' });
+      }
+    })();
+    return;
+  }
+
+  // 4. GET /api/training/bookings?course_id=... - Fetch bookings/batches for a course
+  if (request.method === 'GET' && request.url.startsWith('/api/training/bookings')) {
+    (async () => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const url = new URL(request.url, `http://${request.headers.host}`);
+        const courseId = url.searchParams.get('course_id');
+
+        let query = supabase.from('training_bookings').select('*').order('created_at', { ascending: false });
+        if (courseId) query = query.eq('course_id', courseId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        sendJson(response, 200, { ok: true, bookings: data || [] });
+      } catch (err) {
+        console.error('Error fetching bookings:', err.message);
+        sendJson(response, 500, { error: 'Failed to retrieve training bookings.' });
+      }
+    })();
+    return;
+  }
+
+  // 5. PUT /api/training/bookings/:id - Update status (paid/rejected) or assign trainer
+  const tcBookingUpdateMatch = request.url.match(/^\/api\/training\/bookings\/([a-f0-9\-]+)$/i);
+  if (request.method === 'PUT' && tcBookingUpdateMatch) {
+    if (!authorizeTeamManagement(request, response)) return;
+    const bookingId = tcBookingUpdateMatch[1];
+    readJson(request).then(async (body) => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const updatePayload = {};
+        if (body.payment_status) updatePayload.payment_status = body.payment_status;
+        if (body.assigned_trainer_id !== undefined) updatePayload.assigned_trainer_id = body.assigned_trainer_id;
+        if (body.training_status) updatePayload.training_status = body.training_status;
+        if (body.payment_status === 'paid') updatePayload.payment_confirmed_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+          .from('training_bookings')
+          .update(updatePayload)
+          .eq('id', bookingId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        sendJson(response, 200, { ok: true, booking: data });
+      } catch (err) {
+        console.error('Error updating booking:', err.message);
+        sendJson(response, 500, { error: 'Failed to update booking status.' });
+      }
+    }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+  
   // Dashboard Data API: Fetch real metrics and accounts directly from Supabase
   if (request.method === 'GET' && (request.url === '/api/dashboard/data' || request.url.startsWith('/api/dashboard/data?'))) {
     if (!supabase) {
@@ -3934,7 +4081,7 @@ const server = http.createServer((request, response) => {
           last_assigned_incident_id: userMeta.last_assigned_incident_id || null,
           avatar_url: avatarUrl,
           last_activity: lastActivity,
-          auth_method: isOAuth ? 'Google OAuth' : 'Email/Password'
+          auth_method: isOAuth ? 'Google OAuth' : 'Email/Password'  
         };
 
         sendJson(response, 200, { ok: true, profile: profileData });

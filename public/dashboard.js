@@ -537,7 +537,17 @@ function switchView(viewName) {
     viewName = 'overview';
     window.location.hash = '#dashboard';
   }
-
+  if (viewName === 'training') {
+    try {
+      if (typeof loadTrainingCenterData === 'function') {
+        loadTrainingCenterData();
+      } else {
+        console.warn('loadTrainingCenterData is not defined yet.');
+      }
+    } catch (e) {
+      console.error('Error loading training center:', e);
+    }
+  }
   const views = document.querySelectorAll('.dashboard-view');
   views.forEach((v) => v.classList.remove('active'));
 
@@ -699,6 +709,7 @@ function handleHashRouting() {
     settings: 'settings',
     profile: 'profile',
     account: 'profile',
+    training: 'training',
     'view-profile': 'profile'
   };
 
@@ -6626,6 +6637,318 @@ document.addEventListener('error', function(event) {
     }
   }
 }, true);
+
+
+
+// ====================================================================
+// TRAINING CENTER MODULE LOGIC
+// ====================================================================
+let allTrainingCourses = [];
+let activeTrainingCourse = null;
+let allTrainersList = [];
+
+async function loadTrainingCenterData() {
+  await Promise.all([loadTrainingCourses(), loadTrainersForSelect()]);
+}
+
+async function loadTrainersForSelect() {
+  try {
+    const res = await fetch('/api/responders');
+    if (res.ok) {
+      const data = await res.json();
+      allTrainersList = data.responders || [];
+    }
+  } catch (err) {
+    console.warn('Could not load trainers list:', err.message);
+  }
+}
+
+async function loadTrainingCourses() {
+  const container = document.getElementById('tcCourseList');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/training/courses');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch courses');
+
+    allTrainingCourses = data.courses || [];
+
+    if (allTrainingCourses.length === 0) {
+      container.innerHTML = '<div style="text-align:center; padding: 24px; color:#64748b; font-size:12px;">No courses created yet. Click "+ New Course" above.</div>';
+      showTrainingEmptyState();
+      return;
+    }
+
+    container.innerHTML = allTrainingCourses.map(c => `
+      <div class="tc-course-item" data-id="${escapeHtml(c.id)}" onclick="selectTrainingCourse('${escapeHtml(c.id)}')" 
+           style="padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #e2e8f0; cursor: pointer; transition: all 0.15s ease; background: ${activeTrainingCourse?.id === c.id ? '#f1f5f9' : '#ffffff'};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <strong style="font-size: 13px; color: #0f172a;">${escapeHtml(c.name)}</strong>
+          <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #e0f2fe; color: #0284c7;">${escapeHtml(c.category)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #64748b;">
+          <span>${escapeHtml(c.duration || 'Flexible')}</span>
+          <strong style="color: #059669;">₱${Number(c.student_price || 0).toLocaleString()}</strong>
+        </div>
+      </div>
+    `).join('');
+
+    // If an active course is selected, keep it; otherwise select the first one
+    if (activeTrainingCourse) {
+      const stillExists = allTrainingCourses.find(c => c.id === activeTrainingCourse.id);
+      if (stillExists) selectTrainingCourse(stillExists.id);
+      else selectTrainingCourse(allTrainingCourses[0].id);
+    } else {
+      selectTrainingCourse(allTrainingCourses[0].id);
+    }
+  } catch (err) {
+    container.innerHTML = `<div style="text-align:center; padding: 20px; color:#dc2626; font-size:12px;">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function showTrainingEmptyState() {
+  activeTrainingCourse = null;
+  const emptyState = document.getElementById('tcEmptyState');
+  const activeView = document.getElementById('tcActiveCourseView');
+  if (emptyState) emptyState.style.display = 'flex';
+  if (activeView) activeView.style.display = 'none';
+}
+
+async function selectTrainingCourse(courseId) {
+  const course = allTrainingCourses.find(c => c.id === courseId);
+  if (!course) return;
+
+  activeTrainingCourse = course;
+
+  // Highlight selected in left list
+  document.querySelectorAll('.tc-course-item').forEach(el => {
+    el.style.background = el.dataset.id === courseId ? '#f1f5f9' : '#ffffff';
+    el.style.borderColor = el.dataset.id === courseId ? '#0f172a' : '#e2e8f0';
+  });
+
+  const emptyState = document.getElementById('tcEmptyState');
+  const activeView = document.getElementById('tcActiveCourseView');
+  if (emptyState) emptyState.style.display = 'none';
+  if (activeView) activeView.style.display = 'flex';
+
+  // Populate Header
+  const titleEl = document.getElementById('tcActiveTitle');
+  const priceEl = document.getElementById('tcActivePrice');
+  const descEl = document.getElementById('tcActiveDesc');
+  if (titleEl) titleEl.textContent = course.name;
+  if (priceEl) priceEl.textContent = `Student: ₱${Number(course.student_price).toLocaleString()} | Batch/Org: ₱${Number(course.batch_price).toLocaleString()}`;
+  if (descEl) descEl.textContent = course.description || 'No description provided.';
+
+  // Fetch Bookings & Batches for this Course
+  await loadCourseBookings(course.id);
+}
+
+async function loadCourseBookings(courseId) {
+  const container = document.getElementById('tcSchedulesList');
+  if (!container) return;
+
+  container.innerHTML = '<div style="text-align:center; padding: 20px; color:#64748b; font-size:12px;">Loading bookings and sessions...</div>';
+
+  try {
+    const res = await fetch(`/api/training/bookings?course_id=${encodeURIComponent(courseId)}`);
+    const data = await res.json();
+    const bookings = data.bookings || [];
+
+    if (bookings.length === 0) {
+      container.innerHTML = `
+        <div style="border: 2px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b;">
+          <iconify-icon icon="solar:calendar-date-bold-duotone" width="36" height="36" style="color:#94a3b8;"></iconify-icon>
+          <p style="margin: 8px 0 0; font-size: 13px;">No scheduled batches or bookings for this course yet.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = bookings.map(b => {
+      const isPaid = b.payment_status === 'paid';
+      const isPending = b.payment_status === 'pending';
+
+      const trainerOptions = allTrainersList.map(t => `
+        <option value="${escapeHtml(t.employee_name)}" ${b.assigned_trainer_id === t.employee_name ? 'selected' : ''}>
+          ${escapeHtml(t.employee_name)} (${escapeHtml(t.employee_role)})
+        </option>
+      `).join('');
+
+      return `
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <span style="font-family: monospace; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569;">#${escapeHtml(b.booking_code)}</span>
+              <strong style="display: block; margin-top: 4px; font-size: 15px; color: #0f172a;">${escapeHtml(b.organization || b.contact_name)}</strong>
+              <small style="color: #64748b;">Contact: ${escapeHtml(b.contact_name)} &bull; ${escapeHtml(b.phone)} &bull; ${escapeHtml(b.email)}</small>
+            </div>
+            <div style="text-align: right;">
+              <span style="font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 9999px; ${isPaid ? 'background:#dcfce7; color:#15803d;' : isPending ? 'background:#fef3c7; color:#b45309;' : 'background:#fee2e2; color:#b91c1c;'}">
+                ${escapeHtml(b.payment_status.toUpperCase())}
+              </span>
+              <div style="font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 4px;">₱${Number(b.total_php).toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 12px; margin-bottom: 12px;">
+            <div><strong>Date &amp; Time:</strong> ${escapeHtml(b.requested_date)} at ${escapeHtml(b.requested_time)}</div>
+            <div><strong>Participants:</strong> ${escapeHtml(String(b.participants))} attendees</div>
+            <div><strong>Venue:</strong> ${escapeHtml(b.venue)}</div>
+            <div><strong>Payment Method:</strong> ${escapeHtml(b.payment_method)}</div>
+          </div>
+
+          <!-- Trainer Assignment & Actions -->
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="font-size: 12px; font-weight: 600; color: #475569;">Trainer:</label>
+              <select onchange="assignBookingTrainer('${escapeHtml(b.id)}', this.value)" style="padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px;">
+                <option value="">-- Unassigned --</option>
+                ${trainerOptions}
+              </select>
+            </div>
+
+            <div style="display: flex; gap: 6px;">
+              ${isPending ? `
+                <button type="button" class="filter-btn" style="background:#059669; color:#fff; border:none; padding:4px 10px; font-size:11px; cursor:pointer;" onclick="updateBookingPayment('${escapeHtml(b.id)}', 'paid')">✓ Verify Payment</button>
+                <button type="button" class="filter-btn" style="background:#fff; color:#dc2626; border:1px solid #fca5a5; padding:4px 10px; font-size:11px; cursor:pointer;" onclick="updateBookingPayment('${escapeHtml(b.id)}', 'rejected')">✕ Reject</button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<div style="text-align:center; padding: 20px; color:#dc2626; font-size:12px;">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// Trainer Assignment Handler
+async function assignBookingTrainer(bookingId, trainerName) {
+  try {
+    const res = await fetch(`/api/training/bookings/${bookingId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': getSessionId(),
+        'x-employee-role': getCurrentUserRole()
+      },
+      body: JSON.stringify({ assigned_trainer_id: trainerName })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to assign trainer');
+    showToast(`Trainer ${trainerName ? `"${trainerName}"` : 'removed'} successfully.`, 'success');
+  } catch (err) {
+    showToast(err.message || 'Error assigning trainer', 'error');
+  }
+}
+
+// Payment Verification Handler
+async function updateBookingPayment(bookingId, status) {
+  try {
+    const res = await fetch(`/api/training/bookings/${bookingId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': getSessionId(),
+        'x-employee-role': getCurrentUserRole()
+      },
+      body: JSON.stringify({ payment_status: status })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to update payment status');
+    showToast(`Payment marked as ${status.toUpperCase()}!`, 'success');
+    if (activeTrainingCourse) loadCourseBookings(activeTrainingCourse.id);
+  } catch (err) {
+    showToast(err.message || 'Error updating payment', 'error');
+  }
+}
+
+// Delete Course Handler
+async function deleteActiveCourse() {
+  if (!activeTrainingCourse) return;
+  const confirmed = confirm(`Are you sure you want to delete "${activeTrainingCourse.name}"?\nAll associated bookings will also be deleted.`);
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`/api/training/courses/${activeTrainingCourse.id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-session-id': getSessionId(),
+        'x-employee-role': getCurrentUserRole()
+      }
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to delete course');
+    showToast('Course deleted successfully.', 'success');
+    activeTrainingCourse = null;
+    loadTrainingCourses();
+  } catch (err) {
+    showToast(err.message || 'Failed to delete course', 'error');
+  }
+}
+
+// Wire up Course Creation Modal
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('createCourseModal');
+  const openBtn = document.getElementById('btnCreateCourse');
+  const closeBtn = document.getElementById('closeCreateCourseModal');
+  const cancelBtn = document.getElementById('btnCancelCreateCourse');
+  const form = document.getElementById('createCourseForm');
+  const deleteBtn = document.getElementById('btnDeleteCourse');
+
+  if (openBtn && modal) openBtn.addEventListener('click', () => { modal.style.display = 'flex'; });
+  if (closeBtn && modal) closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+  if (cancelBtn && modal) cancelBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+  if (deleteBtn) deleteBtn.addEventListener('click', deleteActiveCourse);
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = document.getElementById('btnSubmitCourse');
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
+
+      const payload = {
+        name: document.getElementById('courseInputName')?.value,
+        category: document.getElementById('courseInputCategory')?.value,
+        duration: document.getElementById('courseInputDuration')?.value,
+        student_price: document.getElementById('courseInputStudentPrice')?.value,
+        batch_price: document.getElementById('courseInputBatchPrice')?.value,
+        location: document.getElementById('courseInputLocation')?.value,
+        description: document.getElementById('courseInputDesc')?.value
+      };
+
+      try {
+        const res = await fetch('/api/training/courses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-session-id': getSessionId(),
+            'x-employee-role': getCurrentUserRole()
+          },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Failed to create course');
+
+        showToast('Training course created successfully!', 'success');
+        modal.style.display = 'none';
+        form.reset();
+        await loadTrainingCourses();
+        if (result.course?.id) selectTrainingCourse(result.course.id);
+      } catch (err) {
+        showToast(err.message || 'Error saving course', 'error');
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Course'; }
+      }
+    });
+  }
+});
+
+window.selectTrainingCourse = selectTrainingCourse;
+window.assignBookingTrainer = assignBookingTrainer;
+window.updateBookingPayment = updateBookingPayment;
+window.loadTrainingCenterData = loadTrainingCenterData;
 
 window.startResponderLocationTracking = startResponderLocationTracking;
 window.stopResponderLocationTracking = stopResponderLocationTracking;
