@@ -20,7 +20,7 @@
       href: '#dashboard',
       label: 'Dashboard',
       icon: 'solar:widget-2-bold-duotone',
-      roles: ['System Admin', 'HEAD', 'Responder']
+      roles: ['System Admin', 'HEAD', 'Responder', 'Trainer']
     },
     {
       id: 'map',
@@ -59,8 +59,9 @@
       label: 'Training Center',
       icon: 'solar:diploma-verified-bold-duotone',
       view: 'training',
+      href: '#training',
       path: '#training',
-      roles: ['head', 'system admin', 'admin']
+      roles: ['HEAD', 'System Admin', 'admin', 'Trainer', 'trainer', 'Responder', 'responder']
     },
     {
       id: 'audit',
@@ -84,7 +85,7 @@
       href: '#profile',
       label: 'Account Profile',
       icon: 'solar:user-circle-bold-duotone',
-      roles: ['System Admin', 'HEAD', 'Responder'],
+      roles: ['System Admin', 'HEAD', 'Responder', 'Trainer'],
       isBottom: true
     }
   ];
@@ -205,6 +206,10 @@
     _isRoleAllowed(allowedRoles, role) {
       if (!role) return true;
       const cleanRole = this._normalizeRole(role);
+      if (cleanRole === 'trainer') {
+        if (!Array.isArray(allowedRoles)) return false;
+        return allowedRoles.some(r => this._normalizeRole(r) === 'trainer');
+      }
       if (cleanRole === 'system admin') return true;
       if (!Array.isArray(allowedRoles)) return true;
       return allowedRoles.some(r => this._normalizeRole(r) === cleanRole);
@@ -215,6 +220,7 @@
       if (cleanRole === 'admin' || (cleanRole.includes('system') && cleanRole.includes('admin'))) return 'system admin';
       if (cleanRole.includes('head')) return 'head';
       if (cleanRole.includes('responder')) return 'responder';
+      if (cleanRole.includes('trainer')) return 'trainer';
       return cleanRole;
     }
 
@@ -240,8 +246,23 @@
      * Automatically discover and mount any navigation container in the document
      */
     init() {
+      let role = this.currentRole;
+      try {
+        if (typeof window !== 'undefined') {
+          if (typeof window.getCurrentUserRole === 'function') {
+            role = window.getCurrentUserRole() || role;
+          } else {
+            const userInfoStr = sessionStorage.getItem('oauthUserInfo') || localStorage.getItem('oauthUserInfo');
+            if (userInfoStr) {
+              const parsed = JSON.parse(userInfoStr);
+              if (parsed.role) role = parsed.role;
+            }
+          }
+        }
+      } catch (_) { }
+      this.currentRole = role;
       const containers = document.querySelectorAll('.dashboard-sidebar[data-component="navigation"], .dashboard-sidebar:empty, [data-global-nav]');
-      containers.forEach(c => this.mount(c));
+      containers.forEach(c => this.mount(c, { role: this.currentRole }));
     }
   }
 

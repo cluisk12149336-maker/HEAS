@@ -394,7 +394,7 @@
       <h2 id="loginTitle">Administrator Login Portal</h2>
       <p class="login-subtitle">Heron's Emergency Alert System</p>
       <form id="loginForm" novalidate>
-        <label class="login-field"><span aria-hidden="true">&#9679;</span><input id="emailInput" type="email" placeholder="name@umak.edu.ph" pattern="[A-Za-z0-9._%+-]+@umak\.edu\.ph" title="Use your @umak.edu.ph email address" autocomplete="username" required></label>
+        <label class="login-field"><span aria-hidden="true">&#9679;</span><input id="emailInput" type="email" placeholder="name@umak.edu.ph" title="Use your registered email address" autocomplete="username" required></label>
         <label class="login-field"><span aria-hidden="true">&#9679;</span><input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password" minlength="6" required><button class="password-toggle" id="passwordToggle" type="button" aria-label="Show password"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle></svg></button></label>
         <div class="login-options"><a href="#" id="forgotPassword">Forgot your password?</a><span id="loginError" role="alert"></span></div>
         <button class="admin-submit" type="submit">Sign In</button>
@@ -420,7 +420,7 @@
       <p>Enter your registered UMak email and we will send you a verification code.</p>
       <form id="resetRequestForm">
         <label class="otp-label" for="resetEmail">Email address</label>
-        <input class="reset-input" id="resetEmail" type="email" placeholder="name@umak.edu.ph" pattern="[A-Za-z0-9._%+-]+@umak\.edu\.ph" title="Use your @umak.edu.ph email address" autocomplete="email" required>
+        <input class="reset-input" id="resetEmail" type="email" placeholder="name@umak.edu.ph" title="Use your registered email address" autocomplete="email" required>
         <p class="otp-error" id="resetRequestError" role="alert"></p>
         <button class="admin-submit" type="submit">Send reset code</button>
       </form>
@@ -482,7 +482,7 @@
           <li id="requestRequirementNumber">One number [0-9]</li>
           <li id="requestRequirementSpecial">One special character [! @ # $ % ^ & *]</li>
         </ul>
-        <label class="request-field"><span aria-hidden="true">&#9776;</span><select id="requestRole" required><option value="" selected disabled>Select your role</option><option value="HEAD">HEAD</option><option value="System Admin">System Admin</option><option value="Responder">Responder</option></select></label>
+        <label class="request-field"><span aria-hidden="true">&#9776;</span><select id="requestRole" required><option value="" selected disabled>Select your role</option><option value="HEAD">HEAD</option><option value="System Admin">System Admin</option><option value="Responder">Responder</option><option value="Trainer">Trainer</option></select></label>
         <p class="request-error" id="requestAccountError" role="alert"></p>
         <button class="request-submit" type="submit">Submit Request</button>
       </form>

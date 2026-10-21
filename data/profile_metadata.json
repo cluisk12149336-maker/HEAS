@@ -26,19 +26,670 @@
     "username": "admin_joleh"
   },
   "EMP-1790582871579-JGERNC": {
-    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790582871579-JGERNC_1790583160932.jpg",
-    "last_activity": "2026-09-28T08:12:41.785Z"
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790582871579-JGERNC_1792351062247.png",
+    "last_activity": "2026-10-18T19:17:43.169Z",
+    "username": "admin_joleh"
   },
   "EMP-1790589689662-GEYNKU": {
     "username": "sbantay.k12150533",
     "last_activity": "2026-09-28T11:45:45.527Z",
-    "assigned_emergency_type": "Medical",
-    "last_assigned_incident_id": "e16637d6-bf5f-44c0-84d2-7f63deccf279",
-    "last_assigned_at": "2026-09-28T18:40:26.738Z"
+    "assigned_emergency_type": "Security",
+    "last_assigned_incident_id": "97018b1d-524e-4608-bbc0-6202c5d6a492",
+    "last_assigned_at": "2026-10-18T09:38:31.887Z"
   },
   "EMP-1790578455764-9NMNDE": {
     "username": "admin_joleh",
-    "last_activity": "2026-09-28T15:08:54.649Z",
-    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790578455764-9NMNDE_1790608134074.png"
+    "last_activity": "2026-10-18T09:28:52.229Z",
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1790578455764-9NMNDE_1792315731379.png"
+  },
+  "EMP-1792242501250-UEFBCD": {
+    "custom_role": "Trainer",
+    "employee_role": "Trainer"
+  },
+  "EMP-1792255602789-Q4LRLJ": {
+    "custom_role": "Trainer",
+    "employee_role": "Trainer"
+  },
+  "EMP-1792255612518-EVJ751": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792255616563-MIOHB5": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792255621429-USOQDE": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792255625397-TNBYNU": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792255629328-UD60RV": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792255633325-EYP6NO": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792255636688-SRF3CJ": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792266504328-69Z90V": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266504625-1T39OB": {
+    "custom_role": "Trainer",
+    "employee_role": "Trainer"
+  },
+  "EMP-1792266512463-JHXG5X": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266513224-IM4ERX": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792266515784-N69E8F": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266516865-JOKKPD": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792266519538-PF7ORV": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266523256-NGJNAC": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266527169-RBNL4I": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266530539-46KF4M": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266534102-SPZSV7": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792266537143-5LCFWK": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792266540522-IIOIL6": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266543526-O0A2R5": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792266547148-K5SAFJ": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792266550574-M2OV5Z": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792266554058-2DMTZ5": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792269425746-1H5RJ9": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269426064-IQA3VG": {
+    "custom_role": "Trainer",
+    "employee_role": "Trainer"
+  },
+  "EMP-1792269430350-8OFAC9": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792269431290-H8A72F": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269434573-ANRQDM": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792269435341-X4522T": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269439113-O7R5UK": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269442861-HHCA71": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269446607-SWY359": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269450508-0Q36UD": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269453528-YYF6MA": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792269457252-T4EIPX": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792269460455-QU26TQ": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269464035-VE8CTU": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792269467645-VU8BZC": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792269471170-ARM8HA": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792269474966-D6MVZ8": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792271351578-EO1QAP": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792271352078-2E0ILF": {
+    "custom_role": "Trainer",
+    "employee_role": "Trainer"
+  },
+  "EMP-1792271358638-ODHTTY": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792271359252-ZB5N3I": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792271362589-Y7K04M": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792271363933-Y6DPUL": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792271368523-4SBE8S": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792271372878-R95M4G": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792271376798-VMS0SM": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792271380927-INE5RL": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315728961-VBWNMD": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315729342-839D0R": {
+    "custom_role": "Trainer",
+    "employee_role": "Trainer"
+  },
+  "EMP-1792315735600-HG8C8S": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315736988-Q04RMH": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792315739796-J77EZ1": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315740112-SBUK80": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792315743564-1YK8WG": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315751985-NMMGKW": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315756071-6DOW01": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315759485-YVWSDM": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315762734-KPRZ73": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792315766625-8MEUT0": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792315769708-F8I2WV": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315773780-MZTV92": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792315782435-85T92D": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792315785602-J202DD": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792315789137-ZSO04S": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792323896065-MRCMHG": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323896463-0A3FXK": {
+    "custom_role": "Trainer",
+    "employee_role": "Trainer"
+  },
+  "EMP-1792323904931-9UHL7B": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323905344-YRM712": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792323908880-JYIV4U": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792323910062-89AYBD": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323915148-NM5T5I": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323919366-YZ4QL5": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323923115-QIESE8": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323927753-Z1U3PP": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323930651-YR1GAD": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792323933704-D43H53": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792323937097-7644T9": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323940185-05MIPJ": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792323943301-5W7MM6": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792323946992-XCE0EB": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792323950034-SNU8HC": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792324031556-QUYSYO": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324035164-6DJ71G": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324038944-OB0514": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324042962-3P6BQS": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324046274-WUYZRI": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324050279-9IRF8N": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324053374-NQF977": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792324056218-TL6011": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792324059179-18Q8VD": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324062252-8R62VB": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792324065325-FJOSZC": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792324068797-SDDUB0": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324071923-GOIEY5": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792324779165-M3WTQN": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324788301-1NYSET": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324792327-1U4L85": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324796755-ZXXS6H": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324800674-NKGEOE": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324804711-UYA4S6": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324808251-IJSTRR": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792324811844-O1P0LO": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792324814734-YF7WRV": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324817811-9UXC84": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792324821367-OIIA0B": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792324825457-W3ILV0": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792324828992-IERD4R": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792327792550-ZMCX2F": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327792875-264JY4": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327802025-B4YOSF": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327803383-SOAI9D": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792327807997-PV2PQ9": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327808521-F47VZ5": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792327812214-Y79ZWM": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327815963-4II0WK": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327820551-7AGFFU": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327823998-1DDJEN": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792327827413-CDLMF9": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792327830779-QDORYW": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327834107-ORLQCI": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792327838008-QDI8NP": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792327841537-0Y1JDD": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792327845432-5N4Y1Q": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792331271930-1L4LT2": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331271997-XWKKQ4": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331283070-O19E87": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792331283342-I1VNW1": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331286658-0SOUHU": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331287371-STX2V0": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792331293483-QZNLRE": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331296879-Z2HLVL": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331300527-4RBG38": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331303627-F7PGCY": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792331307340-1VN1IS": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792331310742-TW2RVH": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331314148-1IJ2H0": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792331317676-FK5NJA": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792331320856-WU4QV7": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792331324500-AN1U2Q": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792341506863-TZWHI2": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD",
+    "avatar_url": "https://clxpbcnoziynboqhglih.supabase.co/storage/v1/object/public/employee-avatars/avatar_EMP-1792341506863-TZWHI2_1792420328387.jpg",
+    "last_activity": "2026-10-19T14:32:09.370Z"
+  },
+  "EMP-1792351060188-UMQUG9": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351060546-5R6T2H": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351066923-W8JMU2": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792351068492-EXNSPM": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351070026-FNPCOB": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792351072009-2LRDBY": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351075940-LVKAEN": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351079874-031P60": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351083552-2BT0Y9": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351086869-EYVLRC": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792351089964-IQPVGE": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792351092950-HH9PXQ": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351096492-MMS59D": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
+  },
+  "EMP-1792351099295-61LLV4": {
+    "custom_role": "System Admin",
+    "employee_role": "System Admin"
+  },
+  "EMP-1792351102618-LPLFOY": {
+    "custom_role": "HEAD",
+    "employee_role": "HEAD"
+  },
+  "EMP-1792351106303-R1271E": {
+    "custom_role": "Responder",
+    "employee_role": "Responder"
   }
 }

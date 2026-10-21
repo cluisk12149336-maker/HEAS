@@ -184,7 +184,7 @@ describe('Account Creation Preservation Tests - Property-Based', () => {
       'system admin', // Wrong case
       'responder', // Wrong case
       'SuperAdmin',
-      'Trainer',
+      'Coach',
       '', // Empty
       'HEAD, System Admin', // Multiple roles
       'HEAD\\nSystem Admin' // Injection attempt

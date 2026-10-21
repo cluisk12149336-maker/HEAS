@@ -69,6 +69,21 @@ describe('Incident Reports & Analytics Module', () => {
     expect(typeof res.data.analytics.medicalPct).toBe('number');
     expect(typeof res.data.analytics.securityPct).toBe('number');
     expect(typeof res.data.analytics.urgentPct).toBe('number');
+    expect(res.data.analytics.trends.daily).toHaveLength(7);
+    expect(res.data.analytics.trends.weekly).toHaveLength(7);
+    expect(res.data.analytics.trends.monthly).toHaveLength(6);
+    expect(res.data.analytics.trends.yearly).toHaveLength(5);
+    expect(res.data.analytics.trends.monthly.every((bucket) =>
+      typeof bucket.label === 'string' &&
+      typeof bucket.total === 'number' &&
+      typeof bucket.resolved === 'number'
+    )).toBe(true);
+    expect(res.data.analytics.statusBreakdown).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: 'Active', count: expect.any(Number) }),
+      expect.objectContaining({ status: 'On Going', count: expect.any(Number) }),
+      expect.objectContaining({ status: 'Resolved', count: expect.any(Number) }),
+      expect.objectContaining({ status: 'Cancelled', count: expect.any(Number) })
+    ]));
 
     // Verify incidents structure
     expect(Array.isArray(res.data.incidents)).toBe(true);
@@ -201,9 +216,11 @@ describe('Incident Reports & Analytics Module', () => {
     expect(resCat.data).toContain('Medical');
 
     // Search by incident code
-    const resCode = await request('GET', '/api/reports/export?format=excel&search=ICDFD0CC');
+    const codeMatch = resName.data.match(/ICD[A-Z0-9]+/);
+    const targetCode = codeMatch ? codeMatch[0] : 'ICD';
+    const resCode = await request('GET', `/api/reports/export?format=excel&search=${targetCode}`);
     expect(resCode.status).toBe(200);
-    expect(resCode.data).toContain('ICDFD0CC');
+    expect(resCode.data).toContain(targetCode);
   });
 
   test('GET /api/reports/export?format=pdf returns a downloadable PDF', async () => {

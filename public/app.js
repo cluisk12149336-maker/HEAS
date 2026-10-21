@@ -31,6 +31,7 @@ const resetRequestError = document.querySelector('#resetRequestError');
 const resetVerifyError = document.querySelector('#resetVerifyError');
 const resetUpdateError = document.querySelector('#resetUpdateError');
 const umakEmailPattern = /^[A-Za-z0-9._%+-]+@umak\.edu\.ph$/i;
+const standardEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 let challengeId = null;
 let resetId = null;
 let sessionId = null;
@@ -428,11 +429,22 @@ function showToast(message, type = 'success') {
 // RBAC: Filter sidebar menu items based on user role
 function applyRoleBasedAccessControl(userRole) {
   const sidebarLinks = document.querySelectorAll('.dashboard-sidebar nav a[data-roles]');
+  const isTrainer = String(userRole || '').trim().toLowerCase().includes('trainer');
   
   sidebarLinks.forEach((link) => {
-    const allowedRoles = link.getAttribute('data-roles').split(',').map(r => r.trim());
+    const view = link.getAttribute('data-view') || link.getAttribute('id');
+    if (isTrainer) {
+      if (['overview', 'training', 'profile'].includes(view)) {
+        link.style.display = '';
+      } else {
+        link.style.display = 'none';
+      }
+      return;
+    }
+    const allowedRoles = link.getAttribute('data-roles').split(',').map(r => r.trim().toLowerCase());
+    const cleanRole = String(userRole || '').trim().toLowerCase();
     
-    if (allowedRoles.includes(userRole)) {
+    if (cleanRole === 'system admin' || cleanRole === 'admin' || allowedRoles.includes(cleanRole)) {
       link.style.display = '';  // Show
     } else {
       link.style.display = 'none';  // Hide
@@ -499,6 +511,9 @@ function resetLoginState() {
   resetUpdateError.textContent = '';
   requestAccountForm.reset();
   requestAccountError.textContent = '';
+  if (typeof updateRequestRoleEmailRequirements === 'function') {
+    updateRequestRoleEmailRequirements();
+  }
   // Hide resend section
   const resendSection = document.querySelector('.resend-section');
   if (resendSection) resendSection.hidden = false;
@@ -538,8 +553,9 @@ loginForm.addEventListener('submit', (event) => {
     loginForm.reportValidity();
     return;
   }
-  if (!umakEmailPattern.test(emailInput.value.trim())) {
-    showToast('Use your @umak.edu.ph email address.', 'error');
+  const emailVal = emailInput.value.trim();
+  if (!standardEmailPattern.test(emailVal)) {
+    showToast('Enter a valid email address.', 'error');
     emailInput.focus();
     return;
   }
@@ -842,12 +858,31 @@ document.querySelector('#forgotPassword').addEventListener('click', (event) => {
   resetEmail.focus();
 });
 
+function updateRequestRoleEmailRequirements() {
+  if (!requestRole || !requestEmail) return;
+  const isTrainer = requestRole.value === 'Trainer';
+  if (isTrainer) {
+    requestEmail.removeAttribute('pattern');
+    requestEmail.placeholder = 'name@example.com';
+    requestEmail.title = 'Enter your email address (Gmail / UMak email not required)';
+  } else {
+    requestEmail.setAttribute('pattern', '[A-Za-z0-9._%+-]+@umak\\.edu\\.ph');
+    requestEmail.placeholder = 'name@umak.edu.ph';
+    requestEmail.title = 'Use your @umak.edu.ph email address';
+  }
+}
+
+if (requestRole) {
+  requestRole.addEventListener('change', updateRequestRoleEmailRequirements);
+}
+
 document.querySelector('#requestAccount').addEventListener('click', () => {
   adminLogin.hidden = true;
   otpStep.hidden = true;
   resetStep.hidden = true;
   requestStep.hidden = false;
   requestEmail.value = emailInput.value;
+  updateRequestRoleEmailRequirements();
   document.querySelector('#requestName').focus();
 });
 
@@ -896,11 +931,23 @@ requestAccountForm.addEventListener('submit', (event) => {
     document.querySelector('#requestName').focus();
     return;
   }
-  if (!umakEmailPattern.test(requestEmail.value.trim())) {
-    requestAccountError.textContent = 'Use your @umak.edu.ph email address.';
-    showToast('Use your @umak.edu.ph email address.', 'error');
-    requestEmail.focus();
-    return;
+  const selectedRole = requestRole.value;
+  const isTrainer = selectedRole === 'Trainer';
+  const emailVal = requestEmail.value.trim();
+  if (isTrainer) {
+    if (!standardEmailPattern.test(emailVal)) {
+      requestAccountError.textContent = 'Enter a valid email address.';
+      showToast('Enter a valid email address.', 'error');
+      requestEmail.focus();
+      return;
+    }
+  } else {
+    if (!umakEmailPattern.test(emailVal)) {
+      requestAccountError.textContent = 'Use your @umak.edu.ph email address.';
+      showToast('Use your @umak.edu.ph email address.', 'error');
+      requestEmail.focus();
+      return;
+    }
   }
   if (!updateRequestPasswordRequirements()) {
     requestAccountError.textContent = 'Password does not meet all requirements.';
@@ -935,6 +982,9 @@ requestAccountForm.addEventListener('submit', (event) => {
 
       requestAccountForm.reset();
       requestAccountError.textContent = '';
+      if (typeof updateRequestRoleEmailRequirements === 'function') {
+        updateRequestRoleEmailRequirements();
+      }
       document.querySelectorAll('.request-password-checks li').forEach((req) => req.classList.remove('valid'));
 
       requestStep.hidden = true;
@@ -948,8 +998,9 @@ requestAccountForm.addEventListener('submit', (event) => {
 resetRequestForm.addEventListener('submit', (event) => {
   event.preventDefault();
   if (!resetRequestForm.checkValidity()) { resetRequestForm.reportValidity(); return; }
-  if (!umakEmailPattern.test(resetEmail.value.trim())) {
-    resetRequestError.textContent = 'Use your @umak.edu.ph email address.';
+  const resetEmailVal = resetEmail.value.trim();
+  if (!standardEmailPattern.test(resetEmailVal)) {
+    resetRequestError.textContent = 'Enter a valid email address.';
     resetEmail.focus();
     return;
   }

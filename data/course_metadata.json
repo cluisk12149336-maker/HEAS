@@ -1,0 +1,135 @@
+{
+  "327c654d-6e48-46df-9b36-57eba70bb5f4": {
+    "batch_schedule": "October 2026, November 2026 (1 Month Each: 1st Week to Last Week)",
+    "available_months": [
+      "2026-10",
+      "2026-11"
+    ],
+    "training_time": "07:00 A.M - 11:00 A.M",
+    "assigned_trainer": "Cia",
+    "session_schedule": "1 per week on Saturday in 1 month (4 Sessions)",
+    "available_times": [
+      "07:00 A.M - 11:00 A.M"
+    ],
+    "available_time_slots": [
+      "AM"
+    ],
+    "available_days": [
+      "Monday",
+      "Wednesday",
+      "Thursday",
+      "Saturday"
+    ],
+    "available_days_detail": [
+      {
+        "day": "Monday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Monday in 1 Month (4 Mondays)"
+      },
+      {
+        "day": "Wednesday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Wednesday in 1 Month (4 Wednesdays)"
+      },
+      {
+        "day": "Thursday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Thursday in 1 Month (4 Thursdays)"
+      },
+      {
+        "day": "Saturday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Saturday in 1 Month (4 Saturdays)"
+      }
+    ]
+  },
+  "414e21df-6fa7-4f0f-8cae-4f51fa8bf492": {
+    "batch_schedule": "October 2026, November 2026 (1 Month Each: 1st Week to Last Week)",
+    "available_months": [
+      "2026-10",
+      "2026-11"
+    ],
+    "training_time": "01:00 P.M - 5:00 P.M"
+  },
+  "3216c9b7-2a3e-4196-94fe-1b23b828574f": {
+    "batch_schedule": "October 2026, November 2026 (1 Month Each: 1st Week to Last Week)",
+    "available_months": [
+      "2026-10",
+      "2026-11"
+    ],
+    "training_time": "07:00 A.M - 11:00 A.M",
+    "assigned_trainer": "Cia",
+    "available_times": [
+      "07:00 A.M - 11:00 A.M"
+    ],
+    "available_time_slots": [
+      "AM"
+    ],
+    "available_days": [
+      "Monday",
+      "Saturday"
+    ],
+    "available_days_detail": [
+      {
+        "day": "Monday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Monday in 1 Month (4 Mondays)"
+      },
+      {
+        "day": "Saturday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Saturday in 1 Month (4 Saturdays)"
+      }
+    ],
+    "session_schedule": "1 per week on Monday, Saturday in Half day · 4 hours (4 Sessions each)",
+    "duration": "Half day · 4 hours"
+  },
+  "b47ae912-4d86-49d0-8b8b-c4fe986bf988": {
+    "batch_schedule": "October 2026, November 2026 (1 Month Each: 1st Week to Last Week)",
+    "available_months": [
+      "2026-10",
+      "2026-11"
+    ],
+    "training_time": "07:00 A.M - 11:00 A.M",
+    "available_times": [
+      "07:00 A.M - 11:00 A.M"
+    ],
+    "available_time_slots": [
+      "AM"
+    ],
+    "available_days": [
+      "Tuesday",
+      "Friday"
+    ],
+    "available_days_detail": [
+      {
+        "day": "Tuesday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Tuesday in 1 Month (4 Tuesdays)"
+      },
+      {
+        "day": "Friday",
+        "sessions": 4,
+        "sessions_per_month": 4,
+        "frequency": "1 per week",
+        "description": "1 session per week on Friday in 1 Month (4 Fridays)"
+      }
+    ],
+    "session_schedule": "1 per week on Tuesday in 1 month (4 Sessions)",
+    "assigned_trainer": "Cia"
+  }
+}

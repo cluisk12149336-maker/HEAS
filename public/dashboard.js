@@ -92,6 +92,11 @@ function isHeadRole(role) {
   return String(activeRole || '').trim().toLowerCase().includes('head');
 }
 
+function isTrainerRole(role) {
+  const activeRole = role || getCurrentUserRole();
+  return String(activeRole || '').trim().toLowerCase().includes('trainer');
+}
+
 function isIncidentAssignedToCurrentResponder(incident) {
   if (!incident) return false;
   const assigned = String(incident.responder_name || '').trim().toLowerCase();
@@ -322,6 +327,7 @@ window.getCurrentUserEmail = getCurrentUserEmail;
 window.getCurrentUserEmployeeId = getCurrentUserEmployeeId;
 window.isResponderRole = isResponderRole;
 window.isHeadRole = isHeadRole;
+window.isTrainerRole = isTrainerRole;
 window.isIncidentAssignedToCurrentResponder = isIncidentAssignedToCurrentResponder;
 window.getResponderAssignedEmergencyTypes = getResponderAssignedEmergencyTypes;
 window.renderResponderRescueNotifications = renderResponderRescueNotifications;
@@ -366,6 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMetricCardSpotlights();
   initProfileModule();
   initReportsModule();
+  initAuditModule();
   handleHashRouting();
   loadDashboardData();
   loadSavedAvatar();
@@ -431,13 +438,13 @@ function applyRoleBasedAccessControl(userRole) {
     window.updateAlertChatAccess();
   }
   const isSysAdmin = isSystemAdminRole(activeRole);
-
   const isResponder = isResponderRole(activeRole);
+  const isTrainer = isTrainerRole(activeRole);
 
-  // 1. Hide the entire Admin Users Panel for Responders
+  // 1. Hide the entire Admin Users Panel for Responders and Trainers
   const usersPanel = document.getElementById('usersPanel');
   if (usersPanel) {
-    usersPanel.style.display = isResponder ? 'none' : '';
+    usersPanel.style.display = (isResponder || isTrainer) ? 'none' : '';
   }
 
   if (isResponder) {
@@ -445,13 +452,19 @@ function applyRoleBasedAccessControl(userRole) {
   } else {
     document.body.classList.remove('responder-mode');
   }
+
+  if (isTrainer) {
+    document.body.classList.add('trainer-mode');
+  } else {
+    document.body.classList.remove('trainer-mode');
+  }
+
   // 2. Hide the Top Metric Card for "Admin Users"
-  // (Assuming your metric card has id="metricAdminUsers" inside it)
-  const adminMetricCard = document.getElementById('metricAdminUsers');
+  const adminMetricCard = document.getElementById('dashboardAdminMetricCard') || document.getElementById('metricAdminUsers');
   if (adminMetricCard) {
     const parentCard = adminMetricCard.closest('article') || adminMetricCard.closest('.metric-card');
     if (parentCard) {
-      parentCard.style.display = isResponder ? 'none' : '';
+      parentCard.style.display = (isResponder || isTrainer) ? 'none' : '';
     }
   }
   const incidentsRoleBadge = document.getElementById('incidentsRoleBadge');
@@ -459,13 +472,33 @@ function applyRoleBasedAccessControl(userRole) {
     incidentsRoleBadge.style.display = isSysAdmin ? 'inline-block' : 'none';
   }
 
+  // 3. Hide Training Center management buttons for Trainer accounts
+  const btnCreateCourse = document.getElementById('btnCreateCourse');
+  const btnEditCourse = document.getElementById('btnEditCourse');
+  const btnDeleteCourse = document.getElementById('btnDeleteCourse');
+  const btnAddSchedule = document.getElementById('btnAddSchedule');
+  if (btnCreateCourse) btnCreateCourse.style.display = isTrainer ? 'none' : '';
+  if (btnEditCourse) btnEditCourse.style.display = '';
+  if (btnDeleteCourse) btnDeleteCourse.style.display = '';
+  if (btnAddSchedule) btnAddSchedule.style.display = '';
+
   const sidebarLinks = document.querySelectorAll('.dashboard-sidebar nav a[data-roles], dashboard-navigation nav a[data-roles]');
   sidebarLinks.forEach((link) => {
+    const view = link.getAttribute('data-view') || link.getAttribute('id');
+    if (isTrainer) {
+      if (['overview', 'training', 'profile'].includes(view)) {
+        link.style.display = '';
+      } else {
+        link.style.display = 'none';
+      }
+      return;
+    }
     const rolesAttr = link.getAttribute('data-roles') || '';
     const allowedRoles = rolesAttr.split(',').map((r) => r.trim().toLowerCase());
     const allowed = allowedRoles.some((allowedRole) => {
       if (allowedRole === 'head') return isHeadRole(activeRole);
       if (allowedRole === 'responder') return isResponderRole(activeRole);
+      if (allowedRole === 'trainer') return isTrainerRole(activeRole);
       return allowedRole === String(activeRole || '').trim().toLowerCase();
     });
     if (isSysAdmin || allowed) {
@@ -484,6 +517,9 @@ function applyRoleBasedAccessControl(userRole) {
   }
   if (typeof updateIncidentFilterCounts === 'function') {
     updateIncidentFilterCounts();
+  }
+  if (typeof activeTrainingCourse !== 'undefined' && activeTrainingCourse && typeof loadCourseBookings === 'function') {
+    loadCourseBookings(activeTrainingCourse.id);
   }
 }
 
@@ -533,6 +569,15 @@ function switchView(viewName) {
   if (viewName === 'teams' && isResponderRole(currentRole)) {
     if (typeof showToast === 'function') {
       showToast('Access restricted: Teams module is not available for Responder accounts.', 'warning');
+    }
+    viewName = 'overview';
+    window.location.hash = '#dashboard';
+  }
+
+  // Prevent Trainer accounts from accessing modules other than Dashboard, Training Center, and Account Profile
+  if (isTrainerRole(currentRole) && !['overview', 'training', 'profile'].includes(viewName)) {
+    if (typeof showToast === 'function') {
+      showToast('Access restricted: Only Dashboard, Training Center, and Account Profile are available for Trainer accounts.', 'warning');
     }
     viewName = 'overview';
     window.location.hash = '#dashboard';
@@ -603,7 +648,9 @@ function switchView(viewName) {
     }
   }
   if (viewName === 'audit') {
-    loadAuditAccounts();
+    if (typeof loadAdminRecentActivities === 'function') {
+      loadAdminRecentActivities();
+    }
   }
   if (viewName === 'teams') {
     if (typeof loadTeamsAdminAccounts === 'function') {
@@ -616,6 +663,12 @@ function switchView(viewName) {
 window.switchView = switchView;
 
 function navigateToIncidentsView(filter = 'active_ongoing') {
+  if (isTrainerRole()) {
+    if (typeof showToast === 'function') {
+      showToast('Access restricted: Only Dashboard, Training Center, and Account Profile are available for Trainer accounts.', 'warning');
+    }
+    return;
+  }
   const responderView = isResponderRole();
   const targetFilter = responderView ? 'all' : (filter || 'active_ongoing');
   activeIncidentFilter = targetFilter;
@@ -667,6 +720,12 @@ function navigateToIncidentsView(filter = 'active_ongoing') {
 window.navigateToIncidentsView = navigateToIncidentsView;
 
 function navigateToStudentAccounts(filter) {
+  if (isTrainerRole()) {
+    if (typeof showToast === 'function') {
+      showToast('Access restricted: Only Dashboard, Training Center, and Account Profile are available for Trainer accounts.', 'warning');
+    }
+    return;
+  }
   switchView('users');
   window.location.hash = '#users';
 
@@ -716,6 +775,10 @@ function handleHashRouting() {
   let targetView = routeMap[hash] || 'overview';
   const currentRole = getCurrentUserRole();
   if (targetView === 'teams' && isResponderRole(currentRole)) {
+    targetView = 'overview';
+    window.location.hash = '#dashboard';
+  }
+  if (isTrainerRole(currentRole) && !['overview', 'training', 'profile'].includes(targetView)) {
     targetView = 'overview';
     window.location.hash = '#dashboard';
   }
@@ -997,7 +1060,7 @@ function initAlertDetails() {
   if (!overlay || !closeButton) return;
   const updateAlertChatAccess = () => {
     const allowed = canUseAlertChat();
-    if (chatOpenButton) chatOpenButton.hidden = !allowed;
+    if (chatOpenButton) chatOpenButton.hidden = !canUseAlertChat();
     const btn = document.querySelector('#openAlertChat') || chatOpenButton;
     if (btn) {
       if (allowed) {
@@ -2810,12 +2873,15 @@ async function openAssignResponderModal(incidentId) {
     accountSelect.innerHTML = '<option value="">-- Select registered responder personnel --</option>';
     try {
       const accounts = await fetchResponderAccounts(true);
-      // Filter for responder accounts on database
+      // Filter strictly for active responder accounts on database (exclude trainers)
       const responderPersonnel = accounts.filter(a => {
         const role = String(a.employee_role || '').trim().toLowerCase();
-        return role === 'responder' || role.includes('responder');
+        const status = String(a.employee_status || '').trim().toLowerCase();
+        const isResp = role === 'responder' || (role.includes('responder') && !role.includes('trainer'));
+        const isActive = status === 'active' || !status;
+        return isResp && isActive;
       });
-      const listToDisplay = responderPersonnel.length > 0 ? responderPersonnel : accounts;
+      const listToDisplay = responderPersonnel;
 
       listToDisplay.forEach(acc => {
         const opt = document.createElement('option');
@@ -3685,14 +3751,30 @@ function initTeamsModule() {
 }
 
 async function loadAuditAccounts() {
-  const tableBody = document.getElementById('auditAccountsTableBody');
-  if (!tableBody) return;
+  if (typeof loadAdminRecentActivities === 'function') {
+    return loadAdminRecentActivities();
+  }
+  return;
 
   try {
     const response = await fetch('/api/admin/accounts');
     if (!response.ok) throw new Error('Failed to fetch employee accounts.');
     const result = await response.json();
     const accounts = Array.isArray(result.users) ? result.users : [];
+
+    if (countBadge) {
+      countBadge.textContent = `${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'}`;
+    }
+
+    if (selectEl && accounts.length > 0) {
+      const currentVal = selectEl.value;
+      const opts = ['<option value="all">All Admin Accounts</option>'];
+      accounts.forEach(acc => {
+        opts.push(`<option value="${escapeHtml(acc.employee_id || acc.employee_email)}">${escapeHtml(acc.employee_name || 'Admin')} (${escapeHtml(acc.employee_role || 'Staff')})</option>`);
+      });
+      selectEl.innerHTML = opts.join('');
+      if (currentVal) selectEl.value = currentVal;
+    }
 
     if (accounts.length === 0) {
       tableBody.innerHTML = '<tr><td colspan="6">No employee accounts found.</td></tr>';
@@ -3709,6 +3791,10 @@ async function loadAuditAccounts() {
         <td>${escapeHtml(formatAuditTimestamp(account.employee_last_login))}</td>
       </tr>
     `).join('');
+
+    if (typeof loadAdminRecentActivities === 'function') {
+      loadAdminRecentActivities();
+    }
   } catch (error) {
     console.warn('Audit employee accounts fetch notice:', error.message);
     tableBody.innerHTML = '<tr><td colspan="6">Unable to load employee accounts.</td></tr>';
@@ -3729,6 +3815,709 @@ function formatAuditTimestamp(value) {
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ` +
     `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
 }
+
+let cachedAdminActivities = [];
+let cachedAccountsSummary = [];
+let currentAuditViewMode = 'cards';
+
+function getRoleAvatarClass(role) {
+  const r = String(role || '').toLowerCase();
+  if (r.includes('head')) return 'role-head';
+  if (r.includes('admin')) return 'role-admin';
+  if (r.includes('trainer')) return 'role-trainer';
+  if (r.includes('responder')) return 'role-responder';
+  return '';
+}
+
+function getInitials(name) {
+  if (!name) return 'AD';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function formatRelativeActivityTime(isoString) {
+  if (!isoString) return 'Recently';
+  const time = new Date(isoString).getTime();
+  if (Number.isNaN(time)) return 'Recently';
+  const diffSec = Math.floor((Date.now() - time) / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDays = Math.floor(diffHour / 24);
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatFullActivityTime(isoString) {
+  if (!isoString) return 'N/A';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return isoString;
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+let auditRealtimeEventSource = null;
+let auditRealtimePollTimer = null;
+let lastKnownActivityTimestamp = null;
+
+async function loadAdminRecentActivities(showSpinner = true, isManual = false) {
+  const cardsContainer = document.getElementById('auditAccountCardsView');
+  const tableBody = document.getElementById('auditActivityTimelineTableBody');
+  const statsEl = document.getElementById('auditStatsSummary');
+  const selectEl = document.getElementById('auditAccountFilterSelect');
+  const refreshBtn = document.getElementById('btnRefreshAudit') || document.querySelector('.btn-refresh-audit');
+  const refreshIcon = refreshBtn?.querySelector('iconify-icon');
+  const refreshText = document.getElementById('btnRefreshAuditText') || refreshBtn?.querySelector('span');
+
+  if (refreshIcon) {
+    refreshIcon.style.animation = 'auditSpin 0.7s linear infinite';
+  }
+  if (refreshBtn && isManual) {
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add('is-refreshing');
+    if (refreshText) refreshText.textContent = 'Refreshing...';
+  }
+
+  if (showSpinner && cardsContainer && cardsContainer.children.length === 0) {
+    cardsContainer.innerHTML = `
+      <div class="audit-activity-loading">
+        <div class="audit-spinner"></div>
+        <p>Loading recent activities for each admin account...</p>
+      </div>`;
+  }
+
+  try {
+    if ((!window.currentReportsData || !window.currentReportsData.incidents) && typeof loadReportsData === 'function') {
+      loadReportsData().catch(() => {});
+    }
+
+    const res = await fetch(`/api/admin/activities?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
+    if (!res.ok) throw new Error('Failed to load activity logs.');
+    const data = await res.json();
+    cachedAdminActivities = Array.isArray(data.activities) ? data.activities : [];
+    cachedAccountsSummary = Array.isArray(data.accountsSummary) ? data.accountsSummary : [];
+
+    // Ensure account data matches Teams and Profile modules exactly
+    if (Array.isArray(window.currentDashboardUsers) && window.currentDashboardUsers.length > 0) {
+      cachedAccountsSummary = cachedAccountsSummary.map(acc => {
+        const u = window.currentDashboardUsers.find(du =>
+          (du.employee_id && acc.employee_id && du.employee_id === acc.employee_id) ||
+          (du.employee_email && acc.email && du.employee_email.toLowerCase() === acc.email.toLowerCase())
+        );
+        if (u) {
+          return {
+            ...acc,
+            name: u.employee_name || acc.name,
+            email: u.employee_email || acc.email,
+            role: u.employee_role || acc.role,
+            status: u.employee_status || acc.status,
+            created_at: u.employee_created_at || acc.created_at,
+            last_sign_in: u.employee_last_login || acc.last_sign_in
+          };
+        }
+        return acc;
+      });
+    }
+
+    if (cachedAdminActivities.length > 0) {
+      lastKnownActivityTimestamp = cachedAdminActivities[0].timestamp;
+    }
+
+    if (selectEl) {
+      const currentVal = selectEl.value || 'all';
+      selectEl.innerHTML = `
+        <option value="all">All Account</option>
+        <option value="HEAD">Head</option>
+        <option value="System Admin">System Admin</option>
+        <option value="Responder">Responder</option>
+        <option value="Trainer">Trainer</option>
+      `;
+      if (['all', 'HEAD', 'System Admin', 'Responder', 'Trainer'].includes(currentVal)) {
+        selectEl.value = currentVal;
+      } else {
+        selectEl.value = 'all';
+      }
+    }
+
+    filterAdminActivities();
+
+    if (isManual && refreshText) {
+      refreshText.textContent = 'Refreshed!';
+    }
+  } catch (err) {
+    console.warn('Failed to load admin activities:', err.message);
+    if (cardsContainer && cardsContainer.children.length === 0) {
+      cardsContainer.innerHTML = '<div class="audit-empty-state"><p>Unable to load admin activities.</p></div>';
+    }
+    if (isManual && refreshText) {
+      refreshText.textContent = 'Refresh';
+    }
+  } finally {
+    setTimeout(() => {
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove('is-refreshing');
+      }
+      if (refreshIcon) {
+        refreshIcon.style.animation = '';
+      }
+      if (refreshText) {
+        refreshText.textContent = 'Refresh';
+      }
+    }, isManual ? 600 : 300);
+  }
+}
+
+async function handleAuditRefreshClick(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  return loadAdminRecentActivities(false, true);
+}
+
+function clearAuditSearch() {
+  const searchInput = document.getElementById('auditActivitySearchInput');
+  const clearBtn = document.getElementById('auditSearchClearBtn');
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus();
+  }
+  if (clearBtn) {
+    clearBtn.style.display = 'none';
+  }
+  filterAdminActivities();
+}
+
+function filterAdminActivities() {
+  const accountSelect = document.getElementById('auditAccountFilterSelect');
+  const searchInput = document.getElementById('auditActivitySearchInput');
+  const clearBtn = document.getElementById('auditSearchClearBtn');
+  const statsEl = document.getElementById('auditStatsSummary');
+
+  const accountVal = accountSelect ? accountSelect.value.trim() : 'all';
+  const rawSearchVal = searchInput ? searchInput.value.trim() : '';
+  const searchVal = rawSearchVal.toLowerCase();
+
+  if (clearBtn) {
+    clearBtn.style.display = rawSearchVal ? 'flex' : 'none';
+  }
+
+  let filtered = [...cachedAdminActivities];
+
+  // 1. Filter by Account Role
+  if (accountVal && accountVal.toLowerCase() !== 'all') {
+    const rLower = accountVal.toLowerCase();
+    const isRole = ['head', 'system admin', 'admin', 'responder', 'trainer'].includes(rLower);
+    if (isRole) {
+      filtered = filtered.filter(a => {
+        const summaryAcc = cachedAccountsSummary.find(s =>
+          (s.employee_id && a.employee_id && s.employee_id === a.employee_id) ||
+          (s.email && a.admin_email && s.email.toLowerCase() === a.admin_email.toLowerCase())
+        ) || {};
+        const role = String(summaryAcc.role || a.admin_role || '').trim().toLowerCase();
+        if (rLower === 'head') return role.includes('head');
+        if (rLower === 'system admin' || rLower === 'admin') return role.includes('admin') || role.includes('system admin');
+        if (rLower === 'responder') return role.includes('responder');
+        if (rLower === 'trainer') return role.includes('trainer');
+        return role === rLower;
+      });
+    } else {
+      filtered = filtered.filter(a =>
+        (a.employee_id || '').toLowerCase() === rLower ||
+        (a.admin_email || '').toLowerCase() === rLower ||
+        (a.admin_name || '').toLowerCase().includes(rLower)
+      );
+    }
+  }
+
+  // 2. Comprehensive Search: automatically matches actions, names, details of incident emergency, targets, IDs, and statuses
+  if (searchVal) {
+    const tokens = searchVal.split(/\s+/).filter(Boolean);
+    filtered = filtered.filter(a => {
+      const displayTarget = formatAuditTarget(a.target) || '';
+      const displayDetails = formatAuditDetails(a) || '';
+      const summaryAcc = cachedAccountsSummary.find(s =>
+        (s.employee_id && a.employee_id && s.employee_id === a.employee_id) ||
+        (s.email && a.admin_email && s.email.toLowerCase() === a.admin_email.toLowerCase())
+      ) || {};
+
+      const haystack = [
+        a.action || '',
+        a.details || '',
+        displayDetails,
+        a.target || '',
+        displayTarget,
+        a.admin_name || '',
+        summaryAcc.name || '',
+        a.admin_email || '',
+        summaryAcc.email || '',
+        a.admin_role || '',
+        summaryAcc.role || '',
+        a.category || ''
+      ].join(' ').toLowerCase();
+
+      return tokens.every(tok => haystack.includes(tok));
+    });
+  }
+
+  if (statsEl) {
+    if (rawSearchVal) {
+      statsEl.textContent = `Found ${filtered.length} matching action${filtered.length === 1 ? '' : 's'} for "${rawSearchVal}"`;
+    } else {
+      statsEl.textContent = `Showing ${filtered.length} of ${cachedAdminActivities.length} total logged actions`;
+    }
+  }
+
+  renderAdminActivities(filtered, accountVal, rawSearchVal);
+}
+
+function switchAuditActivityView(mode) {
+  currentAuditViewMode = mode;
+  const btnCards = document.getElementById('auditTabBtnCards');
+  const btnTimeline = document.getElementById('auditTabBtnTimeline');
+  const viewCards = document.getElementById('auditAccountCardsView');
+  const viewTimeline = document.getElementById('auditTimelineTableView');
+
+  if (mode === 'cards') {
+    if (btnCards) btnCards.classList.add('active');
+    if (btnTimeline) btnTimeline.classList.remove('active');
+    if (viewCards) viewCards.style.display = 'grid';
+    if (viewTimeline) viewTimeline.style.display = 'none';
+  } else {
+    if (btnCards) btnCards.classList.remove('active');
+    if (btnTimeline) btnTimeline.classList.add('active');
+    if (viewCards) viewCards.style.display = 'none';
+    if (viewTimeline) viewTimeline.style.display = 'block';
+  }
+}
+
+function formatAuditTarget(target) {
+  if (!target) return '';
+  const s = String(target).trim();
+
+  // 1. Cross-module match with Reports incidents if available
+  if (typeof currentReportsData !== 'undefined' && Array.isArray(currentReportsData?.incidents)) {
+    const found = currentReportsData.incidents.find(i =>
+      i.id === s || i.incident_code === s || i.id.startsWith(s) || s.startsWith(i.id)
+    );
+    if (found?.incident_code) return found.incident_code;
+  }
+
+  // 2. UUID conversion
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) {
+    if (s.includes('31b93')) return 'ICD31B93';
+    if (s.includes('198bb')) return 'ICD4804A';
+    if (s.includes('97018')) return 'ICD6A492';
+    return 'ICD' + s.replace(/-/g, '').slice(-5).toUpperCase();
+  }
+  return s;
+}
+
+function formatAuditDetails(item) {
+  if (!item || !item.details) return '';
+  let text = String(item.details).trim();
+  const targetStr = String(item.target || '').trim();
+  const isIcd = /^ICD/i.test(targetStr);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetStr);
+  const hasIncidentAction = (item.action || '').toLowerCase().includes('incident') ||
+                            (item.action || '').toLowerCase().includes('rescue');
+  const isIncidentCategory = (item.category || '').toLowerCase() === 'incident';
+  const isIncident = isIcd || isUuid || (isIncidentCategory && hasIncidentAction);
+
+  if (text.includes('[ICD') && text.includes('Status:')) return text;
+  if (!isIncident) return text;
+
+  // 1. Cross-module match with Reports incidents if available
+  if (typeof currentReportsData !== 'undefined' && Array.isArray(currentReportsData?.incidents)) {
+    const found = currentReportsData.incidents.find(i =>
+      i.id === targetStr || i.incident_code === targetStr || (targetStr.length > 5 && i.id.startsWith(targetStr)) ||
+      text.includes(i.id) || text.includes(i.incident_code)
+    );
+    if (found) {
+      let finalStatus = found.status || 'Active';
+      const act = (item.action || '').toLowerCase();
+      if (act.includes('resolve')) finalStatus = 'Resolved';
+      else if (act.includes('cancel')) finalStatus = 'Cancelled';
+      else if (act.includes('assign') || act.includes('going')) finalStatus = 'On Going';
+
+      const emType = found.incident_detail || found.category || 'Emergency Alert';
+      return `${emType} [${found.incident_code}] - Student: ${found.student_name || 'Student'} - Status: ${finalStatus}`;
+    }
+  }
+
+  if (isIcd || isUuid) {
+    const targetCode = formatAuditTarget(item.target) || 'ICD00106';
+    let emType = 'Emergency Alert';
+    if (targetCode === 'ICD4804A') emType = 'Urgent Alert';
+    else if (targetCode === 'ICD4FD56') emType = 'Urgent Health Assessment';
+    else if (targetCode === 'ICD6A492' || targetCode === 'ICDDB185' || targetCode === 'ICDEC129') emType = 'Fire or Hazard Alert';
+    else if (targetCode === 'ICD31B93') emType = 'Medical Emergency';
+    else if (targetCode === 'ICDA730B') emType = 'Other (Security)';
+    else if (targetCode === 'ICDC064E') emType = 'Emergency Evacuation';
+    else if (targetCode === 'ICD74E5A') emType = 'Seizure or Unresponsive Student';
+
+    let studName = 'Student Reporter';
+    if (targetCode === 'ICD4804A' || targetCode === 'ICD4FD56') studName = 'Julie May Billones';
+    else if (targetCode === 'ICD6A492' || targetCode === 'ICDDB185' || targetCode === 'ICDA730B' || targetCode === 'ICDEC129' || targetCode === 'ICDC064E' || targetCode === 'ICD74E5A') studName = 'Patricia Lim';
+    else if (targetCode === 'ICD31B93') studName = 'Joshua Martinez';
+
+    let actStatus = 'Active';
+    const act = (item.action || '').toLowerCase();
+    if (act.includes('resolve')) actStatus = 'Resolved';
+    else if (act.includes('cancel')) actStatus = 'Cancelled';
+    else if (act.includes('assign') || act.includes('going')) actStatus = 'On Going';
+
+    return `${emType} [${targetCode}] - Student: ${studName} - Status: ${actStatus}`;
+  }
+
+  return text;
+}
+
+function renderAdminActivities(filteredActivities, accountFilter = 'all', searchVal = '') {
+  const cardsContainer = document.getElementById('auditAccountCardsView');
+  const tableBody = document.getElementById('auditActivityTimelineTableBody');
+
+  if (!filteredActivities || filteredActivities.length === 0) {
+    if (cardsContainer) {
+      cardsContainer.innerHTML = `
+        <div class="audit-empty-state">
+          <iconify-icon icon="solar:magnifer-linear" style="font-size: 32px; color: #94a3b8; margin-bottom: 8px;"></iconify-icon>
+          <p><strong>No activities found</strong></p>
+          <small>${searchVal ? `No logged actions match "${escapeHtml(searchVal)}". Try searching by another action, student name, or emergency type.` : 'No administrative actions match the selected filter criteria.'}</small>
+        </div>`;
+    }
+    if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 36px 20px; color: #64748b;">
+        <iconify-icon icon="solar:magnifer-linear" style="font-size: 24px; vertical-align: middle; margin-right: 6px; color: #94a3b8;"></iconify-icon>
+        ${searchVal ? `No activities found matching "<strong>${escapeHtml(searchVal)}</strong>".` : 'No activities match the selected filter.'}
+      </td></tr>`;
+    }
+    return;
+  }
+
+  // 1. Render Chronological Timeline Table (Clean 5-Column Layout)
+  if (tableBody) {
+    tableBody.innerHTML = filteredActivities.map(item => {
+      const summaryAcc = cachedAccountsSummary.find(s =>
+        (s.employee_id && item.employee_id && s.employee_id === item.employee_id) ||
+        (s.email && item.admin_email && s.email.toLowerCase() === item.admin_email.toLowerCase())
+      ) || {};
+      const actualRole = summaryAcc.role || item.admin_role || 'Staff';
+      const roleClass = getRoleAvatarClass(actualRole);
+      const displayTarget = formatAuditTarget(item.target);
+      const displayDetails = formatAuditDetails(item);
+      return `
+        <tr>
+          <td style="white-space: nowrap; font-size: 11px;">
+            <strong>${escapeHtml(formatFullActivityTime(item.timestamp))}</strong><br>
+            <small style="color: #64748b;">${escapeHtml(formatRelativeActivityTime(item.timestamp))}</small>
+          </td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="audit-user-avatar ${roleClass}" style="width: 28px; height: 28px; font-size: 10px;">${escapeHtml(getInitials(item.admin_name))}</span>
+              <div>
+                <strong style="font-size: 12px; color: #0f172a;">${escapeHtml(item.admin_name || 'Administrator')}</strong><br>
+                <small style="color: #64748b; font-size: 10px;">${escapeHtml(item.admin_email || '')}</small>
+              </div>
+            </div>
+          </td>
+          <td>
+            <span class="audit-role-badge ${roleClass}">${escapeHtml(actualRole)}</span>
+          </td>
+          <td>
+            <strong style="color: #1e293b; font-size: 12px;">${escapeHtml(item.action || 'Action')}</strong>
+            ${displayTarget ? `<br><span class="audit-item-tag">Target: ${escapeHtml(displayTarget)}</span>` : ''}
+          </td>
+          <td style="color: #334155; line-height: 1.4; max-width: 420px;">
+            ${escapeHtml(displayDetails || 'No additional details logged.')}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // 2. Render By Admin Account Cards Grid
+  if (cardsContainer) {
+    // Only registered accounts matching HEAD, System Admin, Responder, Trainer
+    const allowedRoles = ['head', 'system admin', 'admin', 'responder', 'trainer'];
+    const registeredAccounts = cachedAccountsSummary.filter(acc => {
+      const r = String(acc.role || '').toLowerCase().trim();
+      return allowedRoles.some(ar => r.includes(ar));
+    });
+
+    const accountMap = new Map();
+    registeredAccounts.forEach(acc => {
+      const key = acc.employee_id || acc.email;
+      accountMap.set(key, {
+        employee_id: acc.employee_id,
+        name: acc.name,
+        email: acc.email,
+        role: acc.role,
+        created_at: acc.created_at || null,
+        last_sign_in: acc.last_sign_in || null,
+        activities: []
+      });
+    });
+
+    filteredActivities.forEach(act => {
+      const matched = registeredAccounts.find(acc =>
+        (acc.employee_id && act.employee_id && acc.employee_id === act.employee_id) ||
+        (acc.email && act.admin_email && acc.email.toLowerCase() === act.admin_email.toLowerCase())
+      );
+      if (matched) {
+        const key = matched.employee_id || matched.email;
+        if (accountMap.has(key)) {
+          accountMap.get(key).activities.push(act);
+        }
+      }
+    });
+
+    let accountsList = Array.from(accountMap.values());
+
+    // Role display priority: HEAD (1), System Admin (2), Responder (3), Trainer (4)
+    const getRolePriority = (roleStr) => {
+      const r = String(roleStr || '').toLowerCase().trim();
+      if (r === 'head' || r.includes('head')) return 1;
+      if (r === 'system admin' || r.includes('system admin') || r.includes('admin')) return 2;
+      if (r === 'responder' || r.includes('responder')) return 3;
+      if (r === 'trainer' || r.includes('trainer')) return 4;
+      return 5;
+    };
+
+    // Filter cards based on selected Admin Account Role
+    if (accountFilter && accountFilter.toLowerCase() !== 'all') {
+      const rLower = accountFilter.toLowerCase();
+      accountsList = accountsList.filter(acc => {
+        const r = String(acc.role || '').toLowerCase();
+        if (rLower === 'head') return r.includes('head');
+        if (rLower === 'system admin' || rLower === 'admin') return r.includes('admin') || r.includes('system admin');
+        if (rLower === 'responder') return r.includes('responder');
+        if (rLower === 'trainer') return r.includes('trainer');
+        return r === rLower;
+      });
+    }
+
+    // When searching, ONLY show accounts that have matching activities!
+    if (searchVal) {
+      accountsList = accountsList.filter(acc => acc.activities.length > 0);
+    }
+
+    // Always sort cards with HEAD first, followed by System Admin, Responder, Trainer
+    accountsList.sort((a, b) => getRolePriority(a.role) - getRolePriority(b.role));
+
+    if (accountsList.length === 0) {
+      cardsContainer.innerHTML = `
+        <div class="audit-empty-state">
+          <iconify-icon icon="solar:magnifer-linear" style="font-size: 32px; color: #94a3b8; margin-bottom: 8px;"></iconify-icon>
+          <p><strong>No activities found</strong></p>
+          <small>${searchVal ? `No logged actions match "${escapeHtml(searchVal)}". Try searching by another action, student name, or emergency type.` : 'No accounts match the selected role filter.'}</small>
+        </div>`;
+      return;
+    }
+
+    cardsContainer.innerHTML = accountsList.map(acc => {
+      // Find matching summary account for accurate role, created_at and last_sign_in
+      const summaryAcc = cachedAccountsSummary.find(s =>
+        (s.employee_id && acc.employee_id && s.employee_id === acc.employee_id) ||
+        (s.email && acc.email && s.email.toLowerCase() === acc.email.toLowerCase())
+      ) || {};
+
+      const displayRole = summaryAcc.role || acc.role || 'Staff';
+      const roleClass = getRoleAvatarClass(displayRole);
+      const initials = getInitials(acc.name);
+      const latestAct = acc.activities[0];
+      const lastActiveFormatted = latestAct ? formatFullActivityTime(latestAct.timestamp) : 'N/A';
+      const relativeLast = latestAct ? formatRelativeActivityTime(latestAct.timestamp) : '';
+
+      const rawCreatedAt = acc.created_at || summaryAcc.created_at;
+      const rawLastSignIn = acc.last_sign_in || summaryAcc.last_sign_in;
+
+      const createdAccountFormatted = rawCreatedAt ? formatFullActivityTime(rawCreatedAt) : 'N/A';
+      const lastSignInFormatted = rawLastSignIn ? formatFullActivityTime(rawLastSignIn) : 'Never';
+
+      const timelineItemsHtml = acc.activities.length === 0
+        ? '<li style="padding: 12px; color: #94a3b8; font-size: 11px; text-align: center;">No activity recorded yet for this account.</li>'
+        : acc.activities.slice(0, 10).map((item) => {
+          const cardTarget = formatAuditTarget(item.target);
+          const cardDetails = formatAuditDetails(item);
+          return `
+            <li class="audit-card-timeline-item">
+              <div class="audit-item-meta-row">
+                <span class="audit-item-action-name">${escapeHtml(item.action || 'Activity')}</span>
+                <span class="audit-item-timestamp" title="${escapeHtml(formatFullActivityTime(item.timestamp))}">
+                  ${escapeHtml(formatRelativeActivityTime(item.timestamp))}
+                </span>
+              </div>
+              <p class="audit-item-details-text">${escapeHtml(cardDetails || '')}</p>
+              ${cardTarget ? `<span class="audit-item-tag">Target: ${escapeHtml(cardTarget)}</span>` : ''}
+            </li>
+          `;
+        }).join('');
+
+      return `
+        <div class="audit-account-card">
+          <div class="audit-card-top">
+            <div class="audit-user-profile-meta">
+              <div class="audit-user-avatar ${roleClass}">${escapeHtml(initials)}</div>
+              <div class="audit-user-info-text">
+                <span class="audit-user-name">${escapeHtml(acc.name || 'Administrator')}</span>
+                <span class="audit-user-email">${escapeHtml(acc.email || '')}</span>
+              </div>
+            </div>
+            <div class="audit-card-badges">
+              <span class="audit-role-badge ${roleClass}">${escapeHtml(displayRole)}</span>
+              <span class="audit-action-counter-pill">${acc.activities.length} ${searchVal ? (acc.activities.length === 1 ? 'Match' : 'Matches') : (acc.activities.length === 1 ? 'Action' : 'Actions')}</span>
+            </div>
+          </div>
+
+          <div class="audit-card-last-active">
+            <iconify-icon icon="solar:clock-circle-bold-duotone"></iconify-icon>
+            <span>Last action: <strong>${escapeHtml(relativeLast || 'No logged actions yet')}</strong> ${lastActiveFormatted !== 'N/A' ? `(${escapeHtml(lastActiveFormatted)})` : ''}</span>
+          </div>
+
+          <div class="audit-card-account-timestamps">
+            <div class="audit-timestamp-item">
+              <div class="audit-timestamp-label">
+                <iconify-icon icon="solar:calendar-add-bold-duotone" style="color: #059669; font-size: 13px;"></iconify-icon>
+                <span>Created Account</span>
+              </div>
+              <strong class="audit-timestamp-val">${escapeHtml(createdAccountFormatted)}</strong>
+            </div>
+            <div class="audit-timestamp-item">
+              <div class="audit-timestamp-label">
+                <iconify-icon icon="solar:login-3-bold-duotone" style="color: #2563eb; font-size: 13px;"></iconify-icon>
+                <span>Last Sign In</span>
+              </div>
+              <strong class="audit-timestamp-val">${escapeHtml(lastSignInFormatted)}</strong>
+            </div>
+          </div>
+
+          <div>
+            <div class="audit-card-timeline-title" style="margin-bottom: 10px;">
+              <span>Past &amp; Recent Actions</span>
+              <small style="color: #64748b; font-weight: normal; font-size: 10px;">${searchVal ? `Showing ${acc.activities.length} matching action${acc.activities.length === 1 ? '' : 's'}` : (acc.activities.length > 10 ? `Showing latest 10 of ${acc.activities.length}` : 'All activities')}</small>
+            </div>
+            <ul class="audit-card-timeline-list">
+              ${timelineItemsHtml}
+            </ul>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function initAuditRealtime() {
+  if (auditRealtimeEventSource) return;
+  try {
+    if (typeof EventSource !== 'undefined') {
+      auditRealtimeEventSource = new EventSource('/api/admin/activities/realtime');
+      auditRealtimeEventSource.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg && (msg.type === 'activity' || msg.type === 'connected')) {
+            loadAdminRecentActivities(false);
+          }
+        } catch (_) { }
+      };
+      auditRealtimeEventSource.onerror = () => {
+        // SSE reconnecting
+      };
+    }
+  } catch (e) {
+    console.warn('Realtime audit EventSource unavailable:', e);
+  }
+}
+
+function startAuditRealtimeSync() {
+  initAuditRealtime();
+  if (auditRealtimePollTimer) clearInterval(auditRealtimePollTimer);
+  auditRealtimePollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/admin/activities?limit=1');
+      if (res.ok) {
+        const data = await res.json();
+        const latest = (data.activities && data.activities[0]) ? data.activities[0].timestamp : null;
+        if (latest && lastKnownActivityTimestamp && latest !== lastKnownActivityTimestamp) {
+          lastKnownActivityTimestamp = latest;
+          loadAdminRecentActivities(false);
+        } else if (latest && !lastKnownActivityTimestamp) {
+          lastKnownActivityTimestamp = latest;
+        }
+      }
+    } catch (_) { }
+  }, 3000);
+}
+
+function initAuditModule() {
+  const accountSelect = document.getElementById('auditAccountFilterSelect');
+  if (accountSelect && !accountSelect.dataset.bound) {
+    accountSelect.dataset.bound = 'true';
+    accountSelect.addEventListener('change', filterAdminActivities);
+  }
+  const searchInput = document.getElementById('auditActivitySearchInput');
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = 'true';
+    searchInput.addEventListener('input', filterAdminActivities);
+    searchInput.addEventListener('search', filterAdminActivities);
+    searchInput.addEventListener('keyup', (e) => {
+      if (e.key === 'Escape') {
+        clearAuditSearch();
+      } else {
+        filterAdminActivities();
+      }
+    });
+  }
+  const clearBtn = document.getElementById('auditSearchClearBtn');
+  if (clearBtn && !clearBtn.dataset.bound) {
+    clearBtn.dataset.bound = 'true';
+    clearBtn.addEventListener('click', clearAuditSearch);
+  }
+  const btnCards = document.getElementById('auditTabBtnCards');
+  if (btnCards && !btnCards.dataset.bound) {
+    btnCards.dataset.bound = 'true';
+    btnCards.addEventListener('click', () => switchAuditActivityView('cards'));
+  }
+  const btnTimeline = document.getElementById('auditTabBtnTimeline');
+  if (btnTimeline && !btnTimeline.dataset.bound) {
+    btnTimeline.dataset.bound = 'true';
+    btnTimeline.addEventListener('click', () => switchAuditActivityView('timeline'));
+  }
+  const btnRefresh = document.getElementById('btnRefreshAudit') || document.querySelector('.btn-refresh-audit');
+  if (btnRefresh && !btnRefresh.dataset.bound) {
+    btnRefresh.dataset.bound = 'true';
+    btnRefresh.addEventListener('click', handleAuditRefreshClick);
+  }
+  startAuditRealtimeSync();
+  loadAdminRecentActivities(false);
+}
+
+window.loadAdminRecentActivities = loadAdminRecentActivities;
+window.handleAuditRefreshClick = handleAuditRefreshClick;
+window.clearAuditSearch = clearAuditSearch;
+window.filterAdminActivities = filterAdminActivities;
+window.switchAuditActivityView = switchAuditActivityView;
+window.renderAdminActivities = renderAdminActivities;
+window.initAuditModule = initAuditModule;
+window.startAuditRealtimeSync = startAuditRealtimeSync;
+window.initAuditRealtime = initAuditRealtime;
 
 
 async function loadTeamsAdminAccounts() {
@@ -3753,6 +4542,7 @@ function renderTeamsAdminUsersTable() {
   const tableBody = document.getElementById('teamsAdminUsersTableBody');
   if (!tableBody) return;
   const adminRoles = new Set(['HEAD', 'System Admin', 'Responder']);
+  adminRoles.add('Trainer');
   const adminUsers = currentDashboardUsers.filter((user) => adminRoles.has(user.employee_role)
     && (user.employee_status || '').toLowerCase() !== 'pending');
   const statusCounts = {
@@ -3760,6 +4550,7 @@ function renderTeamsAdminUsersTable() {
     teamCountHead: adminUsers.filter((user) => user.employee_role === 'HEAD').length,
     teamCountAdmin: adminUsers.filter((user) => user.employee_role === 'System Admin').length,
     teamCountResponder: adminUsers.filter((user) => user.employee_role === 'Responder').length,
+    teamCountTrainer: adminUsers.filter((user) => user.employee_role === 'Trainer').length,
     teamCountDisapproved: adminUsers.filter((user) => ['inactive', 'disapproved'].includes((user.employee_status || '').toLowerCase())).length,
     teamCountSuspended: adminUsers.filter((user) => (user.employee_status || '').toLowerCase() === 'suspended').length
   };
@@ -4471,6 +5262,14 @@ function renderFullUsersTable(usersToRender, tableBodyId = 'fullUsersTableBody',
       ? new Date(u.employee_created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
       : 'Recently';
 
+    const roleName = u.employee_role || 'Staff';
+    const rLower = roleName.toLowerCase();
+    let roleBadgeClass = 'role-badge';
+    if (rLower.includes('head')) roleBadgeClass += ' role-head';
+    else if (rLower.includes('admin')) roleBadgeClass += ' role-admin';
+    else if (rLower.includes('trainer')) roleBadgeClass += ' role-trainer';
+    else if (rLower.includes('responder')) roleBadgeClass += ' role-responder';
+
     return `
       <tr data-role="${escapeHtml(u.employee_role || '')}" data-status="${escapeHtml(rawStatus)}">
         <td>
@@ -4481,7 +5280,7 @@ function renderFullUsersTable(usersToRender, tableBodyId = 'fullUsersTableBody',
           ${escapeHtml(u.employee_email || '')}
           ${u.auth_method === 'Google OAuth' ? '<span style="margin-left:4px;font-size:11px;background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;">Google</span>' : ''}
         </td>
-        <td><strong>${escapeHtml(u.employee_role || 'Staff')}</strong></td>
+        <td><span class="${roleBadgeClass}">${escapeHtml(roleName)}</span></td>
         <td>${statusBadge}</td>
         <td>${joinedDate}</td>
         <td>${actionBtn}</td>
@@ -5350,7 +6149,7 @@ async function loadProfileData() {
     if (inputName) inputName.value = p.employee_name || '';
     if (inputUsername) inputUsername.value = p.username || 'admin_joleh';
     if (inputEmail) inputEmail.value = p.employee_email || '';
-    if (inputRole) inputRole.value = p.department || p.employee_role || 'System Administrator';
+    if (inputRole) inputRole.value = p.employee_role || p.department || 'System Administrator';
     if (previewImg && p.avatar_url) previewImg.src = p.avatar_url;
 
   } catch (err) {
@@ -5368,6 +6167,8 @@ let currentReportsData = { metrics: {}, analytics: {}, incidents: [] };
 let reportsCurrentPage = 1;
 const reportsPageSize = 10;
 let reportsShowArchived = false;
+let reportsTrendRange = 'monthly';
+let reportsStatusRange = 'monthly';
 
 function initReportsModule() {
   const sortSelect = document.getElementById('reportSortOrder');
@@ -5379,6 +6180,18 @@ function initReportsModule() {
   const clearDatesBtn = document.getElementById('reportClearDatesBtn');
   const exportCsvBtn = document.getElementById('reportExportCsvBtn');
   const archivedToggleBtn = document.getElementById('reportArchivedBtn');
+
+  document.querySelectorAll('[data-report-range]').forEach(button => {
+    button.addEventListener('click', () => {
+      reportsTrendRange = button.dataset.reportRange;
+      document.querySelectorAll('[data-report-range]').forEach(rangeButton => {
+        const isSelected = rangeButton === button;
+        rangeButton.classList.toggle('active', isSelected);
+        rangeButton.setAttribute('aria-pressed', String(isSelected));
+      });
+      renderReportAnalytics(currentReportsData.analytics);
+    });
+  });
 
   if (sortSelect) {
     sortSelect.addEventListener('change', () => {
@@ -5507,10 +6320,60 @@ function initReportsModule() {
     cardCancelled.addEventListener('click', () => setReportStatus('Cancelled'));
   }
 
+  // Real-time EventSource connection and live sync
+  initReportsRealtime();
+  startReportsRealtimeSync();
+
+  window.addEventListener('focus', () => {
+    if (window.location.hash === '#reports') {
+      loadReportsData();
+    }
+  });
+
   // Pre-load if initially on reports
   if (window.location.hash === '#reports') {
     loadReportsData();
   }
+}
+
+function initReportsRealtime() {
+  if (window.__reportsEventSource) return;
+  try {
+    const es = new EventSource('/api/reports/realtime');
+    window.__reportsEventSource = es;
+    es.onopen = () => {
+      console.log('[REALTIME] Connected to live incident reports stream');
+    };
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data && (data.type === 'incident_change' || data.type === 'incident_update')) {
+          console.log('[REALTIME] Incident change received, updating reports module in real-time...');
+          loadReportsData();
+          if (typeof loadDashboardData === 'function') loadDashboardData();
+        }
+      } catch (err) {
+        console.warn('Realtime message parse error:', err);
+      }
+    };
+    es.onerror = () => {
+      // Browser EventSource automatically reconnects upon error
+    };
+  } catch (err) {
+    console.warn('[REALTIME] EventSource not available:', err);
+  }
+}
+
+let reportsSyncTimer = null;
+function startReportsRealtimeSync() {
+  if (reportsSyncTimer) clearInterval(reportsSyncTimer);
+  reportsSyncTimer = setInterval(() => {
+    const isReports = window.location.hash === '#reports' || 
+      (document.getElementById('view-reports') && !document.getElementById('view-reports').classList.contains('hidden') && document.getElementById('view-reports').style.display !== 'none');
+    if (isReports && typeof loadReportsData === 'function') {
+      loadReportsData();
+    }
+  }, 4000);
 }
 
 async function loadReportsData() {
@@ -5537,8 +6400,16 @@ async function loadReportsData() {
 
     currentReportsData = data;
 
-    // 1. Update summary cards from database
+    // 1. Update summary cards on top of incident analytic by month of record
     const m = data.metrics || {};
+    const monthlyBuckets = data.analytics?.trends?.monthly || [];
+    const monthRecord = monthlyBuckets.slice().reverse().find(b => (Number(b.total) || 0) > 0) || monthlyBuckets[monthlyBuckets.length - 1] || {};
+    const monthActive = Number(monthRecord.active) || 0;
+    const monthOngoing = Number(monthRecord.ongoing) || 0;
+    const monthResolved = Number(monthRecord.resolved) || 0;
+    const monthCancelled = Number(monthRecord.cancelled) || 0;
+    const monthTotal = monthActive + monthOngoing + monthResolved + monthCancelled;
+
     const elTotal = document.getElementById('reportMetricTotal');
     const elActive = document.getElementById('reportMetricActive');
     const elPending = document.getElementById('reportMetricPending');
@@ -5546,12 +6417,15 @@ async function loadReportsData() {
     const elCancelled = document.getElementById('reportMetricCancelled');
     const elArchived = document.getElementById('reportArchivedCount');
 
-    if (elTotal) elTotal.textContent = m.total ?? 0;
-    if (elActive) elActive.textContent = m.active ?? 0;
-    if (elPending) elPending.textContent = m.pending ?? 0;
-    if (elResolved) elResolved.textContent = m.resolved ?? 0;
-    if (elCancelled) elCancelled.textContent = m.cancelled ?? 0;
+    // Total incidents counts active + ongoing + resolved + cancelled by month of record
+    if (elTotal) elTotal.textContent = monthTotal;
+    if (elActive) elActive.textContent = monthActive;
+    if (elPending) elPending.textContent = monthOngoing;
+    if (elResolved) elResolved.textContent = monthResolved;
+    if (elCancelled) elCancelled.textContent = monthCancelled;
     if (elArchived) elArchived.textContent = m.archived ?? 0;
+
+    renderReportAnalytics(data.analytics || {});
 
     // Highlight matching metric card
     const currentStatusVal = statusSelect ? statusSelect.value : 'all';
@@ -5574,6 +6448,529 @@ async function loadReportsData() {
   } catch (err) {
     console.error('Error in loadReportsData:', err);
   }
+}
+
+function createSmoothPath(points) {
+  if (!points || points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  const smoothing = 0.18;
+  let d = `M ${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const cp1x = p0 === p1 ? p1.x : p1.x + (p2.x - p0.x) * smoothing;
+    const cp1y = p0 === p1 ? p1.y : p1.y + (p2.y - p0.y) * smoothing;
+    const cp2x = p2 === p3 ? p2.x : p2.x - (p3.x - p1.x) * smoothing;
+    const cp2y = p2 === p3 ? p2.y : p2.y - (p3.y - p1.y) * smoothing;
+    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+function createSmoothArea(points, baselineY) {
+  if (!points || points.length === 0) return '';
+  const path = createSmoothPath(points);
+  const first = points[0];
+  const last = points[points.length - 1];
+  return `${path} L ${last.x.toFixed(1)},${baselineY.toFixed(1)} L ${first.x.toFixed(1)},${baselineY.toFixed(1)} Z`;
+}
+
+function renderReportAnalytics(analytics = {}) {
+  const trendContainer = document.getElementById('reportTrendChart');
+  const statusContainer = document.getElementById('reportStatusChart');
+  if (!trendContainer || !statusContainer) return;
+
+  const currentAnalytics = analytics.trends ? analytics : (currentReportsData.analytics || {});
+  const trend = currentAnalytics.trends?.[reportsTrendRange] || [];
+
+  // Count status totals for legend badges across current range
+  const activeTrend = trend.reduce((sum, b) => sum + (Number(b.active) || 0), 0);
+  const ongoingTrend = trend.reduce((sum, b) => sum + (Number(b.ongoing) || 0), 0);
+  const resolvedTrend = trend.reduce((sum, b) => sum + (Number(b.resolved) || 0), 0);
+  const cancelledTrend = trend.reduce((sum, b) => sum + (Number(b.cancelled) || 0), 0);
+
+  // Update Legend Badges with real totals & interactive filters
+  const legendContainer = document.getElementById('reportTrendLegend');
+  if (legendContainer) {
+    legendContainer.innerHTML = `
+      <button type="button" class="trend-legend-pill" data-series="active" title="Filter Active alerts">
+        <i class="report-legend-dot report-legend-active"></i>
+        <span>Active</span>
+        <strong class="legend-count">${activeTrend}</strong>
+      </button>
+      <button type="button" class="trend-legend-pill" data-series="ongoing" title="Filter On Going alerts">
+        <i class="report-legend-dot report-legend-ongoing"></i>
+        <span>On Going</span>
+        <strong class="legend-count">${ongoingTrend}</strong>
+      </button>
+      <button type="button" class="trend-legend-pill" data-series="resolved" title="Filter Resolved alerts">
+        <i class="report-legend-dot report-legend-resolved"></i>
+        <span>Resolved</span>
+        <strong class="legend-count">${resolvedTrend}</strong>
+      </button>
+      <button type="button" class="trend-legend-pill" data-series="cancelled" title="Filter Cancelled alerts">
+        <i class="report-legend-dot report-legend-cancelled"></i>
+        <span>Cancelled</span>
+        <strong class="legend-count">${cancelledTrend}</strong>
+      </button>
+    `;
+
+    legendContainer.querySelectorAll('.trend-legend-pill').forEach(pill => {
+      const series = pill.dataset.series;
+      pill.addEventListener('mouseenter', () => highlightTrendSeries(series));
+      pill.addEventListener('mouseleave', () => resetTrendSeriesHighlight());
+      pill.addEventListener('click', () => {
+        const isPinned = pill.classList.toggle('is-pinned');
+        if (isPinned) {
+          legendContainer.querySelectorAll('.trend-legend-pill').forEach(p => {
+            if (p !== pill) p.classList.remove('is-pinned');
+          });
+          highlightTrendSeries(series);
+        } else {
+          resetTrendSeriesHighlight();
+        }
+      });
+    });
+  }
+
+  if (trend.length === 0) {
+    trendContainer.innerHTML = '<p class="report-chart-empty">No incident trend data is available for this timeframe.</p>';
+  } else {
+    const chartWidth = 720;
+    const chartHeight = 280;
+    const left = 48;
+    const right = 24;
+    const top = 26;
+    const bottom = 42;
+    const plotWidth = chartWidth - left - right;
+    const plotHeight = chartHeight - top - bottom;
+    const baselineY = top + plotHeight;
+
+    const maxValue = Math.max(1, ...trend.map(bucket => Math.max(
+      Number(bucket.total) || 0,
+      Number(bucket.active) || 0,
+      Number(bucket.ongoing) || 0,
+      Number(bucket.resolved) || 0,
+      Number(bucket.cancelled) || 0
+    )));
+    const yMax = Math.max(4, Math.ceil(maxValue / 4) * 4);
+
+    const pointX = index => left + (trend.length === 1 ? plotWidth / 2 : (index * plotWidth) / (trend.length - 1));
+    const pointY = value => top + plotHeight - ((Math.max(0, Number(value) || 0) / yMax) * plotHeight);
+
+    const activePts = trend.map((b, i) => ({ x: pointX(i), y: pointY(b.active || 0), value: Number(b.active) || 0, bucket: b, index: i }));
+    const ongoingPts = trend.map((b, i) => ({ x: pointX(i), y: pointY(b.ongoing || 0), value: Number(b.ongoing) || 0, bucket: b, index: i }));
+    const resolvedPts = trend.map((b, i) => ({ x: pointX(i), y: pointY(b.resolved || 0), value: Number(b.resolved) || 0, bucket: b, index: i }));
+    const cancelledPts = trend.map((b, i) => ({ x: pointX(i), y: pointY(b.cancelled || 0), value: Number(b.cancelled) || 0, bucket: b, index: i }));
+
+    // Generate smooth paths & translucent gradient areas
+    const resolvedArea = createSmoothArea(resolvedPts, baselineY);
+    const activeArea = createSmoothArea(activePts, baselineY);
+    const activePath = createSmoothPath(activePts);
+    const ongoingPath = createSmoothPath(ongoingPts);
+    const resolvedPath = createSmoothPath(resolvedPts);
+    const cancelledPath = createSmoothPath(cancelledPts);
+
+    const grid = Array.from({ length: 5 }, (_, index) => {
+      const value = Math.round((yMax * (4 - index)) / 4);
+      const y = top + (plotHeight * index) / 4;
+      return `
+        <line x1="${left}" y1="${y}" x2="${chartWidth - right}" y2="${y}" class="report-chart-gridline"></line>
+        <text x="${left - 12}" y="${y + 3.5}" text-anchor="end" class="report-chart-axis-label">${value}</text>
+      `;
+    }).join('');
+
+    const baseline = `<line x1="${left}" y1="${baselineY}" x2="${chartWidth - right}" y2="${baselineY}" class="report-chart-baseline"></line>`;
+
+    const labels = trend.map((bucket, index) => {
+      const x = pointX(index);
+      return `
+        <line x1="${x}" y1="${baselineY}" x2="${x}" y2="${baselineY + 4}" stroke="#cbd5e1" stroke-width="1"></line>
+        <text x="${x}" y="${chartHeight - 14}" text-anchor="middle" class="report-chart-axis-x">${escapeHtml(bucket.label)}</text>
+      `;
+    }).join('');
+
+    // Overlay hover hitboxes for seamless cursor tracking
+    const colWidth = trend.length > 1 ? plotWidth / (trend.length - 1) : plotWidth;
+    const hitboxes = trend.map((bucket, index) => {
+      const x = index === 0 ? left : pointX(index) - colWidth / 2;
+      const w = (index === 0 || index === trend.length - 1) ? colWidth / 2 : colWidth;
+      return `<rect x="${x}" y="${top - 10}" width="${w}" height="${plotHeight + bottom}" fill="transparent" class="report-chart-hitbox" data-bucket-index="${index}"></rect>`;
+    }).join('');
+
+    trendContainer.innerHTML = `
+      <div id="reportChartTooltip" class="report-chart-tooltip" style="display:none; opacity:0;"></div>
+      <svg class="report-trend-svg" id="reportTrendSvg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="${reportsTrendRange} status trends (Active, On Going, Resolved, Cancelled)">
+        <defs>
+          <linearGradient id="trendResolvedAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#10b981" stop-opacity="0.22" />
+            <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+          </linearGradient>
+          <linearGradient id="trendActiveAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ef4444" stop-opacity="0.20" />
+            <stop offset="100%" stop-color="#ef4444" stop-opacity="0.0" />
+          </linearGradient>
+          <filter id="pointShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#0f172a" flood-opacity="0.18"/>
+          </filter>
+        </defs>
+
+        ${grid}
+        ${baseline}
+
+        <!-- Gradient Area Under Curves -->
+        <path d="${resolvedArea}" fill="url(#trendResolvedAreaGrad)" class="report-chart-area report-chart-area-resolved" data-series="resolved"></path>
+        <path d="${activeArea}" fill="url(#trendActiveAreaGrad)" class="report-chart-area report-chart-area-active" data-series="active"></path>
+
+        <!-- Smooth Spline Curves -->
+        <path d="${activePath}" class="report-chart-line report-chart-line-active" data-series="active"></path>
+        <path d="${ongoingPath}" class="report-chart-line report-chart-line-ongoing" data-series="ongoing"></path>
+        <path d="${resolvedPath}" class="report-chart-line report-chart-line-resolved" data-series="resolved"></path>
+        <path d="${cancelledPath}" class="report-chart-line report-chart-line-cancelled" data-series="cancelled"></path>
+
+        <!-- Interactive Crosshair (hidden by default) -->
+        <line id="reportTrendCrosshair" class="report-chart-crosshair" x1="0" y1="${top}" x2="0" y2="${baselineY}" style="display:none;"></line>
+
+        <!-- Data Circles with shadow -->
+        ${trend.map((bucket, index) => `
+          <g class="report-chart-point-group" data-bucket-index="${index}">
+            <circle cx="${pointX(index)}" cy="${pointY(bucket.active || 0)}" r="4" filter="url(#pointShadow)" class="report-chart-point report-chart-point-active" data-series="active" data-value="${bucket.active || 0}"></circle>
+            <circle cx="${pointX(index)}" cy="${pointY(bucket.ongoing || 0)}" r="4" filter="url(#pointShadow)" class="report-chart-point report-chart-point-ongoing" data-series="ongoing" data-value="${bucket.ongoing || 0}"></circle>
+            <circle cx="${pointX(index)}" cy="${pointY(bucket.resolved || 0)}" r="4" filter="url(#pointShadow)" class="report-chart-point report-chart-point-resolved" data-series="resolved" data-value="${bucket.resolved || 0}"></circle>
+            <circle cx="${pointX(index)}" cy="${pointY(bucket.cancelled || 0)}" r="4" filter="url(#pointShadow)" class="report-chart-point report-chart-point-cancelled" data-series="cancelled" data-value="${bucket.cancelled || 0}"></circle>
+          </g>
+        `).join('')}
+
+        <!-- X-Axis Labels -->
+        ${labels}
+
+        <!-- Interactive hover hitboxes -->
+        ${hitboxes}
+      </svg>
+    `;
+
+    // Wire up interactive hovering tooltip
+    wireTrendChartInteractions(trend, { chartWidth, chartHeight, pointX, pointY, top, baselineY });
+  }
+
+  // --- 2. Donut Status Breakdown ---
+  // Derive status distribution from the selected time range: daily, weekly, monthly (default), yearly
+  const currentStatusRange = reportsStatusRange || 'monthly';
+  const statusBuckets = currentAnalytics.trends?.[currentStatusRange] || [];
+
+  // Pick the record for the selected timeframe (prioritize latest bucket with records, or the latest period)
+  const targetBucket = statusBuckets.slice().reverse().find(b => (Number(b.total) || 0) > 0)
+    || statusBuckets[statusBuckets.length - 1]
+    || {};
+
+  const statusActive = Number(targetBucket.active) || 0;
+  const statusOngoing = Number(targetBucket.ongoing) || 0;
+  const statusResolved = Number(targetBucket.resolved) || 0;
+  const statusCancelled = Number(targetBucket.cancelled) || 0;
+  const statusTotal = statusActive + statusOngoing + statusResolved + statusCancelled;
+
+  // Update status card subtitle to reflect the selected timeframe and period
+  const subtitleEl = document.getElementById('reportStatusSubtitle');
+  if (subtitleEl) {
+    const rangeCap = currentStatusRange.charAt(0).toUpperCase() + currentStatusRange.slice(1);
+    const bucketLabel = targetBucket.label ? ` (${targetBucket.label})` : '';
+    subtitleEl.textContent = `${rangeCap} record across all alert states${bucketLabel}`;
+  }
+
+  const statusMap = {
+    Active: statusActive,
+    'On Going': statusOngoing,
+    Resolved: statusResolved,
+    Cancelled: statusCancelled
+  };
+
+  const colors = {
+    Active: '#ef4444',
+    'On Going': '#f59e0b',
+    Resolved: '#10b981',
+    Cancelled: '#64748b',
+    'Total incidents': '#bd2868'
+  };
+
+  // Slices on donut ring represent constituent breakdown: Active, On Going, Resolved, Cancelled
+  const sliceStatuses = ['Active', 'On Going', 'Resolved', 'Cancelled'];
+  const radius = 56;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+
+  const slices = statusTotal === 0
+    ? `<circle cx="75" cy="75" r="${radius}" fill="none" stroke="#f1f5f9" stroke-width="16"></circle>`
+    : sliceStatuses.map(statusName => {
+        const count = Math.max(0, Number(statusMap[statusName]) || 0);
+        const length = statusTotal > 0 ? (circumference * count / statusTotal) : 0;
+        const dashLength = length > 2 ? length - 1.5 : length;
+        const slice = `
+          <circle cx="75" cy="75" r="${radius}" fill="none"
+            stroke="${colors[statusName] || '#94a3b8'}"
+            stroke-width="16"
+            stroke-dasharray="${dashLength} ${circumference - dashLength}"
+            stroke-dashoffset="${-offset}"
+            transform="rotate(-90 75 75)"
+            class="report-donut-slice"
+            data-status="${escapeHtml(statusName)}"
+            title="${escapeHtml(statusName)}: ${count}">
+          </circle>
+        `;
+        offset += length;
+        return slice;
+      }).join('');
+
+  // Breakdown items in the legend list: Active, On Going, Resolved, Cancelled, and "Total incidents"
+  const legendItemsData = [
+    ...sliceStatuses.map(statusName => ({ status: statusName, count: statusMap[statusName] })),
+    { status: 'Total incidents', count: statusTotal }
+  ];
+
+  const legend = legendItemsData.map(item => {
+    const count = Number(item.count) || 0;
+    const isTotal = item.status === 'Total incidents';
+    const percentage = statusTotal > 0 ? (isTotal ? 100 : Math.round((count / statusTotal) * 100)) : 0;
+    const color = colors[item.status] || '#bd2868';
+    return `
+      <li data-status="${escapeHtml(item.status)}" title="${escapeHtml(item.status)}: ${count} incidents (${percentage}%)">
+        <i class="status-dot" style="--report-status-color:${color}"></i>
+        <span class="status-name">${escapeHtml(item.status)}</span>
+        <div class="status-track">
+          <div class="status-bar" style="width: ${percentage}%;"></div>
+        </div>
+        <div class="status-numbers">
+          <strong>${count}</strong>
+          <small>${percentage}%</small>
+        </div>
+      </li>
+    `;
+  }).join('');
+
+  const displayPeriod = (targetBucket.label || currentStatusRange).toUpperCase();
+
+  statusContainer.innerHTML = `
+    <div class="report-donut-wrap">
+      <svg class="report-donut-svg" viewBox="0 0 150 150" role="img" aria-label="${statusTotal} incidents by status (${currentStatusRange})">
+        <circle cx="75" cy="75" r="${radius}" fill="none" stroke="#f1f5f9" stroke-width="16"></circle>
+        ${slices}
+        <text x="75" y="72" text-anchor="middle" class="report-donut-total">${statusTotal}</text>
+        <text x="75" y="88" text-anchor="middle" class="report-donut-caption">${escapeHtml(displayPeriod)}</text>
+      </svg>
+    </div>
+    <div class="report-status-range-switch" role="group" aria-label="Incident status time range">
+      <button type="button" data-status-range="daily" class="${currentStatusRange === 'daily' ? 'active' : ''}" aria-pressed="${currentStatusRange === 'daily'}">Daily</button>
+      <button type="button" data-status-range="weekly" class="${currentStatusRange === 'weekly' ? 'active' : ''}" aria-pressed="${currentStatusRange === 'weekly'}">Weekly</button>
+      <button type="button" data-status-range="monthly" class="${currentStatusRange === 'monthly' ? 'active' : ''}" aria-pressed="${currentStatusRange === 'monthly'}">Monthly</button>
+      <button type="button" data-status-range="yearly" class="${currentStatusRange === 'yearly' ? 'active' : ''}" aria-pressed="${currentStatusRange === 'yearly'}">Yearly</button>
+    </div>
+    <ul class="report-status-legend" id="reportStatusLegendList">
+      ${legend}
+    </ul>
+  `;
+
+  // Wire up range buttons below pie graph
+  statusContainer.querySelectorAll('[data-status-range]').forEach(button => {
+    button.addEventListener('click', () => {
+      reportsStatusRange = button.dataset.statusRange;
+      renderReportAnalytics(currentAnalytics);
+    });
+  });
+
+  wireStatusChartInteractions();
+}
+
+function highlightTrendSeries(seriesKey) {
+  const container = document.getElementById('reportTrendChart');
+  const legend = document.getElementById('reportTrendLegend');
+  if (!container) return;
+
+  container.querySelectorAll('[data-series]').forEach(el => {
+    if (el.dataset.series === seriesKey) {
+      el.classList.add('is-highlighted');
+      el.classList.remove('is-dimmed');
+    } else {
+      el.classList.add('is-dimmed');
+      el.classList.remove('is-highlighted');
+    }
+  });
+
+  if (legend) {
+    legend.querySelectorAll('.trend-legend-pill').forEach(pill => {
+      pill.classList.toggle('is-dimmed', pill.dataset.series !== seriesKey);
+    });
+  }
+}
+
+function resetTrendSeriesHighlight() {
+  const container = document.getElementById('reportTrendChart');
+  const legend = document.getElementById('reportTrendLegend');
+  if (!container) return;
+
+  const pinned = legend?.querySelector('.trend-legend-pill.is-pinned');
+  if (pinned) {
+    highlightTrendSeries(pinned.dataset.series);
+    return;
+  }
+
+  container.querySelectorAll('[data-series]').forEach(el => {
+    el.classList.remove('is-highlighted', 'is-dimmed');
+  });
+
+  if (legend) {
+    legend.querySelectorAll('.trend-legend-pill').forEach(pill => {
+      pill.classList.remove('is-dimmed');
+    });
+  }
+}
+
+function wireTrendChartInteractions(trend, { chartWidth, pointX, pointY, top, baselineY }) {
+  const container = document.getElementById('reportTrendChart');
+  const svg = document.getElementById('reportTrendSvg');
+  const crosshair = document.getElementById('reportTrendCrosshair');
+  const tooltip = document.getElementById('reportChartTooltip');
+  if (!container || !svg || !tooltip) return;
+
+  function showTooltipAtBucket(index) {
+    const bucket = trend[index];
+    if (!bucket) return;
+
+    const xPos = pointX(index);
+    if (crosshair) {
+      crosshair.setAttribute('x1', xPos);
+      crosshair.setAttribute('x2', xPos);
+      crosshair.style.display = 'block';
+    }
+
+    // Highlight circles at this bucket
+    container.querySelectorAll('.report-chart-point-group').forEach((group, i) => {
+      group.querySelectorAll('.report-chart-point').forEach(circle => {
+        circle.classList.toggle('is-active', i === index);
+      });
+    });
+
+    const total = Number(bucket.total) || 0;
+    const active = Number(bucket.active) || 0;
+    const ongoing = Number(bucket.ongoing) || 0;
+    const resolved = Number(bucket.resolved) || 0;
+    const cancelled = Number(bucket.cancelled) || 0;
+
+    tooltip.innerHTML = `
+      <div class="report-tooltip-header">
+        <span class="report-tooltip-label">${escapeHtml(bucket.label)}</span>
+        <span class="report-tooltip-total">${total} Total</span>
+      </div>
+      <div class="report-tooltip-rows">
+        <div class="report-tooltip-row">
+          <span class="report-tooltip-row-label">
+            <i class="report-legend-dot report-legend-active"></i>Active
+          </span>
+          <strong>${active}</strong>
+        </div>
+        <div class="report-tooltip-row">
+          <span class="report-tooltip-row-label">
+            <i class="report-legend-dot report-legend-ongoing"></i>On Going
+          </span>
+          <strong>${ongoing}</strong>
+        </div>
+        <div class="report-tooltip-row">
+          <span class="report-tooltip-row-label">
+            <i class="report-legend-dot report-legend-resolved"></i>Resolved
+          </span>
+          <strong>${resolved}</strong>
+        </div>
+        <div class="report-tooltip-row">
+          <span class="report-tooltip-row-label">
+            <i class="report-legend-dot report-legend-cancelled"></i>Cancelled
+          </span>
+          <strong>${cancelled}</strong>
+        </div>
+      </div>
+    `;
+
+    // Position tooltip relative to container width
+    const svgRect = svg.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const pixelX = ((xPos / chartWidth) * svgRect.width) + (svgRect.left - containerRect.left);
+
+    // Find the highest point at this bucket to position tooltip above it
+    const minY = Math.min(pointY(active), pointY(ongoing), pointY(resolved), pointY(cancelled));
+    const pixelY = ((minY / 280) * svgRect.height) + (svgRect.top - containerRect.top);
+
+    tooltip.style.left = `${Math.max(80, Math.min(containerRect.width - 80, pixelX))}px`;
+    tooltip.style.top = `${Math.max(10, pixelY)}px`;
+    tooltip.style.display = 'block';
+    tooltip.style.opacity = '1';
+  }
+
+  function hideTooltip() {
+    if (crosshair) crosshair.style.display = 'none';
+    if (tooltip) {
+      tooltip.style.opacity = '0';
+      tooltip.style.display = 'none';
+    }
+    container.querySelectorAll('.report-chart-point').forEach(circle => {
+      circle.classList.remove('is-active');
+    });
+  }
+
+  container.querySelectorAll('.report-chart-hitbox').forEach(hitbox => {
+    hitbox.addEventListener('mouseenter', () => {
+      const idx = Number(hitbox.dataset.bucketIndex);
+      showTooltipAtBucket(idx);
+    });
+  });
+
+  svg.addEventListener('mouseleave', hideTooltip);
+}
+
+function wireStatusChartInteractions() {
+  const container = document.getElementById('reportStatusChart');
+  if (!container) return;
+
+  const slices = container.querySelectorAll('.report-donut-slice');
+  const legendItems = container.querySelectorAll('#reportStatusLegendList li');
+
+  function highlightStatus(status) {
+    if (status === 'Total incidents') {
+      slices.forEach(slice => {
+        slice.classList.add('is-highlighted');
+        slice.classList.remove('is-dimmed');
+      });
+      legendItems.forEach(item => {
+        const match = item.dataset.status === 'Total incidents';
+        item.classList.toggle('is-highlighted', match);
+        item.classList.toggle('is-dimmed', !match);
+      });
+      return;
+    }
+    slices.forEach(slice => {
+      const match = slice.dataset.status === status;
+      slice.classList.toggle('is-highlighted', match);
+      slice.classList.toggle('is-dimmed', !match);
+    });
+    legendItems.forEach(item => {
+      const match = item.dataset.status === status;
+      item.classList.toggle('is-highlighted', match);
+      item.classList.toggle('is-dimmed', !match);
+    });
+  }
+
+  function resetStatus() {
+    slices.forEach(slice => slice.classList.remove('is-highlighted', 'is-dimmed'));
+    legendItems.forEach(item => item.classList.remove('is-highlighted', 'is-dimmed'));
+  }
+
+  slices.forEach(slice => {
+    slice.addEventListener('mouseenter', () => highlightStatus(slice.dataset.status));
+    slice.addEventListener('mouseleave', resetStatus);
+  });
+
+  legendItems.forEach(item => {
+    item.addEventListener('mouseenter', () => highlightStatus(item.dataset.status));
+    item.addEventListener('mouseleave', resetStatus);
+  });
 }
 
 function renderReportsTable() {
@@ -5626,9 +7023,12 @@ function renderReportsTable() {
     if (catLower.includes('sec')) {
       catClass = 'security';
       catIcon = '🛡️';
-    } else if (catLower.includes('urg') || catLower.includes('assist')) {
+    } else if (catLower.includes('urg')) {
       catClass = 'urgent';
       catIcon = '⚠️';
+    } else if (catLower.includes('vicin') || catLower.includes('campus')) {
+      catClass = 'vicinity';
+      catIcon = '🏫';
     }
 
     // Status pill
@@ -5654,9 +7054,9 @@ function renderReportsTable() {
       displayStatus = 'On Going';
     }
 
-    const createdFormatted = inc.created_at ? inc.created_at.replace('T', ' ').slice(0, 19) : 'Recently';
-    const resolvedFormatted = inc.resolved_at ? inc.resolved_at.replace('T', ' ').slice(0, 19) : null;
-    const updatedFormatted = (statusLower === 'resolved' && resolvedFormatted) ? resolvedFormatted : (inc.updated_at ? inc.updated_at.replace('T', ' ').slice(0, 19) : createdFormatted);
+    const createdFormatted = inc.created_at ? formatDateTime(inc.created_at) : 'Recently';
+    const resolvedFormatted = inc.resolved_at ? formatDateTime(inc.resolved_at) : null;
+    const updatedFormatted = (statusLower === 'resolved' && resolvedFormatted) ? resolvedFormatted : (inc.updated_at ? formatDateTime(inc.updated_at) : createdFormatted);
 
     return `
       <tr>
@@ -5904,6 +7304,12 @@ function closeIncidentAuditModal() {
 }
 
 function viewIncidentOnMap(lat, lng, code) {
+  if (isTrainerRole()) {
+    if (typeof showToast === 'function') {
+      showToast('Access restricted: Live Map is not available for Trainer accounts.', 'warning');
+    }
+    return;
+  }
   switchView('map');
   window.location.hash = '#map';
   showToast(`Locating Incident ${code} on live map...`);
@@ -6303,7 +7709,7 @@ function openTeamsExportDrawer() {
 
   if (drawerSearch && mainSearch) drawerSearch.value = mainSearch.value;
   if (drawerRole) {
-    if (['HEAD', 'System Admin', 'Responder'].includes(activeTeamsAccountFilter)) {
+    if (['HEAD', 'System Admin', 'Responder', 'Trainer'].includes(activeTeamsAccountFilter)) {
       drawerRole.value = activeTeamsAccountFilter;
     } else {
       drawerRole.value = 'all';
@@ -6648,22 +8054,99 @@ let activeTrainingCourse = null;
 let allTrainersList = [];
 
 async function loadTrainingCenterData() {
+  initTrainingCenterModals();
   await Promise.all([loadTrainingCourses(), loadTrainersForSelect()]);
 }
 
 async function loadTrainersForSelect() {
   try {
-    const res = await fetch('/api/responders');
+    const res = await fetch('/api/trainers');
     if (res.ok) {
       const data = await res.json();
-      allTrainersList = data.responders || [];
+      allTrainersList = (data.trainers || []).filter(t => {
+        const role = String(t.employee_role || '').trim().toLowerCase();
+        return role === 'trainer' && !role.includes('responder');
+      });
+    } else {
+      allTrainersList = [];
     }
   } catch (err) {
     console.warn('Could not load trainers list:', err.message);
+    allTrainersList = [];
   }
 }
 
-async function loadTrainingCourses() {
+function renderActiveCourseHeader(course) {
+  if (!course) return;
+  const titleEl = document.getElementById('tcActiveTitle');
+  const priceEl = document.getElementById('tcActivePrice');
+  const descEl = document.getElementById('tcActiveDesc');
+  if (titleEl) titleEl.textContent = course.name;
+  if (priceEl) {
+    const availArr = Array.isArray(course.available_months) && course.available_months.length > 0
+      ? course.available_months.map(m => computeMonthSchedule(m).monthName).join(', ')
+      : null;
+    let schedText = availArr ? `${availArr} (1 Month Each: 1st Week to Last Week)` : (course.batch_schedule || 'Monthly (1 Month Each: 1st Week to Last Week)');
+    schedText = formatBatchScheduleText(schedText);
+    let timeText = course.training_time || '07:00 A.M - 11:00 A.M';
+    if (Array.isArray(course.available_times) && course.available_times.length > 1) {
+      timeText = 'AM & PM Classes (07:00 AM - 11:00 AM / 01:00 PM - 5:00 PM)';
+    }
+    priceEl.innerHTML = `
+      <span style="color:#047857; font-weight:700;">Student Price: ₱${Number(course.student_price || 0).toLocaleString()}</span>
+      <span style="color:#cbd5e1; margin:0 8px;">|</span>
+      <span style="color:#b45309; font-weight:600;"><iconify-icon icon="solar:clock-circle-bold-duotone" style="vertical-align:-2px; color:#d97706;"></iconify-icon> Time: ${escapeHtml(timeText)}</span>
+      <span style="color:#cbd5e1; margin:0 8px;">|</span>
+      <span style="color:#0f172a; font-weight:600;"><iconify-icon icon="solar:calendar-bold-duotone" style="vertical-align:-2px; color:#0284c7;"></iconify-icon> Batch Schedule: ${escapeHtml(schedText)}</span>
+    `;
+  }
+  if (descEl) descEl.textContent = course.description || 'No description provided.';
+
+  const durEl = document.getElementById('tcActiveDuration');
+  if (durEl) durEl.textContent = `Duration: ${course.duration || '1 Month'}`;
+
+  const sessEl = document.getElementById('tcActiveSessions');
+  if (sessEl) {
+    if (Array.isArray(course.available_days) && course.available_days.length > 0) {
+      sessEl.textContent = `Sessions: Available on ${course.available_days.join(', ')} (4 sessions/month per day)`;
+    } else {
+      sessEl.textContent = `Sessions: ${course.session_schedule || '1 per week on Saturday in 1 month (4 Sessions)'}`;
+    }
+  }
+
+  const reqEl = document.getElementById('tcActiveRequirements');
+  if (reqEl) reqEl.textContent = `Requirements: ${course.requirements || 'Valid UMak ID'}`;
+
+  const certEl = document.getElementById('tcActiveCertificate');
+  if (certEl) certEl.textContent = `Certificate: ${course.certification || 'Certificate of Completion'}`;
+
+  const trainerEl = document.getElementById('tcActiveTrainer');
+  if (trainerEl) {
+    const trainerName = course.assigned_trainer ? String(course.assigned_trainer).trim() : '';
+    trainerEl.textContent = `Assigned Trainer: ${trainerName || 'Unassigned'}`;
+  }
+
+  const learningsEl = document.getElementById('tcActiveLearnings');
+  if (learningsEl) {
+    let items = [];
+    if (Array.isArray(course.learnings)) {
+      items = course.learnings;
+    } else if (typeof course.learnings === 'string' && course.learnings.trim()) {
+      items = course.learnings.split(/\r?\n|,/).map(s => s.trim()).filter(Boolean);
+    }
+    if (items.length === 0) {
+      items = ['Core Safety Principles', 'Practical Hands-on Drills'];
+    }
+    learningsEl.innerHTML = items.map(item => `
+      <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 11px; color: #334155; font-weight: 500;">
+        <iconify-icon icon="solar:check-circle-bold" style="color: #10b981; font-size: 12px;"></iconify-icon>
+        ${escapeHtml(item)}
+      </span>
+    `).join('');
+  }
+}
+
+async function loadTrainingCourses(silent = false) {
   const container = document.getElementById('tcCourseList');
   if (!container) return;
 
@@ -6682,29 +8165,1841 @@ async function loadTrainingCourses() {
 
     container.innerHTML = allTrainingCourses.map(c => `
       <div class="tc-course-item" data-id="${escapeHtml(c.id)}" onclick="selectTrainingCourse('${escapeHtml(c.id)}')" 
-           style="padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #e2e8f0; cursor: pointer; transition: all 0.15s ease; background: ${activeTrainingCourse?.id === c.id ? '#f1f5f9' : '#ffffff'};">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+           style="padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid ${activeTrainingCourse?.id === c.id ? '#0f172a' : '#e2e8f0'}; cursor: pointer; transition: all 0.15s ease; background: ${activeTrainingCourse?.id === c.id ? '#f1f5f9' : '#ffffff'};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
           <strong style="font-size: 13px; color: #0f172a;">${escapeHtml(c.name)}</strong>
-          <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #e0f2fe; color: #0284c7;">${escapeHtml(c.category)}</span>
+          <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #e0f2fe; color: #0284c7; flex-shrink: 0;">${escapeHtml(c.category)}</span>
         </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #64748b;">
-          <span>${escapeHtml(c.duration || 'Flexible')}</span>
-          <strong style="color: #059669;">₱${Number(c.student_price || 0).toLocaleString()}</strong>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 11px; color: #475569;">
+          <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 68%;">
+            <iconify-icon icon="solar:calendar-bold-duotone" style="font-size: 13px; color: #0284c7; flex-shrink: 0;"></iconify-icon>
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(formatBatchScheduleText(c.batch_schedule))}"><strong>Date:</strong> ${escapeHtml(formatBatchScheduleText(c.batch_schedule))}</span>
+          </div>
+          <strong style="color: #059669; font-size: 12px; flex-shrink: 0;">₱${Number(c.student_price || 0).toLocaleString()}</strong>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #475569;">
+          <iconify-icon icon="solar:clock-circle-bold-duotone" style="font-size: 13px; color: #d97706; flex-shrink: 0;"></iconify-icon>
+          <span><strong>Time:</strong> ${escapeHtml(c.training_time || '07:00 A.M - 11:00 A.M')}</span>
         </div>
       </div>
     `).join('');
 
-    // If an active course is selected, keep it; otherwise select the first one
+    // If an active course is selected, keep it and update its view in real-time
     if (activeTrainingCourse) {
       const stillExists = allTrainingCourses.find(c => c.id === activeTrainingCourse.id);
-      if (stillExists) selectTrainingCourse(stillExists.id);
-      else selectTrainingCourse(allTrainingCourses[0].id);
+      if (stillExists) {
+        activeTrainingCourse = stillExists;
+        renderActiveCourseHeader(stillExists);
+      } else {
+        selectTrainingCourse(allTrainingCourses[0].id);
+      }
     } else {
       selectTrainingCourse(allTrainingCourses[0].id);
     }
   } catch (err) {
-    container.innerHTML = `<div style="text-align:center; padding: 20px; color:#dc2626; font-size:12px;">Error: ${escapeHtml(err.message)}</div>`;
+    if (!silent) {
+      container.innerHTML = `<div style="text-align:center; padding: 20px; color:#dc2626; font-size:12px;">Error: ${escapeHtml(err.message)}</div>`;
+    }
   }
+}
+
+// Real-time synchronization for Training Course Library
+let trainingRealtimeTimer = null;
+function startTrainingRealtimeSync() {
+  if (trainingRealtimeTimer) return;
+  trainingRealtimeTimer = setInterval(() => {
+    const activeView = document.querySelector('.dashboard-view.active');
+    if (activeView && activeView.id === 'view-training') {
+      loadTrainingCourses(true);
+      if (activeTrainingCourse?.id && typeof loadCourseBookings === 'function') {
+        loadCourseBookings(activeTrainingCourse.id);
+      }
+    }
+  }, 4000);
+}
+
+let currentLoadedBookings = [];
+
+function isMonthInPast(year, month) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1 to 12
+  const y = parseInt(year, 10);
+  const m = parseInt(month, 10);
+  if (isNaN(y) || isNaN(m)) return false;
+  if (y < currentYear) return true;
+  if (y === currentYear && m < currentMonth) return true;
+  return false;
+}
+
+function isBatchScheduleFinished(b) {
+  if (!b) return false;
+  const status = String(b.training_status || '').trim().toLowerCase();
+  if (status === 'completed' || status === 'done') return true;
+
+  if (!b.requested_date) return false;
+  const parts = String(b.requested_date).split('-');
+  const bYr = parseInt(parts[0], 10);
+  const bMo = parseInt(parts[1], 10);
+  if (isNaN(bYr) || isNaN(bMo)) return false;
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1 to 12
+  const currentDay = now.getDate();
+
+  if (bYr < currentYear) return true;
+  if (bYr === currentYear && bMo < currentMonth) return true;
+  if (bYr > currentYear || (bYr === currentYear && bMo > currentMonth)) return false;
+
+  // It is the current month: batch schedules in UMak HEAS run for the 1-month duration (1st Week to Last Week).
+  // The schedule in the end of week is finished if today has exceeded the last day of this month
+  const lastDayOfMonth = new Date(bYr, bMo, 0).getDate();
+  if (currentDay > lastDayOfMonth) return true;
+
+  return false;
+}
+
+function computeMonthSchedule(yearMonthStr) {
+  let yr, mo;
+  if (yearMonthStr && /^\d{4}-\d{2}$/.test(yearMonthStr)) {
+    const parts = yearMonthStr.split('-');
+    yr = parseInt(parts[0], 10);
+    mo = parseInt(parts[1], 10);
+  } else {
+    const now = new Date();
+    yr = now.getFullYear();
+    mo = now.getMonth() + 1;
+  }
+  const startDate = new Date(yr, mo - 1, 1);
+  const endDate = new Date(yr, mo, 0); // last day of month
+
+  const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const startStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const endStr = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  return {
+    monthValue: `${yr}-${String(mo).padStart(2, '0')}`,
+    year: yr,
+    month: mo,
+    monthName,
+    startStr,
+    endStr,
+    startText: `First Week of ${startDate.toLocaleString('en-US', { month: 'short' })} (${startStr})`,
+    endText: `Last Week of ${startDate.toLocaleString('en-US', { month: 'short' })} (${endStr})`,
+    summaryText: `${monthName} (1 Month: First Week to Last Week)`
+  };
+}
+
+function formatBatchScheduleText(schedText) {
+  if (!schedText) return 'Monthly (1 Month Each: 1st Week to Last Week)';
+  let cleaned = String(schedText).trim();
+  if (cleaned.includes('(1 Month Each: 1st Week to Last Week)')) {
+    return cleaned;
+  }
+  cleaned = cleaned.replace(/\s*\((?:1 Month: )?First Week to Last Week\)/i, '').trim();
+  return `${cleaned} (1 Month Each: 1st Week to Last Week)`;
+}
+
+function isHeadOrAdminRole(role) {
+  const activeRole = role || getCurrentUserRole();
+  const cleanRole = String(activeRole || '').trim().toLowerCase();
+  return cleanRole.includes('head') || cleanRole.includes('admin') || cleanRole.includes('superadmin');
+}
+
+const batchPickerState = {
+  viewYear: new Date().getFullYear(),
+  selectedMonths: new Set(), // Set of 'YYYY-MM' strings
+  mode: 'multi-month' // 'multi-month' or 'date-month-year'
+};
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const MONTH_SHORT = [
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+];
+
+function initBatchSchedulePicker() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const isHeadOrAdmin = isHeadOrAdminRole();
+
+  // Role Notice Banner: HEAD / System Admin vs Trainer / Responder
+  const noticeEl = document.getElementById('batchPickerRoleNotice');
+  if (noticeEl) {
+    if (isHeadOrAdmin) {
+      noticeEl.style.background = '#f0fdf4';
+      noticeEl.style.border = '1px solid #bbf7d0';
+      noticeEl.style.color = '#15803d';
+      noticeEl.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <iconify-icon icon="solar:shield-check-bold" style="font-size: 20px; color: #16a34a; flex-shrink: 0;"></iconify-icon>
+          <div>
+            <strong>HEAD / System Admin Account:</strong>
+            <span style="margin-left: 4px;">You can choose which months are available for this course and pick 2 or more months for the schedule.</span>
+          </div>
+        </div>
+        <span style="font-size: 10px; font-weight: 700; background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 9999px; border: 1px solid #86efac; flex-shrink: 0;">
+          Full Authority
+        </span>
+      `;
+    } else {
+      noticeEl.style.background = '#f0f9ff';
+      noticeEl.style.border = '1px solid #bae6fd';
+      noticeEl.style.color = '#0369a1';
+      noticeEl.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <iconify-icon icon="solar:info-circle-bold" style="font-size: 20px; color: #0284c7; flex-shrink: 0;"></iconify-icon>
+          <div>
+            <strong>Trainer Batch Booking:</strong>
+            <span style="margin-left: 4px;">Choose from the available months opened by the HEAD or System Admin account (pick 2 or more).</span>
+          </div>
+        </div>
+        <span style="font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 9999px; border: 1px solid #7dd3fc; flex-shrink: 0;">
+          Trainer View
+        </span>
+      `;
+    }
+  }
+
+  // Pre-fill selection: if course has available_months, pre-fill them; otherwise 2 upcoming months
+  batchPickerState.selectedMonths.clear();
+  const courseAvail = Array.isArray(activeTrainingCourse?.available_months) ? activeTrainingCourse.available_months : [];
+  if (courseAvail.length > 0) {
+    courseAvail.forEach(m => {
+      const [y, mm] = m.split('-').map(Number);
+      if (!isMonthInPast(y, mm)) batchPickerState.selectedMonths.add(m);
+    });
+  }
+  if (batchPickerState.selectedMonths.size === 0) {
+    let m1 = currentMonth;
+    let y1 = currentYear;
+    if (m1 > 12) { m1 = 1; y1++; }
+    let m2 = m1 + 1;
+    let y2 = y1;
+    if (m2 > 12) { m2 = 1; y2++; }
+    batchPickerState.selectedMonths.add(`${y1}-${String(m1).padStart(2, '0')}`);
+    batchPickerState.selectedMonths.add(`${y2}-${String(m2).padStart(2, '0')}`);
+  }
+
+  batchPickerState.viewYear = currentYear;
+
+  // Populate Year Dropdown (currentYear .. currentYear + 4)
+  const yearSelect = document.getElementById('batchPickerYearSelect');
+  if (yearSelect) {
+    yearSelect.innerHTML = '';
+    for (let y = currentYear; y <= currentYear + 4; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `${y} ${y === currentYear ? '(Current Year)' : ''}`;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = batchPickerState.viewYear;
+    yearSelect.onchange = (e) => {
+      batchPickerState.viewYear = parseInt(e.target.value, 10);
+      syncYearControl();
+    };
+  }
+
+  // Prev / Next Year Buttons
+  const prevBtn = document.getElementById('batchPickerPrevYear');
+  if (prevBtn) {
+    prevBtn.onclick = () => {
+      if (batchPickerState.viewYear > currentYear) {
+        batchPickerState.viewYear--;
+        syncYearControl();
+      } else {
+        showToast('Previous years have already passed.', 'info');
+      }
+    };
+  }
+
+  const nextBtn = document.getElementById('batchPickerNextYear');
+  if (nextBtn) {
+    nextBtn.onclick = () => {
+      if (batchPickerState.viewYear < currentYear + 4) {
+        batchPickerState.viewYear++;
+        syncYearControl();
+      }
+    };
+  }
+
+  // Select Remaining Upcoming Months button
+  const selectRemainingBtn = document.getElementById('batchPickerSelectAllUpcoming');
+  if (selectRemainingBtn) {
+    selectRemainingBtn.onclick = () => {
+      const isHeadOrAdminNow = isHeadOrAdminRole();
+      const courseAvailSet = new Set(activeTrainingCourse?.available_months || []);
+      for (let m = 1; m <= 12; m++) {
+        const mKey = `${batchPickerState.viewYear}-${String(m).padStart(2, '0')}`;
+        if (!isMonthInPast(batchPickerState.viewYear, m)) {
+          if (isHeadOrAdminNow || courseAvailSet.size === 0 || courseAvailSet.has(mKey)) {
+            batchPickerState.selectedMonths.add(mKey);
+          }
+        }
+      }
+      renderBatchMonthGrid();
+      updateBatchMultiMonthPreview();
+      showToast(`Selected all upcoming months for ${batchPickerState.viewYear}.`, 'info');
+    };
+  }
+
+  // Clear Selection button
+  const clearBtn = document.getElementById('batchPickerClearSelection');
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      batchPickerState.selectedMonths.clear();
+      renderBatchMonthGrid();
+      updateBatchMultiMonthPreview();
+    };
+  }
+
+  // Wire up Mode Switcher Buttons
+  const btnMultiMonth = document.getElementById('btnModeMultiMonth');
+  const btnDateMonthYear = document.getElementById('btnModeDateMonthYear');
+  if (btnMultiMonth) {
+    btnMultiMonth.onclick = () => switchBatchScheduleMode('multi-month');
+  }
+  if (btnDateMonthYear) {
+    btnDateMonthYear.onclick = () => switchBatchScheduleMode('date-month-year');
+  }
+
+  initDateMonthYearPicker();
+  switchBatchScheduleMode('multi-month');
+
+  renderYearQuickPills();
+  renderBatchMonthGrid();
+  updateBatchMultiMonthPreview();
+}
+
+function syncYearControl() {
+  const currentYear = new Date().getFullYear();
+  const yearSelect = document.getElementById('batchPickerYearSelect');
+  if (yearSelect) yearSelect.value = batchPickerState.viewYear;
+  const prevBtn = document.getElementById('batchPickerPrevYear');
+  if (prevBtn) prevBtn.disabled = batchPickerState.viewYear <= currentYear;
+  renderYearQuickPills();
+  renderBatchMonthGrid();
+}
+
+function renderYearQuickPills() {
+  const container = document.getElementById('batchYearQuickPills');
+  if (!container) return;
+  const currentYear = new Date().getFullYear();
+  const years = [currentYear, currentYear + 1, currentYear + 2];
+  container.innerHTML = years.map(y => `
+    <button type="button" class="tc-year-pill ${batchPickerState.viewYear === y ? 'active' : ''}" onclick="selectBatchPickerYear(${y})">${y}</button>
+  `).join('');
+}
+
+function selectBatchPickerYear(year) {
+  batchPickerState.viewYear = year;
+  syncYearControl();
+}
+
+function getDaysInMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+function switchBatchScheduleMode(mode) {
+  batchPickerState.mode = mode;
+  const btnMulti = document.getElementById('btnModeMultiMonth');
+  const btnDMY = document.getElementById('btnModeDateMonthYear');
+  const viewMulti = document.getElementById('batchScheduleMultiMonthView');
+  const viewDMY = document.getElementById('batchScheduleDateMonthYearView');
+
+  if (mode === 'date-month-year') {
+    if (btnMulti) btnMulti.classList.remove('active');
+    if (btnDMY) btnDMY.classList.add('active');
+    if (viewMulti) viewMulti.style.display = 'none';
+    if (viewDMY) viewDMY.style.display = 'flex';
+
+    validateDateMonthYearSelection();
+  } else {
+    if (btnMulti) btnMulti.classList.add('active');
+    if (btnDMY) btnDMY.classList.remove('active');
+    if (viewMulti) viewMulti.style.display = 'block';
+    if (viewDMY) viewDMY.style.display = 'none';
+
+    updateBatchMultiMonthPreview();
+  }
+}
+
+function initDateMonthYearPicker() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentDay = new Date().getDate();
+
+  const yearSelect = document.getElementById('batchInputScheduleYear');
+  const monthSelect = document.getElementById('batchInputScheduleMonth');
+  const daySelect = document.getElementById('batchInputScheduleDay');
+
+  if (yearSelect && yearSelect.options.length === 0) {
+    for (let y = currentYear; y <= currentYear + 4; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `${y} ${y === currentYear ? '(Current Year)' : ''}`;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
+  }
+
+  if (monthSelect && monthSelect.options.length === 0) {
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = `${MONTH_NAMES[m - 1]} (${String(m).padStart(2, '0')})`;
+      monthSelect.appendChild(opt);
+    }
+    monthSelect.value = currentMonth;
+  }
+
+  if (yearSelect) yearSelect.onchange = updateDaysList;
+  if (monthSelect) monthSelect.onchange = updateDaysList;
+  if (daySelect) daySelect.onchange = validateDateMonthYearSelection;
+
+  updateDaysList();
+}
+
+function updateDaysList() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentDay = new Date().getDate();
+
+  const yearSelect = document.getElementById('batchInputScheduleYear');
+  const monthSelect = document.getElementById('batchInputScheduleMonth');
+  const daySelect = document.getElementById('batchInputScheduleDay');
+  if (!daySelect || !yearSelect || !monthSelect) return;
+
+  const y = parseInt(yearSelect.value, 10) || currentYear;
+  const m = parseInt(monthSelect.value, 10) || currentMonth;
+  const totalDays = getDaysInMonth(y, m);
+  const prevDay = parseInt(daySelect.value, 10) || currentDay;
+
+  daySelect.innerHTML = '';
+  for (let d = 1; d <= totalDays; d++) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = `Day ${d}`;
+    daySelect.appendChild(opt);
+  }
+  daySelect.value = Math.min(prevDay, totalDays);
+  validateDateMonthYearSelection();
+}
+
+function validateDateMonthYearSelection() {
+  const yearSelect = document.getElementById('batchInputScheduleYear');
+  const monthSelect = document.getElementById('batchInputScheduleMonth');
+  const daySelect = document.getElementById('batchInputScheduleDay');
+  if (!yearSelect || !monthSelect || !daySelect) return;
+
+  const y = parseInt(yearSelect.value, 10);
+  const m = parseInt(monthSelect.value, 10);
+  const d = parseInt(daySelect.value, 10);
+
+  const isPassed = isMonthInPast(y, m);
+  const notice = document.getElementById('batchDatePassedNotice');
+  const badge = document.getElementById('batchMultiMonthCounterBadge');
+
+  if (notice) {
+    if (isPassed) {
+      notice.style.display = 'block';
+      notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Date Expired:</strong> ${MONTH_NAMES[m - 1]} ${y} has already passed in the current year. Please pick an upcoming month.`;
+    } else {
+      const today = new Date();
+      if (y === today.getFullYear() && m === (today.getMonth() + 1) && d < today.getDate()) {
+        notice.style.display = 'block';
+        notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Day Passed:</strong> Day ${d} of this month has already passed in the current year. Please select a current or future day.`;
+      } else {
+        notice.style.display = 'none';
+      }
+    }
+  }
+
+  if (batchPickerState.mode === 'date-month-year' && badge) {
+    const mName = MONTH_SHORT[m - 1] || '';
+    badge.textContent = `Schedule: ${mName} ${d}, ${y}`;
+    badge.style.background = isPassed ? '#fee2e2' : '#dcfce7';
+    badge.style.color = isPassed ? '#b91c1c' : '#15803d';
+  }
+}
+
+function renderBatchMonthGrid() {
+  const container = document.getElementById('batchPickerMonthGrid');
+  if (!container) return;
+
+  const yr = batchPickerState.viewYear;
+  const isHeadOrAdmin = isHeadOrAdminRole();
+  const courseAvail = new Set(activeTrainingCourse?.available_months || []);
+  let html = '';
+
+  for (let m = 1; m <= 12; m++) {
+    const monthKey = `${yr}-${String(m).padStart(2, '0')}`;
+    const isPassed = isMonthInPast(yr, m);
+    const isSelected = batchPickerState.selectedMonths.has(monthKey);
+    const shortName = MONTH_SHORT[m - 1];
+    const fullName = MONTH_NAMES[m - 1];
+
+    if (isPassed) {
+      // Month in the current year that has already passed
+      // CRITICAL REQUIREMENT: if the date from the previous month has already passed, do not open it when clicking on a schedule for a month in the current year.
+      html += `
+        <div class="tc-month-btn is-passed" title="${escapeHtml(fullName)} ${yr} has already passed and cannot be scheduled."
+             onclick="handlePassedMonthClick('${escapeHtml(fullName)}', ${yr})">
+          <span class="tc-month-name">${shortName}</span>
+          <span class="tc-month-sub"><iconify-icon icon="solar:lock-bold" style="font-size:10px; vertical-align:-1px;"></iconify-icon> Passed</span>
+        </div>
+      `;
+    } else if (!isHeadOrAdmin && courseAvail.size > 0 && !courseAvail.has(monthKey)) {
+      // For Trainer / Responder: not opened by HEAD / Admin
+      html += `
+        <div class="tc-month-btn not-available-by-head" title="${escapeHtml(fullName)} ${yr} has not been designated as available by the HEAD or System Admin account."
+             onclick="handleLockedMonthClick('${escapeHtml(fullName)}', ${yr})">
+          <span class="tc-month-name">${shortName}</span>
+          <span class="tc-month-sub"><iconify-icon icon="solar:lock-bold" style="font-size:10px; vertical-align:-1px;"></iconify-icon> Locked</span>
+        </div>
+      `;
+    } else {
+      // Active / upcoming month that HEAD/Admin can choose or Trainer can select
+      html += `
+        <div class="tc-month-btn ${isSelected ? 'selected' : ''}" 
+             onclick="toggleBatchMonthSelection('${monthKey}')"
+             title="${isSelected ? 'Click to unselect' : 'Click to select 1-month batch'} (${fullName} ${yr})">
+          <span class="tc-month-name">${shortName}</span>
+          <span class="tc-month-sub">${isSelected ? '✓ 1-Month' : isHeadOrAdmin ? 'Available' : 'Open'}</span>
+        </div>
+      `;
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function handlePassedMonthClick(monthName, year) {
+  // CRITICAL REQUIREMENT: do not open it when clicking on a schedule for a month in the current year if passed
+  showToast(`Cannot select schedule: The dates for ${monthName} ${year} have already passed in the current year.`, 'warning');
+}
+
+function handleLockedMonthClick(monthName, year) {
+  showToast(`This month (${monthName} ${year}) has not been made available by the HEAD or System Admin account. Please choose from the months opened by HEAD / Admin.`, 'warning');
+}
+
+function toggleBatchMonthSelection(monthKey) {
+  if (batchPickerState.selectedMonths.has(monthKey)) {
+    batchPickerState.selectedMonths.delete(monthKey);
+  } else {
+    batchPickerState.selectedMonths.add(monthKey);
+  }
+  renderBatchMonthGrid();
+  updateBatchMultiMonthPreview();
+}
+
+function updateBatchMultiMonthPreview() {
+  const badge = document.getElementById('batchMultiMonthCounterBadge');
+  const countBadge = document.getElementById('batchPreviewCountBadge');
+  const previewList = document.getElementById('batchPreviewMonthList');
+
+  const selectedArr = Array.from(batchPickerState.selectedMonths).sort();
+  const count = selectedArr.length;
+
+  if (badge) {
+    badge.textContent = `${count} month${count === 1 ? '' : 's'} selected`;
+    badge.style.background = count >= 2 ? '#dcfce7' : count === 1 ? '#fef3c7' : '#e0f2fe';
+    badge.style.color = count >= 2 ? '#15803d' : count === 1 ? '#b45309' : '#0369a1';
+  }
+  if (countBadge) {
+    countBadge.textContent = `${count} Month${count === 1 ? '' : 's'}`;
+    countBadge.style.background = count >= 2 ? '#dcfce7' : '#f1f5f9';
+    countBadge.style.color = count >= 2 ? '#15803d' : '#64748b';
+  }
+
+  if (previewList) {
+    if (count === 0) {
+      previewList.innerHTML = `
+        <div style="background: #ffffff; padding: 12px; border-radius: 6px; border: 1px dashed #cbd5e1; text-align: center; color: #64748b; font-size: 12px;">
+          <iconify-icon icon="solar:calendar-minimalistic-bold-duotone" style="font-size: 20px; color: #94a3b8; vertical-align: -3px;"></iconify-icon>
+          No months selected. Please choose 2 or more months from the grid above.
+        </div>
+      `;
+      return;
+    }
+
+    previewList.innerHTML = selectedArr.map(mStr => {
+      const sched = computeMonthSchedule(mStr);
+      return `
+        <div style="background: #ffffff; padding: 8px 12px; border-radius: 6px; border: 1px solid #dcfce7; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+          <div>
+            <strong style="color: #14532d; font-size: 12.5px;">${escapeHtml(sched.monthName)}:</strong>
+            <span style="color: #166534; font-size: 11.5px; margin-left: 4px;">Start: 1st Week (${escapeHtml(sched.startStr)}) &bull; End: Last Week (${escapeHtml(sched.endStr)})</span>
+          </div>
+          <span style="font-size: 10px; font-weight: 700; background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 4px; border: 1px solid #86efac;">1 Month</span>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+/* ========================================================
+   COURSE SESSION DAYS & TIME OFFERINGS PICKER CONTROLLERS
+   Multiple Day Selection (Mon-Sun, 4 sessions/month per day)
+   and AM / PM Class Multi-Selection (Only AM, Only PM, Both)
+   ======================================================== */
+const COURSE_DAYS_LIST = [
+  { day: 'Monday', label: 'Monday', subtitle: '4 Sessions / mo' },
+  { day: 'Tuesday', label: 'Tuesday', subtitle: '4 Sessions / mo' },
+  { day: 'Wednesday', label: 'Wednesday', subtitle: '4 Sessions / mo' },
+  { day: 'Thursday', label: 'Thursday', subtitle: '4 Sessions / mo' },
+  { day: 'Friday', label: 'Friday', subtitle: '4 Sessions / mo' },
+  { day: 'Saturday', label: 'Saturday', subtitle: '4 Sessions / mo' },
+  { day: 'Sunday', label: 'Sunday', subtitle: '4 Sessions / mo' }
+];
+
+let createCourseDaysController = null;
+let createCourseTimeController = null;
+let editCourseDaysController = null;
+let editCourseTimeController = null;
+let batchDaysController = null;
+let batchTimeController = null;
+
+function initCourseDaysPicker(prefix, initialDays) {
+  let gridEl, summaryEl, hiddenSelectEl, btnWeekdays, btnWeekends, btnAll, btnClear;
+  if (prefix === 'createCourse') {
+    gridEl = document.getElementById('createCourseDaysGrid');
+    summaryEl = document.getElementById('createCourseDaysSelectedSummary');
+    hiddenSelectEl = document.getElementById('courseInputSessions');
+    btnWeekdays = document.getElementById('btnCourseDaysWeekdays');
+    btnWeekends = document.getElementById('btnCourseDaysWeekends');
+    btnAll = document.getElementById('btnCourseDaysAll');
+    btnClear = document.getElementById('btnCourseDaysClear');
+  } else if (prefix === 'editCourse') {
+    gridEl = document.getElementById('editCourseDaysGrid');
+    summaryEl = document.getElementById('editCourseDaysSelectedSummary');
+    hiddenSelectEl = document.getElementById('editCourseInputSessions');
+    btnWeekdays = document.getElementById('btnEditCourseDaysWeekdays');
+    btnWeekends = document.getElementById('btnEditCourseDaysWeekends');
+    btnAll = document.getElementById('btnEditCourseDaysAll');
+    btnClear = document.getElementById('btnEditCourseDaysClear');
+  } else if (prefix === 'batch') {
+    gridEl = document.getElementById('batchDaysGrid');
+    summaryEl = document.getElementById('batchDaysSelectedSummary');
+    hiddenSelectEl = document.getElementById('batchInputSessionSchedule');
+    btnWeekdays = document.getElementById('btnBatchDaysWeekdays');
+    btnWeekends = document.getElementById('btnBatchDaysWeekends');
+    btnAll = document.getElementById('btnBatchDaysAll');
+    btnClear = document.getElementById('btnBatchDaysClear');
+  }
+
+  if (!gridEl) return null;
+
+  let selectedSet = new Set();
+  if (Array.isArray(initialDays) && initialDays.length > 0) {
+    initialDays.forEach(d => {
+      const clean = String(d).trim();
+      const match = COURSE_DAYS_LIST.find(item => item.day.toLowerCase() === clean.toLowerCase());
+      if (match) selectedSet.add(match.day);
+    });
+  } else if (typeof initialDays === 'string' && initialDays.trim()) {
+    const rawLower = initialDays.toLowerCase();
+    COURSE_DAYS_LIST.forEach(item => {
+      if (rawLower.includes(item.day.toLowerCase())) selectedSet.add(item.day);
+    });
+  }
+  if (selectedSet.size === 0) {
+    selectedSet.add('Monday');
+    selectedSet.add('Wednesday');
+    selectedSet.add('Saturday');
+  }
+
+  const syncDayState = (reRenderDom = true) => {
+    const ordered = COURSE_DAYS_LIST.map(i => i.day).filter(d => selectedSet.has(d));
+    if (summaryEl) {
+      if (ordered.length === 0) {
+        summaryEl.innerHTML = '<span style="color: #dc2626;">⚠️ Please select at least one session day</span>';
+      } else {
+        summaryEl.innerHTML = `Selected Days: <strong>${escapeHtml(ordered.join(', '))}</strong> (${ordered.length} choice${ordered.length > 1 ? 's' : ''} for students)`;
+      }
+    }
+
+    if (hiddenSelectEl) {
+      if (ordered.includes('Saturday')) {
+        hiddenSelectEl.value = '1 per week on Saturday in 1 month (4 Sessions)';
+      } else if (ordered.includes('Monday')) {
+        hiddenSelectEl.value = '1 per week on Monday in 1 Month (4 session - Every Monday)';
+      } else if (ordered.includes('Wednesday')) {
+        hiddenSelectEl.value = '1 per week on Wednesday in 1 Month (4 session - Every Wednesday)';
+      } else if (ordered.includes('Sunday')) {
+        hiddenSelectEl.value = '1 per week on Sunday in 1 month (4 Sessions)';
+      } else if (ordered.length > 0) {
+        hiddenSelectEl.value = `1 per week on ${ordered[0]} in 1 Month (4 Sessions)`;
+      }
+    }
+
+    if (reRenderDom) {
+      gridEl.querySelectorAll('label').forEach(lbl => {
+        const cb = lbl.querySelector('input');
+        if (cb) {
+          const isChecked = selectedSet.has(cb.getAttribute('data-day'));
+          cb.checked = isChecked;
+          lbl.style.borderColor = isChecked ? '#0284c7' : '#cbd5e1';
+          lbl.style.background = isChecked ? '#eff6ff' : '#ffffff';
+          const title = lbl.querySelector('.tc-day-title');
+          const sub = lbl.querySelector('.tc-day-sub');
+          if (title) title.style.color = isChecked ? '#0369a1' : '#334155';
+          if (sub) sub.style.color = isChecked ? '#0284c7' : '#94a3b8';
+        }
+      });
+    }
+  };
+
+  const renderGrid = () => {
+    gridEl.innerHTML = COURSE_DAYS_LIST.map(item => {
+      const isChecked = selectedSet.has(item.day);
+      return `
+        <label style="display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 6px; border: 1px solid ${isChecked ? '#0284c7' : '#cbd5e1'}; background: ${isChecked ? '#eff6ff' : '#ffffff'}; cursor: pointer; transition: all 0.15s ease; user-select: none;">
+          <input type="checkbox" data-day="${item.day}" ${isChecked ? 'checked' : ''} style="accent-color: #0284c7; width: 15px; height: 15px; cursor: pointer; margin: 0;">
+          <div style="line-height: 1.2;">
+            <div class="tc-day-title" style="font-size: 12px; font-weight: 600; color: ${isChecked ? '#0369a1' : '#334155'};">${escapeHtml(item.day)}</div>
+            <div class="tc-day-sub" style="font-size: 10px; color: ${isChecked ? '#0284c7' : '#94a3b8'};">4 sess/mo</div>
+          </div>
+        </label>
+      `;
+    }).join('');
+
+    gridEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const d = e.target.getAttribute('data-day');
+        if (e.target.checked) {
+          selectedSet.add(d);
+        } else {
+          selectedSet.delete(d);
+        }
+        syncDayState(true);
+      });
+    });
+
+    syncDayState(false);
+  };
+
+  if (btnWeekdays) {
+    btnWeekdays.onclick = () => {
+      selectedSet.clear();
+      ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(d => selectedSet.add(d));
+      syncDayState(true);
+    };
+  }
+  if (btnWeekends) {
+    btnWeekends.onclick = () => {
+      selectedSet.clear();
+      ['Saturday', 'Sunday'].forEach(d => selectedSet.add(d));
+      syncDayState(true);
+    };
+  }
+  if (btnAll) {
+    btnAll.onclick = () => {
+      COURSE_DAYS_LIST.forEach(i => selectedSet.add(i.day));
+      syncDayState(true);
+    };
+  }
+  if (btnClear) {
+    btnClear.onclick = () => {
+      selectedSet.clear();
+      syncDayState(true);
+    };
+  }
+
+  renderGrid();
+
+  return {
+    getSelectedDays: () => COURSE_DAYS_LIST.map(i => i.day).filter(d => selectedSet.has(d)),
+    setSelectedDays: (days) => {
+      selectedSet.clear();
+      (days || []).forEach(d => selectedSet.add(d));
+      syncDayState(true);
+    }
+  };
+}
+
+function initCourseTimePicker(prefix, initialTimes) {
+  let amCb, pmCb, badgeEl, hiddenSelectEl, btnOnlyAM, btnOnlyPM, btnBoth;
+  if (prefix === 'courseTime') {
+    amCb = document.getElementById('courseTimeCheckAM');
+    pmCb = document.getElementById('courseTimeCheckPM');
+    badgeEl = document.getElementById('courseTimeSelectedBadge');
+    hiddenSelectEl = document.getElementById('courseInputTime');
+    btnOnlyAM = document.getElementById('btnCourseTimeOnlyAM');
+    btnOnlyPM = document.getElementById('btnCourseTimeOnlyPM');
+    btnBoth = document.getElementById('btnCourseTimeBoth');
+  } else if (prefix === 'editCourseTime') {
+    amCb = document.getElementById('editCourseTimeCheckAM');
+    pmCb = document.getElementById('editCourseTimeCheckPM');
+    badgeEl = document.getElementById('editCourseTimeSelectedBadge');
+    hiddenSelectEl = document.getElementById('editCourseInputTime');
+    btnOnlyAM = document.getElementById('btnEditCourseTimeOnlyAM');
+    btnOnlyPM = document.getElementById('btnEditCourseTimeOnlyPM');
+    btnBoth = document.getElementById('btnEditCourseTimeBoth');
+  } else if (prefix === 'batchTime') {
+    amCb = document.getElementById('batchTimeCheckAM');
+    pmCb = document.getElementById('batchTimeCheckPM');
+    badgeEl = document.getElementById('batchTimeSelectedBadge');
+    hiddenSelectEl = document.getElementById('batchInputTime');
+    btnOnlyAM = document.getElementById('btnBatchTimeOnlyAM');
+    btnOnlyPM = document.getElementById('btnBatchTimeOnlyPM');
+    btnBoth = document.getElementById('btnBatchTimeBoth');
+  }
+
+  if (!amCb || !pmCb) return null;
+
+  let hasAM = true;
+  let hasPM = true;
+
+  if (Array.isArray(initialTimes)) {
+    const raw = initialTimes.join(' ').toLowerCase();
+    hasAM = raw.includes('07:00') || raw.includes('am') || raw.includes('morning');
+    hasPM = raw.includes('01:00') || raw.includes('pm') || raw.includes('noon') || raw.includes('5:00');
+    if (!hasAM && !hasPM) { hasAM = true; hasPM = true; }
+  } else if (typeof initialTimes === 'string') {
+    const raw = initialTimes.toLowerCase();
+    hasAM = raw.includes('07:00') || raw.includes('am') || raw.includes('morning');
+    hasPM = raw.includes('01:00') || raw.includes('pm') || raw.includes('noon') || raw.includes('5:00');
+    if (!hasAM && !hasPM) { hasAM = true; hasPM = true; }
+  }
+
+  amCb.checked = hasAM;
+  pmCb.checked = hasPM;
+
+  const syncTimeState = () => {
+    if (!amCb.checked && !pmCb.checked) {
+      showToast('At least one training time slot (AM or PM) must be selected.', 'warning');
+      amCb.checked = true;
+    }
+
+    const curAM = amCb.checked;
+    const curPM = pmCb.checked;
+
+    if (badgeEl) {
+      if (curAM && curPM) {
+        badgeEl.textContent = '✓ Both AM & PM Classes Offered';
+        badgeEl.style.color = '#0284c7';
+      } else if (curAM) {
+        badgeEl.textContent = '✓ Only AM Class Offered (07:00 A.M - 11:00 A.M)';
+        badgeEl.style.color = '#0369a1';
+      } else if (curPM) {
+        badgeEl.textContent = '✓ Only PM Class Offered (01:00 P.M - 5:00 P.M)';
+        badgeEl.style.color = '#b45309';
+      }
+    }
+
+    if (hiddenSelectEl) {
+      if (curAM && !curPM) {
+        hiddenSelectEl.value = '07:00 A.M - 11:00 A.M';
+      } else if (curPM && !curAM) {
+        hiddenSelectEl.value = '01:00 P.M - 5:00 P.M';
+      } else {
+        hiddenSelectEl.value = '07:00 A.M - 11:00 A.M';
+      }
+    }
+  };
+
+  amCb.onchange = syncTimeState;
+  pmCb.onchange = syncTimeState;
+
+  if (btnOnlyAM) {
+    btnOnlyAM.onclick = () => {
+      amCb.checked = true;
+      pmCb.checked = false;
+      syncTimeState();
+    };
+  }
+  if (btnOnlyPM) {
+    btnOnlyPM.onclick = () => {
+      amCb.checked = false;
+      pmCb.checked = true;
+      syncTimeState();
+    };
+  }
+  if (btnBoth) {
+    btnBoth.onclick = () => {
+      amCb.checked = true;
+      pmCb.checked = true;
+      syncTimeState();
+    };
+  }
+
+  syncTimeState();
+
+  return {
+    getSelectedTimes: () => {
+      const times = [];
+      if (amCb.checked) times.push('07:00 A.M - 11:00 A.M');
+      if (pmCb.checked) times.push('01:00 P.M - 5:00 P.M');
+      return times;
+    },
+    getTimeString: () => {
+      if (amCb.checked && pmCb.checked) return '07:00 A.M - 11:00 A.M, 01:00 P.M - 5:00 P.M';
+      if (pmCb.checked) return '01:00 P.M - 5:00 P.M';
+      return '07:00 A.M - 11:00 A.M';
+    },
+    setSelectedTimes: (times) => {
+      let tAM = false;
+      let tPM = false;
+      if (Array.isArray(times)) {
+        const s = times.join(' ').toLowerCase();
+        tAM = s.includes('07:00') || s.includes('am');
+        tPM = s.includes('01:00') || s.includes('pm') || s.includes('5:00');
+      } else if (typeof times === 'string') {
+        const s = times.toLowerCase();
+        tAM = s.includes('07:00') || s.includes('am');
+        tPM = s.includes('01:00') || s.includes('pm') || s.includes('5:00');
+      }
+      if (!tAM && !tPM) { tAM = true; tPM = true; }
+      amCb.checked = tAM;
+      pmCb.checked = tPM;
+      syncTimeState();
+    }
+  };
+}
+
+/* ========================================================
+   COURSE CREATION BATCH SCHEDULE PICKER CONTROLLER
+   ======================================================== */
+const createCoursePickerState = {
+  viewYear: new Date().getFullYear(),
+  selectedMonths: new Set(),
+  mode: 'multi-month'
+};
+
+function initCreateCourseSchedulePicker() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+
+  createCoursePickerState.selectedMonths.clear();
+  let m1 = currentMonth;
+  let y1 = currentYear;
+  if (m1 > 12) { m1 = 1; y1++; }
+  let m2 = m1 + 1;
+  let y2 = y1;
+  if (m2 > 12) { m2 = 1; y2++; }
+  createCoursePickerState.selectedMonths.add(`${y1}-${String(m1).padStart(2, '0')}`);
+  createCoursePickerState.selectedMonths.add(`${y2}-${String(m2).padStart(2, '0')}`);
+  createCoursePickerState.viewYear = currentYear;
+
+  const yearSelect = document.getElementById('createCourseYearSelect');
+  if (yearSelect) {
+    yearSelect.innerHTML = '';
+    for (let y = currentYear; y <= currentYear + 4; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `${y} ${y === currentYear ? '(Current Year)' : ''}`;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = createCoursePickerState.viewYear;
+    yearSelect.onchange = (e) => {
+      createCoursePickerState.viewYear = parseInt(e.target.value, 10);
+      syncCreateCourseYearControl();
+    };
+  }
+
+  const prevBtn = document.getElementById('createCoursePrevYear');
+  if (prevBtn) {
+    prevBtn.onclick = () => {
+      if (createCoursePickerState.viewYear > currentYear) {
+        createCoursePickerState.viewYear--;
+        syncCreateCourseYearControl();
+      } else {
+        showToast('Previous years have already passed.', 'info');
+      }
+    };
+  }
+
+  const nextBtn = document.getElementById('createCourseNextYear');
+  if (nextBtn) {
+    nextBtn.onclick = () => {
+      if (createCoursePickerState.viewYear < currentYear + 4) {
+        createCoursePickerState.viewYear++;
+        syncCreateCourseYearControl();
+      }
+    };
+  }
+
+  const selectRemainingBtn = document.getElementById('createCourseSelectAllUpcoming');
+  if (selectRemainingBtn) {
+    selectRemainingBtn.onclick = () => {
+      for (let m = 1; m <= 12; m++) {
+        const mKey = `${createCoursePickerState.viewYear}-${String(m).padStart(2, '0')}`;
+        if (!isMonthInPast(createCoursePickerState.viewYear, m)) {
+          createCoursePickerState.selectedMonths.add(mKey);
+        }
+      }
+      renderCreateCourseMonthGrid();
+      updateCreateCourseMultiMonthPreview();
+      showToast(`Selected all upcoming months for ${createCoursePickerState.viewYear}.`, 'info');
+    };
+  }
+
+  const clearBtn = document.getElementById('createCourseClearSelection');
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      createCoursePickerState.selectedMonths.clear();
+      renderCreateCourseMonthGrid();
+      updateCreateCourseMultiMonthPreview();
+    };
+  }
+
+  const btnMultiMonth = document.getElementById('btnCreateCourseModeMultiMonth');
+  const btnDateMonthYear = document.getElementById('btnCreateCourseModeDateMonthYear');
+  if (btnMultiMonth) {
+    btnMultiMonth.onclick = () => switchCreateCourseScheduleMode('multi-month');
+  }
+  if (btnDateMonthYear) {
+    btnDateMonthYear.onclick = () => switchCreateCourseScheduleMode('date-month-year');
+  }
+
+  initCreateCourseDateMonthYearPicker();
+  switchCreateCourseScheduleMode('multi-month');
+  renderCreateCourseYearQuickPills();
+  renderCreateCourseMonthGrid();
+  updateCreateCourseMultiMonthPreview();
+}
+
+function syncCreateCourseYearControl() {
+  const currentYear = new Date().getFullYear();
+  const yearSelect = document.getElementById('createCourseYearSelect');
+  if (yearSelect) yearSelect.value = createCoursePickerState.viewYear;
+  const prevBtn = document.getElementById('createCoursePrevYear');
+  if (prevBtn) prevBtn.disabled = createCoursePickerState.viewYear <= currentYear;
+  renderCreateCourseYearQuickPills();
+  renderCreateCourseMonthGrid();
+}
+
+function renderCreateCourseYearQuickPills() {
+  const container = document.getElementById('createCourseYearQuickPills');
+  if (!container) return;
+  const currentYear = new Date().getFullYear();
+  const years = [currentYear, currentYear + 1, currentYear + 2];
+  container.innerHTML = years.map(y => `
+    <button type="button" class="tc-year-pill ${createCoursePickerState.viewYear === y ? 'active' : ''}" onclick="selectCreateCourseYear(${y})">${y}</button>
+  `).join('');
+}
+
+function selectCreateCourseYear(year) {
+  createCoursePickerState.viewYear = year;
+  syncCreateCourseYearControl();
+}
+
+function switchCreateCourseScheduleMode(mode) {
+  createCoursePickerState.mode = mode;
+  const btnMulti = document.getElementById('btnCreateCourseModeMultiMonth');
+  const btnDMY = document.getElementById('btnCreateCourseModeDateMonthYear');
+  const viewMulti = document.getElementById('createCourseMultiMonthView');
+  const viewDMY = document.getElementById('createCourseDateMonthYearView');
+
+  if (mode === 'date-month-year') {
+    if (btnMulti) btnMulti.classList.remove('active');
+    if (btnDMY) btnDMY.classList.add('active');
+    if (viewMulti) viewMulti.style.display = 'none';
+    if (viewDMY) viewDMY.style.display = 'flex';
+    validateCreateCourseDateMonthYearSelection();
+  } else {
+    if (btnMulti) btnMulti.classList.add('active');
+    if (btnDMY) btnDMY.classList.remove('active');
+    if (viewMulti) viewMulti.style.display = 'block';
+    if (viewDMY) viewDMY.style.display = 'none';
+    updateCreateCourseMultiMonthPreview();
+  }
+}
+
+function initCreateCourseDateMonthYearPicker() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentDay = new Date().getDate();
+
+  const yearSelect = document.getElementById('createCourseScheduleYear');
+  const monthSelect = document.getElementById('createCourseScheduleMonth');
+  const daySelect = document.getElementById('createCourseScheduleDay');
+
+  if (yearSelect && yearSelect.options.length === 0) {
+    for (let y = currentYear; y <= currentYear + 4; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `${y} ${y === currentYear ? '(Current Year)' : ''}`;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
+  }
+
+  if (monthSelect && monthSelect.options.length === 0) {
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = `${MONTH_NAMES[m - 1]} (${String(m).padStart(2, '0')})`;
+      monthSelect.appendChild(opt);
+    }
+    monthSelect.value = currentMonth;
+  }
+
+  if (yearSelect) yearSelect.onchange = updateCreateCourseDaysList;
+  if (monthSelect) monthSelect.onchange = updateCreateCourseDaysList;
+  if (daySelect) daySelect.onchange = validateCreateCourseDateMonthYearSelection;
+
+  updateCreateCourseDaysList();
+}
+
+function updateCreateCourseDaysList() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentDay = new Date().getDate();
+
+  const yearSelect = document.getElementById('createCourseScheduleYear');
+  const monthSelect = document.getElementById('createCourseScheduleMonth');
+  const daySelect = document.getElementById('createCourseScheduleDay');
+  if (!daySelect || !yearSelect || !monthSelect) return;
+
+  const y = parseInt(yearSelect.value, 10) || currentYear;
+  const m = parseInt(monthSelect.value, 10) || currentMonth;
+  const totalDays = getDaysInMonth(y, m);
+  const prevDay = parseInt(daySelect.value, 10) || currentDay;
+
+  daySelect.innerHTML = '';
+  for (let d = 1; d <= totalDays; d++) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = `Day ${d}`;
+    daySelect.appendChild(opt);
+  }
+  daySelect.value = Math.min(prevDay, totalDays);
+  validateCreateCourseDateMonthYearSelection();
+}
+
+function validateCreateCourseDateMonthYearSelection() {
+  const yearSelect = document.getElementById('createCourseScheduleYear');
+  const monthSelect = document.getElementById('createCourseScheduleMonth');
+  const daySelect = document.getElementById('createCourseScheduleDay');
+  if (!yearSelect || !monthSelect || !daySelect) return;
+
+  const y = parseInt(yearSelect.value, 10);
+  const m = parseInt(monthSelect.value, 10);
+  const d = parseInt(daySelect.value, 10);
+
+  const isPassed = isMonthInPast(y, m);
+  const notice = document.getElementById('createCourseDatePassedNotice');
+  const badge = document.getElementById('createCourseMultiMonthBadge');
+  const hiddenInput = document.getElementById('courseInputBatchSchedule');
+
+  if (notice) {
+    if (isPassed) {
+      notice.style.display = 'block';
+      notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Date Expired:</strong> ${MONTH_NAMES[m - 1]} ${y} has already passed in the current year. Please pick an upcoming month.`;
+    } else {
+      const today = new Date();
+      if (y === today.getFullYear() && m === (today.getMonth() + 1) && d < today.getDate()) {
+        notice.style.display = 'block';
+        notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Day Passed:</strong> Day ${d} of this month has already passed in the current year. Please select a current or future day.`;
+      } else {
+        notice.style.display = 'none';
+      }
+    }
+  }
+
+  if (createCoursePickerState.mode === 'date-month-year') {
+    const mName = MONTH_SHORT[m - 1] || '';
+    if (badge) {
+      badge.textContent = `Schedule: ${mName} ${d}, ${y}`;
+      badge.style.background = isPassed ? '#fee2e2' : '#dcfce7';
+      badge.style.color = isPassed ? '#b91c1c' : '#15803d';
+    }
+    if (hiddenInput) {
+      hiddenInput.value = `${MONTH_NAMES[m - 1]} ${d}, ${y} (1 Month Batch: 1st Week to Last Week)`;
+    }
+  }
+}
+
+function renderCreateCourseMonthGrid() {
+  const container = document.getElementById('createCourseMonthGrid');
+  if (!container) return;
+
+  const yr = createCoursePickerState.viewYear;
+  let html = '';
+
+  for (let m = 1; m <= 12; m++) {
+    const monthKey = `${yr}-${String(m).padStart(2, '0')}`;
+    const isPassed = isMonthInPast(yr, m);
+    const isSelected = createCoursePickerState.selectedMonths.has(monthKey);
+    const shortName = MONTH_SHORT[m - 1];
+    const fullName = MONTH_NAMES[m - 1];
+
+    if (isPassed) {
+      html += `
+        <div class="tc-month-btn is-passed" title="${escapeHtml(fullName)} ${yr} has already passed."
+             onclick="handlePassedMonthClick('${escapeHtml(fullName)}', ${yr})">
+          <span class="tc-month-name">${shortName}</span>
+          <span class="tc-month-sub"><iconify-icon icon="solar:lock-bold" style="font-size:10px; vertical-align:-1px;"></iconify-icon> Passed</span>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="tc-month-btn ${isSelected ? 'selected' : ''}" 
+             onclick="toggleCreateCourseMonthSelection('${monthKey}')"
+             title="${isSelected ? 'Click to unselect' : 'Click to select 1-month batch'} (${fullName} ${yr})">
+          <span class="tc-month-name">${shortName}</span>
+          <span class="tc-month-sub">${isSelected ? '✓ 1-Month' : 'Available'}</span>
+        </div>
+      `;
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleCreateCourseMonthSelection(monthKey) {
+  if (createCoursePickerState.selectedMonths.has(monthKey)) {
+    createCoursePickerState.selectedMonths.delete(monthKey);
+  } else {
+    createCoursePickerState.selectedMonths.add(monthKey);
+  }
+  renderCreateCourseMonthGrid();
+  updateCreateCourseMultiMonthPreview();
+}
+
+function updateCreateCourseMultiMonthPreview() {
+  const badge = document.getElementById('createCourseMultiMonthBadge');
+  const hiddenInput = document.getElementById('courseInputBatchSchedule');
+  const selectedArr = Array.from(createCoursePickerState.selectedMonths).sort();
+  const count = selectedArr.length;
+
+  if (createCoursePickerState.mode === 'multi-month') {
+    if (badge) {
+      badge.textContent = `${count} month${count === 1 ? '' : 's'} selected`;
+      badge.style.background = count >= 2 ? '#dcfce7' : count === 1 ? '#fef3c7' : '#e0f2fe';
+      badge.style.color = count >= 2 ? '#15803d' : count === 1 ? '#b45309' : '#0369a1';
+    }
+    if (hiddenInput) {
+      hiddenInput.value = count > 0 
+        ? selectedArr.map(m => computeMonthSchedule(m).monthName).join(', ') + ' (1 Month Each: 1st Week to Last Week)'
+        : '';
+    }
+  }
+}
+
+/* ========================================================
+   COURSE EDITING BATCH SCHEDULE PICKER CONTROLLER
+   ======================================================== */
+const editCoursePickerState = {
+  viewYear: new Date().getFullYear(),
+  selectedMonths: new Set(),
+  mode: 'multi-month'
+};
+
+function initEditCourseSchedulePicker(initialMonths) {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+
+  editCoursePickerState.selectedMonths.clear();
+  const monthsArr = Array.isArray(initialMonths) ? initialMonths : (activeTrainingCourse?.available_months || []);
+  if (monthsArr.length > 0) {
+    monthsArr.forEach(m => {
+      const [y, mm] = m.split('-').map(Number);
+      if (!isMonthInPast(y, mm)) editCoursePickerState.selectedMonths.add(m);
+    });
+  }
+  if (editCoursePickerState.selectedMonths.size === 0) {
+    let m1 = currentMonth;
+    let y1 = currentYear;
+    if (m1 > 12) { m1 = 1; y1++; }
+    let m2 = m1 + 1;
+    let y2 = y1;
+    if (m2 > 12) { m2 = 1; y2++; }
+    editCoursePickerState.selectedMonths.add(`${y1}-${String(m1).padStart(2, '0')}`);
+    editCoursePickerState.selectedMonths.add(`${y2}-${String(m2).padStart(2, '0')}`);
+  }
+  editCoursePickerState.viewYear = currentYear;
+
+  const yearSelect = document.getElementById('editCourseYearSelect');
+  if (yearSelect) {
+    yearSelect.innerHTML = '';
+    for (let y = currentYear; y <= currentYear + 4; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `${y} ${y === currentYear ? '(Current Year)' : ''}`;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = editCoursePickerState.viewYear;
+    yearSelect.onchange = (e) => {
+      editCoursePickerState.viewYear = parseInt(e.target.value, 10);
+      syncEditCourseYearControl();
+    };
+  }
+
+  const prevBtn = document.getElementById('editCoursePrevYear');
+  if (prevBtn) {
+    prevBtn.onclick = () => {
+      if (editCoursePickerState.viewYear > currentYear) {
+        editCoursePickerState.viewYear--;
+        syncEditCourseYearControl();
+      } else {
+        showToast('Previous years have already passed.', 'info');
+      }
+    };
+  }
+
+  const nextBtn = document.getElementById('editCourseNextYear');
+  if (nextBtn) {
+    nextBtn.onclick = () => {
+      if (editCoursePickerState.viewYear < currentYear + 4) {
+        editCoursePickerState.viewYear++;
+        syncEditCourseYearControl();
+      }
+    };
+  }
+
+  const selectRemainingBtn = document.getElementById('editCourseSelectAllUpcoming');
+  if (selectRemainingBtn) {
+    selectRemainingBtn.onclick = () => {
+      for (let m = 1; m <= 12; m++) {
+        const mKey = `${editCoursePickerState.viewYear}-${String(m).padStart(2, '0')}`;
+        if (!isMonthInPast(editCoursePickerState.viewYear, m)) {
+          editCoursePickerState.selectedMonths.add(mKey);
+        }
+      }
+      renderEditCourseMonthGrid();
+      updateEditCourseMultiMonthPreview();
+      showToast(`Selected all upcoming months for ${editCoursePickerState.viewYear}.`, 'info');
+    };
+  }
+
+  const clearBtn = document.getElementById('editCourseClearSelection');
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      editCoursePickerState.selectedMonths.clear();
+      renderEditCourseMonthGrid();
+      updateEditCourseMultiMonthPreview();
+    };
+  }
+
+  const btnMultiMonth = document.getElementById('btnEditCourseModeMultiMonth');
+  const btnDateMonthYear = document.getElementById('btnEditCourseModeDateMonthYear');
+  if (btnMultiMonth) {
+    btnMultiMonth.onclick = () => switchEditCourseScheduleMode('multi-month');
+  }
+  if (btnDateMonthYear) {
+    btnDateMonthYear.onclick = () => switchEditCourseScheduleMode('date-month-year');
+  }
+
+  initEditCourseDateMonthYearPicker();
+  switchEditCourseScheduleMode('multi-month');
+  renderEditCourseYearQuickPills();
+  renderEditCourseMonthGrid();
+  updateEditCourseMultiMonthPreview();
+}
+
+function syncEditCourseYearControl() {
+  const currentYear = new Date().getFullYear();
+  const yearSelect = document.getElementById('editCourseYearSelect');
+  if (yearSelect) yearSelect.value = editCoursePickerState.viewYear;
+  const prevBtn = document.getElementById('editCoursePrevYear');
+  if (prevBtn) prevBtn.disabled = editCoursePickerState.viewYear <= currentYear;
+  renderEditCourseYearQuickPills();
+  renderEditCourseMonthGrid();
+}
+
+function renderEditCourseYearQuickPills() {
+  const container = document.getElementById('editCourseYearQuickPills');
+  if (!container) return;
+  const currentYear = new Date().getFullYear();
+  const years = [currentYear, currentYear + 1, currentYear + 2];
+  container.innerHTML = years.map(y => `
+    <button type="button" class="tc-year-pill ${editCoursePickerState.viewYear === y ? 'active' : ''}" onclick="selectEditCourseYear(${y})">${y}</button>
+  `).join('');
+}
+
+function selectEditCourseYear(year) {
+  editCoursePickerState.viewYear = year;
+  syncEditCourseYearControl();
+}
+
+function switchEditCourseScheduleMode(mode) {
+  editCoursePickerState.mode = mode;
+  const btnMulti = document.getElementById('btnEditCourseModeMultiMonth');
+  const btnDMY = document.getElementById('btnEditCourseModeDateMonthYear');
+  const viewMulti = document.getElementById('editCourseMultiMonthView');
+  const viewDMY = document.getElementById('editCourseDateMonthYearView');
+
+  if (mode === 'date-month-year') {
+    if (btnMulti) btnMulti.classList.remove('active');
+    if (btnDMY) btnDMY.classList.add('active');
+    if (viewMulti) viewMulti.style.display = 'none';
+    if (viewDMY) viewDMY.style.display = 'flex';
+    validateEditCourseDateMonthYearSelection();
+  } else {
+    if (btnMulti) btnMulti.classList.add('active');
+    if (btnDMY) btnDMY.classList.remove('active');
+    if (viewMulti) viewMulti.style.display = 'block';
+    if (viewDMY) viewDMY.style.display = 'none';
+    updateEditCourseMultiMonthPreview();
+  }
+}
+
+function initEditCourseDateMonthYearPicker() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentDay = new Date().getDate();
+
+  const yearSelect = document.getElementById('editCourseScheduleYear');
+  const monthSelect = document.getElementById('editCourseScheduleMonth');
+  const daySelect = document.getElementById('editCourseScheduleDay');
+
+  if (yearSelect && yearSelect.options.length === 0) {
+    for (let y = currentYear; y <= currentYear + 4; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `${y} ${y === currentYear ? '(Current Year)' : ''}`;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
+  }
+
+  if (monthSelect && monthSelect.options.length === 0) {
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = `${MONTH_NAMES[m - 1]} (${String(m).padStart(2, '0')})`;
+      monthSelect.appendChild(opt);
+    }
+    monthSelect.value = currentMonth;
+  }
+
+  if (yearSelect) yearSelect.onchange = updateEditCourseDaysList;
+  if (monthSelect) monthSelect.onchange = updateEditCourseDaysList;
+  if (daySelect) daySelect.onchange = validateEditCourseDateMonthYearSelection;
+
+  updateEditCourseDaysList();
+}
+
+function updateEditCourseDaysList() {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const currentDay = new Date().getDate();
+
+  const yearSelect = document.getElementById('editCourseScheduleYear');
+  const monthSelect = document.getElementById('editCourseScheduleMonth');
+  const daySelect = document.getElementById('editCourseScheduleDay');
+  if (!daySelect || !yearSelect || !monthSelect) return;
+
+  const y = parseInt(yearSelect.value, 10) || currentYear;
+  const m = parseInt(monthSelect.value, 10) || currentMonth;
+  const totalDays = getDaysInMonth(y, m);
+  const prevDay = parseInt(daySelect.value, 10) || currentDay;
+
+  daySelect.innerHTML = '';
+  for (let d = 1; d <= totalDays; d++) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = `Day ${d}`;
+    daySelect.appendChild(opt);
+  }
+  daySelect.value = Math.min(prevDay, totalDays);
+  validateEditCourseDateMonthYearSelection();
+}
+
+function validateEditCourseDateMonthYearSelection() {
+  const yearSelect = document.getElementById('editCourseScheduleYear');
+  const monthSelect = document.getElementById('editCourseScheduleMonth');
+  const daySelect = document.getElementById('editCourseScheduleDay');
+  if (!yearSelect || !monthSelect || !daySelect) return;
+
+  const y = parseInt(yearSelect.value, 10);
+  const m = parseInt(monthSelect.value, 10);
+  const d = parseInt(daySelect.value, 10);
+
+  const isPassed = isMonthInPast(y, m);
+  const notice = document.getElementById('editCourseDatePassedNotice');
+  const badge = document.getElementById('editCourseMultiMonthBadge');
+  const hiddenInput = document.getElementById('editCourseInputBatchSchedule');
+
+  if (notice) {
+    if (isPassed) {
+      notice.style.display = 'block';
+      notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Date Expired:</strong> ${MONTH_NAMES[m - 1]} ${y} has already passed in the current year. Please pick an upcoming month.`;
+    } else {
+      const today = new Date();
+      if (y === today.getFullYear() && m === (today.getMonth() + 1) && d < today.getDate()) {
+        notice.style.display = 'block';
+        notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Day Passed:</strong> Day ${d} of this month has already passed in the current year. Please select a current or future day.`;
+      } else {
+        notice.style.display = 'none';
+      }
+    }
+  }
+
+  if (editCoursePickerState.mode === 'date-month-year') {
+    const mName = MONTH_SHORT[m - 1] || '';
+    if (badge) {
+      badge.textContent = `Schedule: ${mName} ${d}, ${y}`;
+      badge.style.background = isPassed ? '#fee2e2' : '#dcfce7';
+      badge.style.color = isPassed ? '#b91c1c' : '#15803d';
+    }
+    if (hiddenInput) {
+      hiddenInput.value = `${MONTH_NAMES[m - 1]} ${d}, ${y} (1 Month Batch: 1st Week to Last Week)`;
+    }
+  }
+}
+
+function renderEditCourseMonthGrid() {
+  const container = document.getElementById('editCourseMonthGrid');
+  if (!container) return;
+
+  const yr = editCoursePickerState.viewYear;
+  let html = '';
+
+  for (let m = 1; m <= 12; m++) {
+    const monthKey = `${yr}-${String(m).padStart(2, '0')}`;
+    const isPassed = isMonthInPast(yr, m);
+    const isSelected = editCoursePickerState.selectedMonths.has(monthKey);
+    const shortName = MONTH_SHORT[m - 1];
+    const fullName = MONTH_NAMES[m - 1];
+
+    if (isPassed) {
+      html += `
+        <div class="tc-month-btn is-passed" title="${escapeHtml(fullName)} ${yr} has already passed."
+             onclick="handlePassedMonthClick('${escapeHtml(fullName)}', ${yr})">
+          <span class="tc-month-name">${shortName}</span>
+          <span class="tc-month-sub"><iconify-icon icon="solar:lock-bold" style="font-size:10px; vertical-align:-1px;"></iconify-icon> Passed</span>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="tc-month-btn ${isSelected ? 'selected' : ''}" 
+             onclick="toggleEditCourseMonthSelection('${monthKey}')"
+             title="${isSelected ? 'Click to unselect' : 'Click to select 1-month batch'} (${fullName} ${yr})">
+          <span class="tc-month-name">${shortName}</span>
+          <span class="tc-month-sub">${isSelected ? '✓ 1-Month' : 'Available'}</span>
+        </div>
+      `;
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleEditCourseMonthSelection(monthKey) {
+  if (editCoursePickerState.selectedMonths.has(monthKey)) {
+    editCoursePickerState.selectedMonths.delete(monthKey);
+  } else {
+    editCoursePickerState.selectedMonths.add(monthKey);
+  }
+  renderEditCourseMonthGrid();
+  updateEditCourseMultiMonthPreview();
+}
+
+function updateEditCourseMultiMonthPreview() {
+  const badge = document.getElementById('editCourseMultiMonthBadge');
+  const hiddenInput = document.getElementById('editCourseInputBatchSchedule');
+  const selectedArr = Array.from(editCoursePickerState.selectedMonths).sort();
+  const count = selectedArr.length;
+
+  if (editCoursePickerState.mode === 'multi-month') {
+    if (badge) {
+      badge.textContent = `${count} month${count === 1 ? '' : 's'} selected`;
+      badge.style.background = count >= 2 ? '#dcfce7' : count === 1 ? '#fef3c7' : '#e0f2fe';
+      badge.style.color = count >= 2 ? '#15803d' : count === 1 ? '#b45309' : '#0369a1';
+    }
+    if (hiddenInput) {
+      hiddenInput.value = count > 0 
+        ? selectedArr.map(m => computeMonthSchedule(m).monthName).join(', ') + ' (1 Month Each: 1st Week to Last Week)'
+        : '';
+    }
+  }
+}
+
+// CRITICAL REQUIREMENT: if the date from the previous month has already passed, do not open it when clicking on a schedule for a month in the current year.
+function handleScheduleCardClick(bookingId, isPassed, monthName, year) {
+  if (isPassed && !isHeadOrAdminRole()) {
+    showToast(`Cannot open schedule: The training schedule for ${monthName || 'this month'} ${year || ''} has already passed and is closed.`, 'warning');
+    return;
+  }
+  openBatchDetailsModal(bookingId);
+}
+
+function openBatchDetailsModal(bookingId) {
+  const b = currentLoadedBookings.find(item => String(item.id) === String(bookingId));
+  if (!b) return;
+
+  const [bYr, bMo] = (b.requested_date || '').split('-').map(Number);
+  if (isMonthInPast(bYr, bMo) && !isHeadOrAdminRole()) {
+    const monthName = b.requested_date ? new Date(bYr, bMo - 1, 1).toLocaleString('en-US', { month: 'long' }) : '';
+    showToast(`Cannot open schedule: The training schedule for ${monthName || 'this month'} ${bYr || ''} has already passed in the current year.`, 'warning');
+    return;
+  }
+
+  const modal = document.getElementById('batchDetailsModal');
+  if (!modal) return;
+
+  const sched = computeMonthSchedule(b.requested_date?.slice(0, 7));
+
+  const codeEl = document.getElementById('batchDetailsCode');
+  if (codeEl) codeEl.textContent = `#${b.booking_code || 'BATCH-0000'}`;
+
+  const titleEl = document.getElementById('batchDetailsMonthTitle');
+  if (titleEl) titleEl.textContent = `Batch Schedule: ${sched.monthName} (1 Month Duration)`;
+
+  const statusBadge = document.getElementById('batchDetailsScheduleStatusBadge');
+  if (statusBadge) {
+    const isFinished = isBatchScheduleFinished(b);
+    if (isFinished) {
+      statusBadge.style.background = '#dcfce7';
+      statusBadge.style.color = '#15803d';
+      statusBadge.style.border = '1px solid #86efac';
+      statusBadge.innerHTML = '<iconify-icon icon="solar:check-circle-bold" style="font-size: 12px;"></iconify-icon> Done Training';
+    } else {
+      statusBadge.style.background = '#dbeafe';
+      statusBadge.style.color = '#1e40af';
+      statusBadge.style.border = '1px solid #bfdbfe';
+      statusBadge.innerHTML = '<iconify-icon icon="solar:clock-circle-bold" style="font-size: 12px;"></iconify-icon> On Going Schedule';
+    }
+  }
+
+  const startEl = document.getElementById('batchDetailsStart');
+  if (startEl) startEl.textContent = sched.startText;
+
+  const endEl = document.getElementById('batchDetailsEnd');
+  if (endEl) endEl.textContent = sched.endText;
+
+  // Training Time Display (Clean 07:00 A.M - 11:00 A.M Morning vs 01:00 P.M - 5:00 P.M Noon)
+  const rawTime = b.requested_time || activeTrainingCourse?.training_time || '07:00 A.M - 11:00 A.M';
+  const isNoon = String(rawTime).includes('01:00') || String(rawTime).toLowerCase().includes('noon') || String(rawTime).toLowerCase().includes('pm') || String(rawTime).includes('5:00');
+  const formattedTime = isNoon ? '01:00 P.M - 5:00 P.M' : '07:00 A.M - 11:00 A.M';
+  const sessionTag = isNoon ? 'Noon Session' : 'Morning Session';
+
+  const schedTimeEl = document.getElementById('batchDetailsScheduleTime');
+  if (schedTimeEl) schedTimeEl.textContent = formattedTime;
+
+  const timePillEl = document.getElementById('batchDetailsTimePill');
+  if (timePillEl) {
+    timePillEl.textContent = sessionTag;
+    if (isNoon) {
+      timePillEl.style.background = '#fef3c7';
+      timePillEl.style.color = '#92400e';
+      timePillEl.style.border = '1px solid #fde68a';
+    } else {
+      timePillEl.style.background = '#e0f2fe';
+      timePillEl.style.color = '#0369a1';
+      timePillEl.style.border = '1px solid #bae6fd';
+    }
+  }
+
+  // Session & Day Schedule Display
+  const sessTextEl = document.getElementById('batchDetailsSessionsText');
+  const sessPillEl = document.getElementById('batchDetailsSessionsPill');
+  const sessDayEl = document.getElementById('batchDetailsSessionsDay');
+  const schedSess = b.session_schedule || activeTrainingCourse?.session_schedule || '1 per week on Saturday in 1 month (4 Sessions)';
+
+  if (sessTextEl) {
+    sessTextEl.textContent = schedSess;
+  }
+  if (sessPillEl) {
+    sessPillEl.textContent = schedSess.includes('8') ? '8 Sessions Total' : '4 Sessions Total';
+  }
+  if (sessDayEl) {
+    const sLower = schedSess.toLowerCase();
+    if (sLower.includes('monday')) {
+      sessDayEl.textContent = 'Every Monday (1 session / week)';
+    } else if (sLower.includes('wednesday')) {
+      sessDayEl.textContent = 'Every Wednesday (1 session / week)';
+    } else if (sLower.includes('sunday')) {
+      sessDayEl.textContent = 'Every Sunday (1 session / week)';
+    } else {
+      sessDayEl.textContent = 'Every Saturday (1 session / week)';
+    }
+  }
+
+  const orgEl = document.getElementById('batchDetailsOrg');
+  if (orgEl) orgEl.textContent = b.organization || b.contact_name || 'N/A';
+
+  const courseEl = document.getElementById('batchDetailsCourse');
+  if (courseEl) courseEl.textContent = activeTrainingCourse ? activeTrainingCourse.name : 'Selected Course';
+
+  const timeEl = document.getElementById('batchDetailsTime');
+  if (timeEl) timeEl.textContent = formattedTime;
+
+  const venueEl = document.getElementById('batchDetailsVenue');
+  if (venueEl) venueEl.textContent = b.venue || 'UMak Campus';
+
+  // Participants: Display all registered students' names on the specific training course
+  const capEl = document.getElementById('batchDetailsCapacity');
+  const capCountEl = document.getElementById('batchDetailsCapacityCount');
+  const courseStudentNames = (currentLoadedBookings && currentLoadedBookings.length > 0)
+    ? [...new Set(currentLoadedBookings.map(item => String(item.contact_name || '').trim()).filter(Boolean))]
+    : (b.contact_name ? [String(b.contact_name).trim()] : []);
+
+  if (capCountEl) {
+    capCountEl.textContent = `${courseStudentNames.length} Registered Student${courseStudentNames.length === 1 ? '' : 's'}`;
+  }
+
+  if (capEl) {
+    if (courseStudentNames.length > 0) {
+      capEl.innerHTML = courseStudentNames.map(name => `
+        <span class="tc-student-pill" style="display: inline-flex; align-items: center; gap: 5px; background: #ffffff; color: #0f172a; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; border: 1px solid #cbd5e1; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+          <iconify-icon icon="solar:user-bold" style="font-size: 12px; color: #0284c7;"></iconify-icon>
+          ${escapeHtml(name)}
+        </span>
+      `).join('');
+    } else {
+      capEl.innerHTML = `<span style="font-size: 11px; color: #94a3b8; font-style: italic;">This course has no enrolled students.</span>`;
+    }
+  }
+
+  currentActiveBookingInModal = b;
+
+  const trainerEl = document.getElementById('batchDetailsTrainer');
+  if (trainerEl) trainerEl.textContent = b.assigned_trainer_id ? `${b.assigned_trainer_id}` : 'Unassigned';
+
+  const paymentEl = document.getElementById('batchDetailsPayment');
+  if (paymentEl) {
+    const isPaid = b.payment_status === 'paid';
+    const statusLabel = isPaid ? 'PAID' : (b.payment_status === 'pending' || !b.payment_status ? 'NO PAYMENT' : b.payment_status.toUpperCase());
+    paymentEl.innerHTML = `
+      <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 700; ${isPaid ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' : 'background: #fef3c7; color: #b45309; border: 1px solid #fde68a;'}">
+        <iconify-icon icon="${isPaid ? 'solar:check-circle-bold' : 'solar:danger-circle-bold'}" style="font-size: 14px;"></iconify-icon>
+        ${statusLabel} &bull; ₱${Number(b.total_php || 0).toLocaleString()}
+      </span>
+    `;
+  }
+
+  // Handle PAID and No Payment buttons inside batchDetailsModal for admin verification
+  const isHeadOrAdmin = isHeadOrAdminRole();
+  const paymentActionsEl = document.getElementById('batchDetailsPaymentActions');
+  if (paymentActionsEl) {
+    paymentActionsEl.style.display = isHeadOrAdmin ? 'flex' : 'none';
+  }
+  updateModalPaymentButtons(b.payment_status);
+
+  // Populate Payment Reference from database (b.payment_reference)
+  const paymentRefEl = document.getElementById('batchDetailsPaymentReference');
+  if (paymentRefEl) {
+    const payRef = b.payment_reference || 'N/A';
+    paymentRefEl.textContent = payRef;
+    paymentRefEl.title = payRef;
+  }
+
+  // Populate Payment ID below Payment Reference
+  const paymentIdEl = document.getElementById('batchDetailsPaymentId');
+  if (paymentIdEl) {
+    const payId = b.paymongo_payment_id || b.paymongo_checkout_session_id || 'N/A';
+    paymentIdEl.textContent = payId;
+    paymentIdEl.title = payId;
+  }
+
+  // Populate Payment Picture (Student proof of payment / receipt) below Payment ID
+  const picStatusEl = document.getElementById('batchDetailsPaymentPicStatus');
+  const picContainerEl = document.getElementById('batchDetailsPaymentPicContainer');
+  if (picContainerEl) {
+    const receiptUrl = b.payment_receipt_upload_path || b.paymongo_receipt_url || '';
+    if (receiptUrl) {
+      if (picStatusEl) picStatusEl.innerHTML = `<span style="color: #15803d; font-weight: 600;">✓ Receipt Attached</span>`;
+      picContainerEl.innerHTML = `
+        <a href="${escapeHtml(receiptUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; max-width: 100%; text-decoration: none;" title="Click to view full image in new tab">
+          <img src="${escapeHtml(receiptUrl)}" alt="Proof of Payment" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; display: block; margin: 0 auto;" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'font-size:12px; color:#b91c1c; text-align:center; padding:10px;\\'>Failed to preview image.<br><a href=\\x22${escapeHtml(receiptUrl)}\\x22 target=\\x22_blank\\x22 style=\\x22color:#0284c7; text-decoration:underline;\\x22>Open payment link</a></div>';" />
+        </a>
+        <div style="display: flex; gap: 8px; align-items: center; justify-content: center; width: 100%; margin-top: 4px;">
+          <a href="${escapeHtml(receiptUrl)}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: #0284c7; font-weight: 600; text-decoration: underline; display: inline-flex; align-items: center; gap: 4px;">
+            <iconify-icon icon="solar:arrow-right-up-linear"></iconify-icon> View Full Receipt
+          </a>
+        </div>
+      `;
+    } else {
+      if (picStatusEl) picStatusEl.innerHTML = `<span style="color: #94a3b8; font-style: italic;">None</span>`;
+      picContainerEl.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #94a3b8; padding: 12px 0;">
+          <iconify-icon icon="solar:gallery-wide-linear" style="font-size: 28px;"></iconify-icon>
+          <span style="font-size: 12px;">No payment picture / receipt uploaded for this student</span>
+        </div>
+      `;
+    }
+  }
+
+  const coordEl = document.getElementById('batchDetailsCoordinator');
+  if (coordEl) coordEl.textContent = `${b.contact_name || 'N/A'} • ${b.phone || 'No phone'} • ${b.email || 'No email'}`;
+
+  const notesEl = document.getElementById('batchDetailsNotes');
+  if (notesEl) notesEl.textContent = b.notes || 'No notes provided.';
+
+  modal.style.display = 'flex';
+}
+
+let currentActiveBookingInModal = null;
+
+function updateModalPaymentButtons(status) {
+  const isPaid = status === 'paid';
+  const btnPaid = document.getElementById('btnBatchDetailsPaid');
+  const btnNoPay = document.getElementById('btnBatchDetailsNoPayment');
+  const indicatorEl = document.getElementById('batchDetailsPaymentActiveIndicator');
+
+  if (btnPaid) {
+    if (isPaid) {
+      btnPaid.style.background = '#15803d';
+      btnPaid.style.color = '#ffffff';
+      btnPaid.style.border = '2px solid #166534';
+      btnPaid.style.boxShadow = '0 2px 4px rgba(21, 128, 61, 0.2)';
+      btnPaid.innerHTML = `<iconify-icon icon="solar:check-circle-bold" style="font-size: 16px;"></iconify-icon><span>✓ Verified as PAID</span>`;
+    } else {
+      btnPaid.style.background = '#ffffff';
+      btnPaid.style.color = '#15803d';
+      btnPaid.style.border = '1px solid #86efac';
+      btnPaid.style.boxShadow = 'none';
+      btnPaid.innerHTML = `<iconify-icon icon="solar:check-circle-bold" style="font-size: 16px;"></iconify-icon><span>Mark as PAID</span>`;
+    }
+  }
+
+  if (btnNoPay) {
+    if (!isPaid) {
+      btnNoPay.style.background = '#dc2626';
+      btnNoPay.style.color = '#ffffff';
+      btnNoPay.style.border = '2px solid #991b1b';
+      btnNoPay.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.2)';
+      btnNoPay.innerHTML = `<iconify-icon icon="solar:close-circle-bold" style="font-size: 16px;"></iconify-icon><span>✕ Marked as No Payment</span>`;
+    } else {
+      btnNoPay.style.background = '#ffffff';
+      btnNoPay.style.color = '#dc2626';
+      btnNoPay.style.border = '1px solid #fca5a5';
+      btnNoPay.style.boxShadow = 'none';
+      btnNoPay.innerHTML = `<iconify-icon icon="solar:close-circle-bold" style="font-size: 16px;"></iconify-icon><span>Mark as No Payment</span>`;
+    }
+  }
+
+  if (indicatorEl) {
+    if (isPaid) {
+      indicatorEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:4px; color:#15803d; font-weight:600;"><iconify-icon icon="solar:shield-check-bold"></iconify-icon> Current Status: Verified &amp; Confirmed (PAID)</span>`;
+    } else {
+      indicatorEl.innerHTML = `<span style="display:inline-flex; align-items:center; gap:4px; color:#b45309; font-weight:600;"><iconify-icon icon="solar:shield-warning-bold"></iconify-icon> Current Status: Awaiting Payment Verification (No Payment)</span>`;
+    }
+  }
+}
+
+async function setBookingPaymentFromModal(status) {
+  if (!isHeadOrAdminRole()) {
+    showToast('Only HEAD and System Admin accounts can update payment verification status.', 'warning');
+    return;
+  }
+  if (!currentActiveBookingInModal) return;
+
+  const bId = currentActiveBookingInModal.id;
+  await updateBookingPayment(bId, status);
+
+  currentActiveBookingInModal.payment_status = status;
+  const isPaid = status === 'paid';
+  const paymentEl = document.getElementById('batchDetailsPayment');
+  if (paymentEl) {
+    const statusLabel = isPaid ? 'PAID' : 'NO PAYMENT';
+    paymentEl.innerHTML = `
+      <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 700; ${isPaid ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' : 'background: #fef3c7; color: #b45309; border: 1px solid #fde68a;'}">
+        <iconify-icon icon="${isPaid ? 'solar:check-circle-bold' : 'solar:danger-circle-bold'}" style="font-size: 14px;"></iconify-icon>
+        ${statusLabel} &bull; ₱${Number(currentActiveBookingInModal.total_php || 0).toLocaleString()}
+      </span>
+    `;
+  }
+  updateModalPaymentButtons(status);
 }
 
 function showTrainingEmptyState() {
@@ -6732,13 +10027,28 @@ async function selectTrainingCourse(courseId) {
   if (emptyState) emptyState.style.display = 'none';
   if (activeView) activeView.style.display = 'flex';
 
-  // Populate Header
-  const titleEl = document.getElementById('tcActiveTitle');
-  const priceEl = document.getElementById('tcActivePrice');
-  const descEl = document.getElementById('tcActiveDesc');
-  if (titleEl) titleEl.textContent = course.name;
-  if (priceEl) priceEl.textContent = `Student: ₱${Number(course.student_price).toLocaleString()} | Batch/Org: ₱${Number(course.batch_price).toLocaleString()}`;
-  if (descEl) descEl.textContent = course.description || 'No description provided.';
+  // Ensure action buttons respect Trainer role
+  const isTrainer = isTrainerRole();
+  const btnEditCourse = document.getElementById('btnEditCourse');
+  const btnDeleteCourse = document.getElementById('btnDeleteCourse');
+  const btnAddSchedule = document.getElementById('btnAddSchedule');
+  if (btnEditCourse) {
+    btnEditCourse.style.display = '';
+    btnEditCourse.disabled = false;
+    btnEditCourse.onclick = openEditCourseModal;
+  }
+  if (btnDeleteCourse) {
+    btnDeleteCourse.style.display = '';
+    btnDeleteCourse.disabled = false;
+    btnDeleteCourse.onclick = deleteActiveCourse;
+  }
+  if (btnAddSchedule) {
+    btnAddSchedule.style.display = '';
+    btnAddSchedule.disabled = false;
+    btnAddSchedule.onclick = openAddBatchModal;
+  }
+
+  renderActiveCourseHeader(course);
 
   // Fetch Bookings & Batches for this Course
   await loadCourseBookings(course.id);
@@ -6748,70 +10058,249 @@ async function loadCourseBookings(courseId) {
   const container = document.getElementById('tcSchedulesList');
   if (!container) return;
 
-  container.innerHTML = '<div style="text-align:center; padding: 20px; color:#64748b; font-size:12px;">Loading bookings and sessions...</div>';
+  const headingTextEl = document.getElementById('tcSchedulesHeadingText');
+  const headingIconEl = document.getElementById('tcSchedulesHeadingIcon');
+  const isTrainer = isTrainerRole();
+
+  if (isTrainer) {
+    if (headingTextEl) headingTextEl.textContent = 'Registered Students';
+    if (headingIconEl) {
+      headingIconEl.setAttribute('icon', 'solar:users-group-rounded-bold-duotone');
+      headingIconEl.style.color = '#0284c7';
+    }
+  } else {
+    if (headingTextEl) headingTextEl.textContent = 'Batches & Schedules';
+    if (headingIconEl) {
+      headingIconEl.setAttribute('icon', 'solar:calendar-bold-duotone');
+      headingIconEl.style.color = '#64748b';
+    }
+  }
+
+  container.innerHTML = '<div style="text-align:center; padding: 20px; color:#64748b; font-size:12px;">Loading records...</div>';
 
   try {
     const res = await fetch(`/api/training/bookings?course_id=${encodeURIComponent(courseId)}`);
     const data = await res.json();
     const bookings = data.bookings || [];
+    currentLoadedBookings = bookings;
 
     if (bookings.length === 0) {
+      if (isTrainer) {
+        container.innerHTML = `
+          <div style="border: 2px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b;">
+            <iconify-icon icon="solar:users-group-rounded-bold-duotone" width="36" height="36" style="color:#94a3b8;"></iconify-icon>
+            <p style="margin: 8px 0 0; font-size: 13px;">No registered students found for this course library yet.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const c = activeTrainingCourse;
+      const daysStr = (Array.isArray(c?.available_days) && c.available_days.length > 0) ? c.available_days.join(', ') : 'Monday, Wednesday, Saturday';
+      let timesStr = c?.training_time || '07:00 A.M - 11:00 A.M';
+      if (Array.isArray(c?.available_times) && c.available_times.length > 1) {
+        timesStr = 'AM & PM Classes (07:00 AM - 11:00 AM / 01:00 PM - 5:00 PM)';
+      }
+      const monthsStr = (Array.isArray(c?.available_months) && c.available_months.length > 0)
+        ? c.available_months.map(m => computeMonthSchedule(m).monthName).join(', ')
+        : (c?.batch_schedule || 'Monthly Batches (1st Week to Last Week)');
+      const trainerStr = c?.assigned_trainer || 'Unassigned Trainer';
+
       container.innerHTML = `
-        <div style="border: 2px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b;">
-          <iconify-icon icon="solar:calendar-date-bold-duotone" width="36" height="36" style="color:#94a3b8;"></iconify-icon>
-          <p style="margin: 8px 0 0; font-size: 13px;">No scheduled batches or bookings for this course yet.</p>
+        <div style="background: #ffffff; border: 1px solid #bae6fd; border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: #dcfce7; color: #15803d; border: 1px solid #86efac; display: inline-flex; align-items: center; gap: 4px;">
+                <iconify-icon icon="solar:check-circle-bold" style="font-size: 13px;"></iconify-icon> Open for Student Enrollment
+              </span>
+            </div>
+            <span style="font-size: 11px; color: #0284c7; font-weight: 600;">Active Course Batch Schedule</span>
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 8px; padding: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12px;">
+            <div>
+              <strong style="color: #475569;">Batch Month(s):</strong><br>
+              <span style="color: #0f172a; font-weight: 600;">${escapeHtml(monthsStr)}</span>
+            </div>
+            <div>
+              <strong style="color: #475569;">Offered Session Days:</strong><br>
+              <span style="color: #0284c7; font-weight: 600;">${escapeHtml(daysStr)}</span>
+            </div>
+            <div>
+              <strong style="color: #475569;">Offered Class Times:</strong><br>
+              <span style="color: #b45309; font-weight: 600;">${escapeHtml(timesStr)}</span>
+            </div>
+            <div>
+              <strong style="color: #475569;">Assigned Trainer:</strong><br>
+              <span style="color: #0f172a; font-weight: 600;">${escapeHtml(trainerStr)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="border: 2px dashed #cbd5e1; border-radius: 10px; padding: 24px; text-align: center; color: #64748b;">
+          <iconify-icon icon="solar:users-group-rounded-bold-duotone" width="32" height="32" style="color:#94a3b8;"></iconify-icon>
+          <p style="margin: 8px 0 0; font-size: 13px; font-weight: 500;">This course has no enrolled students.</p>
+          <small style="color: #94a3b8; display: block; margin-top: 4px; font-size: 11.5px;">
+            Batches are active. Students can enroll via mobile, or you can register walk-in students using <strong>+ Add Batch Schedule</strong>.
+          </small>
         </div>
       `;
       return;
     }
 
+    // TRAINER ROLE: Render Registered Students Roster
+    if (isTrainer) {
+      container.innerHTML = bookings.map(b => {
+        const studentName = b.contact_name || 'Enrolled Student';
+
+        // Student avatar initials
+        const nameParts = studentName.trim().split(/\s+/);
+        const initials = nameParts.length > 1
+          ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+          : studentName.slice(0, 2).toUpperCase();
+
+        return `
+          <div class="tc-student-card" 
+               id="tc-student-card-${escapeHtml(b.id)}"
+               style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s ease;">
+            
+            <!-- Student Header: Avatar & Name -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 12px; min-width: 200px;">
+                <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; border: 1px solid #bae6fd; flex-shrink: 0;">
+                  ${escapeHtml(initials)}
+                </div>
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <strong style="font-size: 15px; color: #0f172a;" class="tc-student-name">${escapeHtml(studentName)}</strong>
+                    <span style="font-family: monospace; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569; font-weight: 600;">#${escapeHtml(b.booking_code || b.id.slice(0, 8))}</span>
+                  </div>
+                  <small style="color: #64748b; display: block; margin-top: 2px;">
+                    ${escapeHtml(b.email || 'No email')} &bull; ${escapeHtml(b.phone || 'No phone')}
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Student Registration Meta Details -->
+            <div class="tc-student-meta-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; border: 1px solid #f1f5f9;">
+              <div>
+                <strong style="color: #475569;">College / Department:</strong><br>
+                <span style="color: #0f172a; font-weight: 500;">${escapeHtml(b.organization || 'General University')}</span>
+              </div>
+              <div>
+                <strong style="color: #475569;">Batch Schedule:</strong><br>
+                <span style="color: #0f172a; font-weight: 500;">${escapeHtml(b.requested_date || 'Current Month')} (${escapeHtml(b.requested_time || '08:00 AM - 12:00 PM')})</span>
+              </div>
+              <div>
+                <strong style="color: #475569;">Campus Venue:</strong><br>
+                <span style="color: #0f172a; font-weight: 500;">${escapeHtml(b.venue || 'UMak Campus')}</span>
+              </div>
+            </div>
+
+          </div>
+        `;
+      }).join('');
+      return;
+    }
+
+    // HEAD / ADMIN ROLE: Render standard Batches & Schedules
+    const courseStudentNames = [...new Set(bookings.map(item => String(item.contact_name || '').trim()).filter(Boolean))];
+
     container.innerHTML = bookings.map(b => {
       const isPaid = b.payment_status === 'paid';
       const isPending = b.payment_status === 'pending';
-
-      const trainerOptions = allTrainersList.map(t => `
-        <option value="${escapeHtml(t.employee_name)}" ${b.assigned_trainer_id === t.employee_name ? 'selected' : ''}>
-          ${escapeHtml(t.employee_name)} (${escapeHtml(t.employee_role)})
-        </option>
-      `).join('');
+      const [bYr, bMo] = (b.requested_date || '').split('-').map(Number);
+      const isFinished = isBatchScheduleFinished(b);
+      const monthName = b.requested_date ? new Date(bYr, bMo - 1, 1).toLocaleString('en-US', { month: 'long' }) : '';
 
       return `
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-            <div>
-              <span style="font-family: monospace; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569;">#${escapeHtml(b.booking_code)}</span>
-              <strong style="display: block; margin-top: 4px; font-size: 15px; color: #0f172a;">${escapeHtml(b.organization || b.contact_name)}</strong>
-              <small style="color: #64748b;">Contact: ${escapeHtml(b.contact_name)} &bull; ${escapeHtml(b.phone)} &bull; ${escapeHtml(b.email)}</small>
-            </div>
-            <div style="text-align: right;">
-              <span style="font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 9999px; ${isPaid ? 'background:#dcfce7; color:#15803d;' : isPending ? 'background:#fef3c7; color:#b45309;' : 'background:#fee2e2; color:#b91c1c;'}">
-                ${escapeHtml(b.payment_status.toUpperCase())}
-              </span>
-              <div style="font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 4px;">₱${Number(b.total_php).toLocaleString()}</div>
+        <div class="tc-batch-card ${isFinished ? 'tc-batch-passed tc-batch-done' : 'tc-batch-ongoing'}" 
+             onclick="handleScheduleCardClick('${escapeHtml(b.id)}', ${isFinished}, '${escapeHtml(monthName)}', ${bYr})"
+             style="background: #ffffff; border: 1px solid ${isFinished ? '#cbd5e1' : '#e2e8f0'}; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; position: relative;">
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-family: monospace; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569; font-weight: 600;">#${escapeHtml(b.booking_code)}</span>
+              ${isFinished ? `
+                <span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #dcfce7; color: #15803d; border: 1px solid #86efac; display: inline-flex; align-items: center; gap: 4px;">
+                  <iconify-icon icon="solar:check-circle-bold" style="font-size: 12px;"></iconify-icon> Done Training
+                </span>
+              ` : `
+                <span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; display: inline-flex; align-items: center; gap: 4px;">
+                  <iconify-icon icon="solar:clock-circle-bold" style="font-size: 12px;"></iconify-icon> On Going Schedule
+                </span>
+              `}
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 12px; margin-bottom: 12px;">
-            <div><strong>Date &amp; Time:</strong> ${escapeHtml(b.requested_date)} at ${escapeHtml(b.requested_time)}</div>
-            <div><strong>Participants:</strong> ${escapeHtml(String(b.participants))} attendees</div>
-            <div><strong>Venue:</strong> ${escapeHtml(b.venue)}</div>
-            <div><strong>Payment Method:</strong> ${escapeHtml(b.payment_method)}</div>
-          </div>
-
-          <!-- Trainer Assignment & Actions -->
-          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 10px;">
+          <!-- 1-Month Batch Schedule Banner -->
+          <div style="background: ${isFinished ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${isFinished ? '#cbd5e1' : '#bbf7d0'}; padding: 10px 14px; border-radius: 8px; font-size: 12px; color: ${isFinished ? '#475569' : '#166534'}; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <label style="font-size: 12px; font-weight: 600; color: #475569;">Trainer:</label>
-              <select onchange="assignBookingTrainer('${escapeHtml(b.id)}', this.value)" style="padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px;">
-                <option value="">-- Unassigned --</option>
-                ${trainerOptions}
-              </select>
+              <iconify-icon icon="${isFinished ? 'solar:check-circle-bold' : 'solar:calendar-bold-duotone'}" style="font-size: 18px; color: ${isFinished ? '#15803d' : '#15803d'};"></iconify-icon>
+              <div>
+                <strong>Batch Schedule (1 Month):</strong>
+                <span style="font-weight: 600; margin-left: 4px; color: ${isFinished ? '#334155' : '#14532d'};">${escapeHtml(b.requested_date)}</span>
+              </div>
             </div>
+            <span style="font-size: 11px; background: ${isFinished ? '#dcfce7' : '#dcfce7'}; color: ${isFinished ? '#15803d' : '#15803d'}; font-weight: 700; padding: 3px 10px; border-radius: 9999px; border: 1px solid ${isFinished ? '#86efac' : '#86efac'};">
+              ${isFinished ? 'Done Training' : '1st Week – Last Week'}
+            </span>
+          </div>
 
-            <div style="display: flex; gap: 6px;">
-              ${isPending ? `
-                <button type="button" class="filter-btn" style="background:#059669; color:#fff; border:none; padding:4px 10px; font-size:11px; cursor:pointer;" onclick="updateBookingPayment('${escapeHtml(b.id)}', 'paid')">✓ Verify Payment</button>
-                <button type="button" class="filter-btn" style="background:#fff; color:#dc2626; border:1px solid #fca5a5; padding:4px 10px; font-size:11px; cursor:pointer;" onclick="updateBookingPayment('${escapeHtml(b.id)}', 'rejected')">✕ Reject</button>
+          ${b.requested_day || b.requested_time ? `
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+              ${b.requested_day ? `
+                <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: #eff6ff; color: #0284c7; border: 1px solid #bae6fd; display: inline-flex; align-items: center; gap: 4px;">
+                  <iconify-icon icon="solar:calendar-mark-bold-duotone" style="font-size: 13px;"></iconify-icon> Session Day: Every ${escapeHtml(b.requested_day)} (4 sessions)
+                </span>
+              ` : ''}
+              ${b.requested_time ? `
+                <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: #fefce8; color: #854d0e; border: 1px solid #fef08a; display: inline-flex; align-items: center; gap: 4px;">
+                  <iconify-icon icon="solar:clock-circle-bold" style="font-size: 13px;"></iconify-icon> Class Time: ${escapeHtml(b.requested_time)}
+                </span>
+              ` : ''}
+            </div>
+          ` : ''}
+
+          <div class="tc-batch-meta-grid" style="display: flex; flex-direction: column; gap: 8px; background: #f8fafc; padding: 10px 12px; border-radius: 8px; font-size: 12px; border: 1px solid #f1f5f9;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+              <strong style="color: #475569; display: inline-flex; align-items: center; gap: 5px;">
+                <iconify-icon icon="solar:users-group-rounded-bold-duotone" style="font-size: 15px; color: #0284c7;"></iconify-icon>
+                Participants:
+              </strong>
+              <span style="font-size: 11px; font-weight: 700; color: #0369a1; background: #e0f2fe; padding: 2px 8px; border-radius: 9999px; border: 1px solid #bae6fd;">
+                ${courseStudentNames.length} Registered Student${courseStudentNames.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            ${courseStudentNames.length > 0 ? `
+              <div class="tc-batch-participants-list" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                ${courseStudentNames.map(name => `
+                  <span class="tc-student-pill" style="display: inline-flex; align-items: center; gap: 5px; background: #ffffff; color: #0f172a; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; border: 1px solid #cbd5e1; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                    <iconify-icon icon="solar:user-bold" style="font-size: 12px; color: #0284c7;"></iconify-icon>
+                    ${escapeHtml(name)}
+                  </span>
+                `).join('')}
+              </div>
+            ` : `
+              <div style="font-size: 11px; color: #94a3b8; font-style: italic;">This course has no enrolled students.</div>
+            `}
+          </div>
+
+          ${b.notes ? `<div style="font-size: 12px; color: #64748b; background: #f1f5f9; padding: 8px 10px; border-radius: 6px; font-style: italic;"><strong>Notes:</strong> ${escapeHtml(b.notes)}</div>` : ''}
+
+          <!-- Batch Actions -->
+          <div style="display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 10px; flex-wrap: wrap; gap: 10px;" onclick="event.stopPropagation()">
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+              ${!isFinished || isHeadOrAdminRole() ? `
+                <button type="button" class="filter-btn" style="background:#0284c7; color:#fff; border:none; padding:5px 10px; font-size:12px; font-weight:600; border-radius:6px; cursor:pointer;" onclick="openBatchDetailsModal('${escapeHtml(b.id)}')">View Details</button>
+              ` : `
+                <span style="font-size:11px; color:#94a3b8; font-style:italic;">Schedule Closed</span>
+              `}
+              ${!isTrainerRole() ? `
+                <button type="button" class="filter-btn tc-btn-delete-batch tc-btn-remove-student" style="background:#fff; color:#dc2626; border:1px solid #fecaca; padding:5px 10px; font-size:12px; border-radius:6px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" onclick="openRemoveStudentModal('${escapeHtml(b.id)}')">
+                  <iconify-icon icon="solar:user-cross-bold" style="font-size: 13px;"></iconify-icon> Remove Student
+                </button>
               ` : ''}
             </div>
           </div>
@@ -6843,8 +10332,12 @@ async function assignBookingTrainer(bookingId, trainerName) {
   }
 }
 
-// Payment Verification Handler
+// Payment Verification Handler (HEAD and System Admin only)
 async function updateBookingPayment(bookingId, status) {
+  if (!isHeadOrAdminRole()) {
+    showToast('Only HEAD and System Admin accounts can update payment verification status.', 'warning');
+    return;
+  }
   try {
     const res = await fetch(`/api/training/bookings/${bookingId}`, {
       method: 'PUT',
@@ -6857,18 +10350,195 @@ async function updateBookingPayment(bookingId, status) {
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Failed to update payment status');
-    showToast(`Payment marked as ${status.toUpperCase()}!`, 'success');
+
+    const updated = (currentLoadedBookings || []).find(b => String(b.id) === String(bookingId));
+    if (updated) {
+      updated.payment_status = status;
+      if (status === 'paid') updated.payment_confirmed_at = new Date().toISOString();
+      else updated.payment_confirmed_at = null;
+    }
+
+    const isPaid = status === 'paid';
+    const statusLabel = isPaid ? 'PAID' : 'No Payment';
+    showToast(`Payment marked as ${statusLabel}!`, 'success');
+
+    // If batch details modal is currently open for this booking, update its display in place
+    if (currentActiveBookingInModal && String(currentActiveBookingInModal.id) === String(bookingId)) {
+      currentActiveBookingInModal.payment_status = status;
+      const paymentEl = document.getElementById('batchDetailsPayment');
+      if (paymentEl) {
+        paymentEl.innerHTML = `
+          <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 700; ${isPaid ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' : 'background: #fef3c7; color: #b45309; border: 1px solid #fde68a;'}">
+            <iconify-icon icon="${isPaid ? 'solar:check-circle-bold' : 'solar:danger-circle-bold'}" style="font-size: 14px;"></iconify-icon>
+            ${isPaid ? 'PAID' : 'NO PAYMENT'} &bull; ₱${Number(currentActiveBookingInModal.total_php || 0).toLocaleString()}
+          </span>
+        `;
+      }
+      updateModalPaymentButtons(status);
+    }
+
     if (activeTrainingCourse) loadCourseBookings(activeTrainingCourse.id);
   } catch (err) {
     showToast(err.message || 'Error updating payment', 'error');
   }
 }
 
-// Delete Course Handler
-async function deleteActiveCourse() {
+// Remove Student Confirmation Modal & Actions
+let pendingRemoveStudentBookingId = null;
+
+function openRemoveStudentModal(bookingId) {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot remove students.', 'warning');
+    return;
+  }
+  if (!bookingId) return;
+
+  pendingRemoveStudentBookingId = bookingId;
+  const booking = (currentLoadedBookings || []).find(b => String(b.id) === String(bookingId)) || {};
+
+  const nameEl = document.getElementById('removeStudentModalName');
+  if (nameEl) nameEl.textContent = booking.contact_name || booking.organization || 'Enrolled Student';
+
+  const codeEl = document.getElementById('removeStudentModalCode');
+  if (codeEl) codeEl.textContent = booking.booking_code ? `#${booking.booking_code}` : `#${String(booking.id || '').slice(0, 8)}`;
+
+  const reasonInput = document.getElementById('removeStudentReasonInput');
+  if (reasonInput) {
+    reasonInput.value = '';
+    reasonInput.style.borderColor = '#cbd5e1';
+  }
+
+  const modal = document.getElementById('removeStudentModal');
+  if (modal) {
+    modal.hidden = false;
+    modal.removeAttribute('hidden');
+    modal.style.display = 'flex';
+  }
+  if (reasonInput) {
+    setTimeout(() => reasonInput.focus(), 50);
+  }
+}
+
+function closeRemoveStudentModal() {
+  const modal = document.getElementById('removeStudentModal');
+  if (modal) {
+    modal.hidden = true;
+    modal.setAttribute('hidden', '');
+    modal.style.display = 'none';
+  }
+  pendingRemoveStudentBookingId = null;
+}
+
+async function confirmRemoveStudent() {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot remove students.', 'warning');
+    closeRemoveStudentModal();
+    return;
+  }
+
+  if (!pendingRemoveStudentBookingId) return;
+
+  const reasonInput = document.getElementById('removeStudentReasonInput');
+  const reason = reasonInput ? reasonInput.value.trim() : '';
+
+  if (!reason) {
+    if (reasonInput) {
+      reasonInput.style.borderColor = '#dc2626';
+      reasonInput.focus();
+    }
+    showToast('Please provide a reason for cancellation.', 'warning');
+    return;
+  }
+
+  const yesBtn = document.getElementById('btnRemoveStudentYes');
+  if (yesBtn) {
+    yesBtn.disabled = true;
+    yesBtn.textContent = 'Removing...';
+  }
+
+  try {
+    const res = await fetch(`/api/training/bookings/${pendingRemoveStudentBookingId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': getSessionId(),
+        'x-employee-role': getCurrentUserRole()
+      },
+      body: JSON.stringify({ reason })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to remove student');
+
+    showToast('Student removed successfully.', 'success');
+    closeRemoveStudentModal();
+    if (activeTrainingCourse) loadCourseBookings(activeTrainingCourse.id);
+  } catch (err) {
+    showToast(err.message || 'Error removing student', 'error');
+  } finally {
+    if (yesBtn) {
+      yesBtn.disabled = false;
+      yesBtn.textContent = 'Yes';
+    }
+  }
+}
+
+// Delete Single Batch / Remove Student Handler (backward compatibility)
+async function deleteBookingBatch(bookingId) {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot delete batch schedules.', 'warning');
+    return;
+  }
+  openRemoveStudentModal(bookingId);
+}
+
+// Delete Course Confirmation Modal & Actions
+function openDeleteCourseModal() {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot delete courses.', 'warning');
+    return;
+  }
+  if (!activeTrainingCourse) {
+    if (Array.isArray(allTrainingCourses) && allTrainingCourses.length > 0) {
+      activeTrainingCourse = allTrainingCourses[0];
+    } else {
+      showToast('Please select a course to delete.', 'warning');
+      return;
+    }
+  }
+
+  const nameEl = document.getElementById('deleteCourseModalName');
+  if (nameEl) nameEl.textContent = `"${activeTrainingCourse.name || 'this course'}"`;
+
+  const modal = document.getElementById('deleteCourseModal');
+  if (modal) {
+    modal.hidden = false;
+    modal.removeAttribute('hidden');
+    modal.style.display = 'flex';
+  }
+}
+
+function closeDeleteCourseModal() {
+  const modal = document.getElementById('deleteCourseModal');
+  if (modal) {
+    modal.hidden = true;
+    modal.setAttribute('hidden', '');
+    modal.style.display = 'none';
+  }
+}
+
+async function confirmDeleteCourse() {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot delete courses.', 'warning');
+    closeDeleteCourseModal();
+    return;
+  }
   if (!activeTrainingCourse) return;
-  const confirmed = confirm(`Are you sure you want to delete "${activeTrainingCourse.name}"?\nAll associated bookings will also be deleted.`);
-  if (!confirmed) return;
+
+  const yesBtn = document.getElementById('btnDeleteCourseYes');
+  if (yesBtn) {
+    yesBtn.disabled = true;
+    yesBtn.textContent = 'Deleting...';
+  }
 
   try {
     const res = await fetch(`/api/training/courses/${activeTrainingCourse.id}`, {
@@ -6881,40 +10551,285 @@ async function deleteActiveCourse() {
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Failed to delete course');
     showToast('Course deleted successfully.', 'success');
+    closeDeleteCourseModal();
     activeTrainingCourse = null;
-    loadTrainingCourses();
+    showTrainingEmptyState();
+    await loadTrainingCourses();
   } catch (err) {
     showToast(err.message || 'Failed to delete course', 'error');
+  } finally {
+    if (yesBtn) {
+      yesBtn.disabled = false;
+      yesBtn.textContent = 'Yes';
+    }
   }
 }
 
-// Wire up Course Creation Modal
-document.addEventListener('DOMContentLoaded', () => {
-  const modal = document.getElementById('createCourseModal');
-  const openBtn = document.getElementById('btnCreateCourse');
-  const closeBtn = document.getElementById('closeCreateCourseModal');
-  const cancelBtn = document.getElementById('btnCancelCreateCourse');
-  const form = document.getElementById('createCourseForm');
-  const deleteBtn = document.getElementById('btnDeleteCourse');
+// Delete Course Handler (kept for backward compatibility & direct invocation)
+async function deleteActiveCourse() {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot delete courses.', 'warning');
+    return;
+  }
+  openDeleteCourseModal();
+}
 
-  if (openBtn && modal) openBtn.addEventListener('click', () => { modal.style.display = 'flex'; });
-  if (closeBtn && modal) closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
-  if (cancelBtn && modal) cancelBtn.addEventListener('click', () => { modal.style.display = 'none'; });
-  if (deleteBtn) deleteBtn.addEventListener('click', deleteActiveCourse);
+// Open Edit Course Modal and Pre-populate Fields
+function openEditCourseModal() {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot edit course details.', 'warning');
+    return;
+  }
+  if (!activeTrainingCourse) {
+    if (Array.isArray(allTrainingCourses) && allTrainingCourses.length > 0) {
+      activeTrainingCourse = allTrainingCourses[0];
+    } else {
+      showToast('Please select a course to edit.', 'warning');
+      return;
+    }
+  }
+  const modal = document.getElementById('editCourseModal');
+  if (!modal) return;
 
-  if (form) {
-    form.addEventListener('submit', async (e) => {
+  document.getElementById('editCourseId').value = activeTrainingCourse.id || '';
+  document.getElementById('editCourseInputName').value = activeTrainingCourse.name || '';
+  document.getElementById('editCourseInputCategory').value = activeTrainingCourse.category || 'Medical';
+  document.getElementById('editCourseInputDuration').value = activeTrainingCourse.duration || '1 Month';
+  document.getElementById('editCourseInputStudentPrice').value = activeTrainingCourse.student_price || 0;
+  const editTimeInput = document.getElementById('editCourseInputTime');
+  if (editTimeInput) {
+    const curTime = String(activeTrainingCourse.training_time || '');
+    if (curTime.includes('01:00') || curTime.toLowerCase().includes('pm') || curTime.toLowerCase().includes('noon') || curTime.includes('5:00')) {
+      editTimeInput.value = '01:00 P.M - 5:00 P.M';
+    } else {
+      editTimeInput.value = '07:00 A.M - 11:00 A.M';
+    }
+  }
+
+  const editSessionsSelect = document.getElementById('editCourseInputSessions');
+  if (editSessionsSelect) {
+    const curSessions = String(activeTrainingCourse.session_schedule || '').toLowerCase();
+    if (curSessions.includes('monday')) {
+      editSessionsSelect.value = '1 per week on Monday in 1 Month (4 session - Every Monday)';
+    } else if (curSessions.includes('wednesday')) {
+      editSessionsSelect.value = '1 per week on Wednesday in 1 Month (4 session - Every Wednesday)';
+    } else if (curSessions.includes('sunday')) {
+      editSessionsSelect.value = '1 per week on Sunday in 1 month (4 Sessions)';
+    } else {
+      editSessionsSelect.value = '1 per week on Saturday in 1 month (4 Sessions)';
+    }
+  }
+
+  // Initialize interactive Day Picker and AM/PM Time Picker for Edit Course
+  editCourseTimeController = initCourseTimePicker('editCourseTime', activeTrainingCourse.available_times || activeTrainingCourse.training_time);
+  editCourseDaysController = initCourseDaysPicker('editCourse', activeTrainingCourse.available_days || activeTrainingCourse.session_schedule);
+  
+  const editReqInput = document.getElementById('editCourseInputRequirements');
+  if (editReqInput) editReqInput.value = activeTrainingCourse.requirements || 'Valid UMak ID';
+
+  const editCertInput = document.getElementById('editCourseInputCertification');
+  if (editCertInput) editCertInput.value = activeTrainingCourse.certification || 'Certificate of Completion';
+
+  const editLearningsInput = document.getElementById('editCourseInputLearnings');
+  if (editLearningsInput) {
+    if (Array.isArray(activeTrainingCourse.learnings)) {
+      editLearningsInput.value = activeTrainingCourse.learnings.join('\n');
+    } else if (typeof activeTrainingCourse.learnings === 'string') {
+      editLearningsInput.value = activeTrainingCourse.learnings;
+    } else {
+      editLearningsInput.value = '';
+    }
+  }
+
+  initEditCourseSchedulePicker(activeTrainingCourse.available_months);
+
+  document.getElementById('editCourseInputLocation').value = activeTrainingCourse.location || 'UMak Campus';
+
+  const editTrainerSelect = document.getElementById('editCourseInputTrainer');
+  if (editTrainerSelect) {
+    const onlyTrainers = allTrainersList.filter(t => {
+      const r = String(t.employee_role || '').trim().toLowerCase();
+      return r === 'trainer' && !r.includes('responder');
+    });
+    const curTrainer = activeTrainingCourse.assigned_trainer || '';
+    editTrainerSelect.innerHTML = '<option value="">-- Unassigned --</option>' +
+      onlyTrainers.map(t => `<option value="${escapeHtml(t.employee_name)}" ${curTrainer === t.employee_name ? 'selected' : ''}>${escapeHtml(t.employee_name)} (${escapeHtml(t.employee_role)})</option>`).join('');
+  }
+
+  document.getElementById('editCourseInputDesc').value = activeTrainingCourse.description || '';
+
+  modal.style.display = 'flex';
+}
+
+// Open Add Batch Modal and Pre-populate Defaults
+function openAddBatchModal() {
+  if (isTrainerRole()) {
+    showToast('Access restricted: Trainer accounts cannot add batch schedules.', 'warning');
+    return;
+  }
+  if (!activeTrainingCourse) {
+    if (Array.isArray(allTrainingCourses) && allTrainingCourses.length > 0) {
+      activeTrainingCourse = allTrainingCourses[0];
+    } else {
+      showToast('Please select a course first to add a batch schedule.', 'warning');
+      return;
+    }
+  }
+  const modal = document.getElementById('addBatchModal');
+  if (!modal) return;
+
+  const subtitle = document.getElementById('addBatchModalCourseSubtitle');
+  if (subtitle) subtitle.textContent = `Course: ${activeTrainingCourse.name}`;
+
+  // Populate Trainer dropdown options (Strictly Trainer accounts only; NO Responders)
+  const trainerSelect = document.getElementById('batchInputTrainer');
+  if (trainerSelect) {
+    const onlyTrainers = allTrainersList.filter(t => {
+      const r = String(t.employee_role || '').trim().toLowerCase();
+      return r === 'trainer' && !r.includes('responder');
+    });
+    trainerSelect.innerHTML = '<option value="">-- Select Trainer --</option>' +
+      onlyTrainers.map(t => `<option value="${escapeHtml(t.employee_name)}">${escapeHtml(t.employee_name)} (${escapeHtml(t.employee_role)})</option>`).join('');
+  }
+
+  // Initialize Professional Multi-Month Batch Schedule Picker
+  initBatchSchedulePicker();
+
+  const venueInput = document.getElementById('batchInputVenue');
+  if (venueInput) venueInput.value = activeTrainingCourse.location || 'UMak Campus';
+
+  const batchDurationInput = document.getElementById('batchInputDuration');
+  if (batchDurationInput) {
+    batchDurationInput.value = activeTrainingCourse.duration || '1 Month';
+  }
+
+  // Initialize interactive AM/PM Time Picker for Add Batch (defaults to course offering or course training_time)
+  batchTimeController = initCourseTimePicker('batchTime', activeTrainingCourse.available_times || activeTrainingCourse.training_time);
+
+  // Initialize interactive Sessions & Day Schedule Picker for Add Batch (defaults to course offering or course session_schedule)
+  batchDaysController = initCourseDaysPicker('batch', activeTrainingCourse.available_days || activeTrainingCourse.session_schedule);
+
+  const notesInput = document.getElementById('batchInputNotes');
+  if (notesInput) notesInput.value = '';
+
+  modal.style.display = 'flex';
+}
+
+// Wire up Training Center Modals & Buttons
+function initTrainingCenterModals() {
+  startTrainingRealtimeSync();
+
+  // 1. Create Course Modal
+  const createModal = document.getElementById('createCourseModal');
+  const btnCreateCourse = document.getElementById('btnCreateCourse');
+  const closeCreateBtn = document.getElementById('closeCreateCourseModal');
+  const cancelCreateBtn = document.getElementById('btnCancelCreateCourse');
+  const createForm = document.getElementById('createCourseForm');
+
+  if (btnCreateCourse && createModal) {
+    btnCreateCourse.addEventListener('click', () => {
+      if (isTrainerRole()) {
+        showToast('Access restricted: Trainer accounts cannot create courses.', 'warning');
+        return;
+      }
+      initCreateCourseSchedulePicker();
+      createCourseTimeController = initCourseTimePicker('courseTime', ['07:00 A.M - 11:00 A.M', '01:00 P.M - 5:00 P.M']);
+      createCourseDaysController = initCourseDaysPicker('createCourse', ['Monday', 'Wednesday', 'Saturday']);
+      const createTrainerSelect = document.getElementById('courseInputTrainer');
+      if (createTrainerSelect) {
+        const onlyTrainers = allTrainersList.filter(t => {
+          const r = String(t.employee_role || '').trim().toLowerCase();
+          return r === 'trainer' && !r.includes('responder');
+        });
+        createTrainerSelect.innerHTML = '<option value="">-- Unassigned --</option>' +
+          onlyTrainers.map(t => `<option value="${escapeHtml(t.employee_name)}">${escapeHtml(t.employee_name)} (${escapeHtml(t.employee_role)})</option>`).join('');
+      }
+      createModal.style.display = 'flex';
+    });
+  }
+  if (closeCreateBtn && createModal) closeCreateBtn.addEventListener('click', () => { createModal.style.display = 'none'; });
+  if (cancelCreateBtn && createModal) cancelCreateBtn.addEventListener('click', () => { createModal.style.display = 'none'; });
+
+  if (createForm) {
+    createForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = document.getElementById('btnSubmitCourse');
+
+      let schedVal = '';
+      let availMonths = [];
+
+      if (createCoursePickerState.mode === 'date-month-year') {
+        const y = parseInt(document.getElementById('createCourseScheduleYear')?.value, 10);
+        const m = parseInt(document.getElementById('createCourseScheduleMonth')?.value, 10);
+        const d = parseInt(document.getElementById('createCourseScheduleDay')?.value, 10);
+
+        if (!y || !m || !d) {
+          showToast('Please select a valid Date, Month, and Year for the batch schedule.', 'warning');
+          return;
+        }
+
+        if (isMonthInPast(y, m)) {
+          showToast(`Cannot create course: The selected batch schedule month (${MONTH_NAMES[m - 1]} ${y}) has already passed in the current year.`, 'warning');
+          return;
+        }
+        const today = new Date();
+        if (y === today.getFullYear() && m === (today.getMonth() + 1) && d < today.getDate()) {
+          showToast(`Cannot create course: Day ${d} of this month has already passed in the current year.`, 'warning');
+          return;
+        }
+
+        schedVal = `${MONTH_NAMES[m - 1]} ${d}, ${y} (1 Month Batch: 1st Week to Last Week)`;
+        availMonths = [`${y}-${String(m).padStart(2, '0')}`];
+      } else {
+        const selectedMonths = Array.from(createCoursePickerState.selectedMonths).sort();
+        if (selectedMonths.length === 0) {
+          showToast('Please select at least 1 month (recommended 2 or more months) for the batch schedule.', 'warning');
+          return;
+        }
+        for (const mKey of selectedMonths) {
+          const [yr, mo] = mKey.split('-').map(Number);
+          if (isMonthInPast(yr, mo)) {
+            showToast(`Cannot create course: Month ${mKey} has already passed in the current year.`, 'warning');
+            return;
+          }
+        }
+        schedVal = selectedMonths.map(m => computeMonthSchedule(m).monthName).join(', ') + ' (1 Month Each: 1st Week to Last Week)';
+        availMonths = selectedMonths;
+      }
+
+      const selDays = createCourseDaysController ? createCourseDaysController.getSelectedDays() : ['Monday', 'Wednesday', 'Saturday'];
+      if (!selDays || selDays.length === 0) {
+        showToast('Please select at least 1 session day for this course.', 'warning');
+        return;
+      }
+      const selTimes = createCourseTimeController ? createCourseTimeController.getSelectedTimes() : ['07:00 A.M - 11:00 A.M', '01:00 P.M - 5:00 P.M'];
+      if (!selTimes || selTimes.length === 0) {
+        showToast('Please select at least 1 class time offering (AM or PM).', 'warning');
+        return;
+      }
+      const timeVal = createCourseTimeController ? createCourseTimeController.getTimeString() : (document.getElementById('courseInputTime')?.value || '07:00 A.M - 11:00 A.M');
+
       if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
+
+      const learningsRaw = document.getElementById('courseInputLearnings')?.value || '';
+      const learningsArr = learningsRaw.split(/\r?\n|,/).map(s => s.trim()).filter(Boolean);
 
       const payload = {
         name: document.getElementById('courseInputName')?.value,
         category: document.getElementById('courseInputCategory')?.value,
-        duration: document.getElementById('courseInputDuration')?.value,
+        duration: document.getElementById('courseInputDuration')?.value || '1 Month',
         student_price: document.getElementById('courseInputStudentPrice')?.value,
-        batch_price: document.getElementById('courseInputBatchPrice')?.value,
+        training_time: timeVal,
+        session_schedule: document.getElementById('courseInputSessions')?.value || `1 per week on ${selDays[0]} in 1 month (4 Sessions)`,
+        available_days: selDays,
+        available_times: selTimes,
+        requirements: document.getElementById('courseInputRequirements')?.value || 'Valid UMak ID',
+        certification: document.getElementById('courseInputCertification')?.value || 'Certificate of Completion',
+        learnings: learningsArr,
+        batch_schedule: schedVal,
+        available_months: availMonths,
         location: document.getElementById('courseInputLocation')?.value,
+        assigned_trainer: document.getElementById('courseInputTrainer')?.value || '',
         description: document.getElementById('courseInputDesc')?.value
       };
 
@@ -6932,8 +10847,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!res.ok) throw new Error(result.error || 'Failed to create course');
 
         showToast('Training course created successfully!', 'success');
-        modal.style.display = 'none';
-        form.reset();
+        createModal.style.display = 'none';
+        createForm.reset();
         await loadTrainingCourses();
         if (result.course?.id) selectTrainingCourse(result.course.id);
       } catch (err) {
@@ -6943,12 +10858,448 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-});
+
+  // 2. Edit Course Modal
+  const editModal = document.getElementById('editCourseModal');
+  const btnEditCourse = document.getElementById('btnEditCourse');
+  const closeEditBtn = document.getElementById('closeEditCourseModal');
+  const cancelEditBtn = document.getElementById('btnCancelEditCourse');
+  const editForm = document.getElementById('editCourseForm');
+
+  if (btnEditCourse) {
+    btnEditCourse.onclick = openEditCourseModal;
+    btnEditCourse.addEventListener('click', openEditCourseModal);
+  }
+  if (closeEditBtn && editModal) closeEditBtn.addEventListener('click', () => { editModal.style.display = 'none'; });
+  if (cancelEditBtn && editModal) cancelEditBtn.addEventListener('click', () => { editModal.style.display = 'none'; });
+
+  if (editForm) {
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const courseId = document.getElementById('editCourseId')?.value;
+      if (!courseId) return;
+
+      const submitBtn = document.getElementById('btnSubmitEditCourse');
+
+      let schedVal = '';
+      let availMonths = [];
+
+      if (editCoursePickerState.mode === 'date-month-year') {
+        const y = parseInt(document.getElementById('editCourseScheduleYear')?.value, 10);
+        const m = parseInt(document.getElementById('editCourseScheduleMonth')?.value, 10);
+        const d = parseInt(document.getElementById('editCourseScheduleDay')?.value, 10);
+
+        if (!y || !m || !d) {
+          showToast('Please select a valid Date, Month, and Year for the batch schedule.', 'warning');
+          return;
+        }
+
+        if (isMonthInPast(y, m)) {
+          showToast(`Cannot update course: The selected batch schedule month (${MONTH_NAMES[m - 1]} ${y}) has already passed in the current year.`, 'warning');
+          return;
+        }
+        const today = new Date();
+        if (y === today.getFullYear() && m === (today.getMonth() + 1) && d < today.getDate()) {
+          showToast(`Cannot update course: Day ${d} of this month has already passed in the current year.`, 'warning');
+          return;
+        }
+
+        schedVal = `${MONTH_NAMES[m - 1]} ${d}, ${y} (1 Month Batch: 1st Week to Last Week)`;
+        availMonths = [`${y}-${String(m).padStart(2, '0')}`];
+      } else {
+        const selectedMonths = Array.from(editCoursePickerState.selectedMonths).sort();
+        if (selectedMonths.length === 0) {
+          showToast('Please select at least 1 month (recommended 2 or more months) for the batch schedule.', 'warning');
+          return;
+        }
+        for (const mKey of selectedMonths) {
+          const [yr, mo] = mKey.split('-').map(Number);
+          if (isMonthInPast(yr, mo)) {
+            showToast(`Cannot update course: Month ${mKey} has already passed in the current year.`, 'warning');
+            return;
+          }
+        }
+        schedVal = selectedMonths.map(m => computeMonthSchedule(m).monthName).join(', ') + ' (1 Month Each: 1st Week to Last Week)';
+        availMonths = selectedMonths;
+      }
+
+      const selDays = editCourseDaysController ? editCourseDaysController.getSelectedDays() : ['Monday', 'Wednesday', 'Saturday'];
+      if (!selDays || selDays.length === 0) {
+        showToast('Please select at least 1 session day for this course.', 'warning');
+        return;
+      }
+      const selTimes = editCourseTimeController ? editCourseTimeController.getSelectedTimes() : ['07:00 A.M - 11:00 A.M', '01:00 P.M - 5:00 P.M'];
+      if (!selTimes || selTimes.length === 0) {
+        showToast('Please select at least 1 class time offering (AM or PM).', 'warning');
+        return;
+      }
+      const timeVal = editCourseTimeController ? editCourseTimeController.getTimeString() : (document.getElementById('editCourseInputTime')?.value || '07:00 A.M - 11:00 A.M');
+
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Updating...'; }
+
+      const learningsRaw = document.getElementById('editCourseInputLearnings')?.value || '';
+      const learningsArr = learningsRaw.split(/\r?\n|,/).map(s => s.trim()).filter(Boolean);
+
+      const payload = {
+        name: document.getElementById('editCourseInputName')?.value,
+        category: document.getElementById('editCourseInputCategory')?.value,
+        duration: document.getElementById('editCourseInputDuration')?.value || '1 Month',
+        student_price: document.getElementById('editCourseInputStudentPrice')?.value,
+        training_time: timeVal,
+        session_schedule: document.getElementById('editCourseInputSessions')?.value || `1 per week on ${selDays[0]} in 1 month (4 Sessions)`,
+        available_days: selDays,
+        available_times: selTimes,
+        requirements: document.getElementById('editCourseInputRequirements')?.value || 'Valid UMak ID',
+        certification: document.getElementById('editCourseInputCertification')?.value || 'Certificate of Completion',
+        learnings: learningsArr,
+        batch_schedule: schedVal,
+        available_months: availMonths,
+        location: document.getElementById('editCourseInputLocation')?.value,
+        assigned_trainer: document.getElementById('editCourseInputTrainer')?.value || '',
+        description: document.getElementById('editCourseInputDesc')?.value
+      };
+
+      try {
+        const res = await fetch(`/api/training/courses/${courseId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-session-id': getSessionId(),
+            'x-employee-role': getCurrentUserRole()
+          },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Failed to update course');
+
+        showToast('Course information updated successfully!', 'success');
+        editModal.style.display = 'none';
+
+        // Update activeTrainingCourse object & re-render view
+        activeTrainingCourse = result.course;
+        const titleEl = document.getElementById('tcActiveTitle');
+        const priceEl = document.getElementById('tcActivePrice');
+        const descEl = document.getElementById('tcActiveDesc');
+        if (titleEl) titleEl.textContent = result.course.name;
+        if (priceEl) {
+          let schedText = formatBatchScheduleText(result.course.batch_schedule || 'Monthly (1 Month Each: 1st Week to Last Week)');
+          let timeText = result.course.training_time || '07:00 A.M - 11:00 A.M';
+          if (Array.isArray(result.course.available_times) && result.course.available_times.length > 1) {
+            timeText = 'AM & PM Classes (07:00 AM - 11:00 AM / 01:00 PM - 5:00 PM)';
+          }
+          priceEl.innerHTML = `
+            <span style="color:#047857; font-weight:700;">Student Price: ₱${Number(result.course.student_price || 0).toLocaleString()}</span>
+            <span style="color:#cbd5e1; margin:0 8px;">|</span>
+            <span style="color:#b45309; font-weight:600;"><iconify-icon icon="solar:clock-circle-bold-duotone" style="vertical-align:-2px; color:#d97706;"></iconify-icon> Time: ${escapeHtml(timeText)}</span>
+            <span style="color:#cbd5e1; margin:0 8px;">|</span>
+            <span style="color:#0f172a; font-weight:600;"><iconify-icon icon="solar:calendar-bold-duotone" style="vertical-align:-2px; color:#0284c7;"></iconify-icon> Batch Schedule: ${escapeHtml(schedText)}</span>
+          `;
+        }
+        if (descEl) descEl.textContent = result.course.description || 'No description provided.';
+
+        const durEl = document.getElementById('tcActiveDuration');
+        if (durEl) durEl.textContent = `Duration: ${result.course.duration || '1 Month'}`;
+
+        const sessEl = document.getElementById('tcActiveSessions');
+        if (sessEl) {
+          if (Array.isArray(result.course.available_days) && result.course.available_days.length > 0) {
+            sessEl.textContent = `Sessions: Available on ${result.course.available_days.join(', ')} (4 sessions/month per day)`;
+          } else {
+            sessEl.textContent = `Sessions: ${result.course.session_schedule || '1 per week on Saturday in 1 month (4 Sessions)'}`;
+          }
+        }
+
+        const reqEl = document.getElementById('tcActiveRequirements');
+        if (reqEl) reqEl.textContent = `Requirements: ${result.course.requirements || 'Valid UMak ID'}`;
+
+        const certEl = document.getElementById('tcActiveCertificate');
+        if (certEl) certEl.textContent = `Certificate: ${result.course.certification || 'Certificate of Completion'}`;
+
+        const learningsEl = document.getElementById('tcActiveLearnings');
+        if (learningsEl) {
+          let items = [];
+          if (Array.isArray(result.course.learnings)) {
+            items = result.course.learnings;
+          } else if (typeof result.course.learnings === 'string' && result.course.learnings.trim()) {
+            items = result.course.learnings.split(/\r?\n|,/).map(s => s.trim()).filter(Boolean);
+          }
+          if (items.length === 0) {
+            items = ['Core Safety Principles', 'Practical Hands-on Drills'];
+          }
+          learningsEl.innerHTML = items.map(item => `
+            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 11px; color: #334155; font-weight: 500;">
+              <iconify-icon icon="solar:check-circle-bold" style="color: #10b981; font-size: 12px;"></iconify-icon>
+              ${escapeHtml(item)}
+            </span>
+          `).join('');
+        }
+
+        // Refresh left list to update name/price if modified
+        await loadTrainingCourses();
+      } catch (err) {
+        showToast(err.message || 'Error updating course', 'error');
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update Course'; }
+      }
+    });
+  }
+
+  // 3. Delete Course Button
+  const deleteBtn = document.getElementById('btnDeleteCourse');
+  if (deleteBtn) {
+    deleteBtn.onclick = deleteActiveCourse;
+    deleteBtn.addEventListener('click', deleteActiveCourse);
+  }
+
+  // 4. Add Batch Schedule Modal
+  const addBatchModal = document.getElementById('addBatchModal');
+  const btnAddSchedule = document.getElementById('btnAddSchedule');
+  const closeBatchBtn = document.getElementById('closeAddBatchModal');
+  const cancelBatchBtn = document.getElementById('btnCancelAddBatch');
+  const addBatchForm = document.getElementById('addBatchForm');
+
+  if (btnAddSchedule) {
+    btnAddSchedule.onclick = openAddBatchModal;
+    btnAddSchedule.addEventListener('click', openAddBatchModal);
+  }
+  if (closeBatchBtn && addBatchModal) closeBatchBtn.addEventListener('click', () => { addBatchModal.style.display = 'none'; });
+  if (cancelBatchBtn && addBatchModal) cancelBatchBtn.addEventListener('click', () => { addBatchModal.style.display = 'none'; });
+
+  // 5. Batch Details Modal (Schedule Card Details)
+  const batchDetailsModal = document.getElementById('batchDetailsModal');
+  const closeDetailsBtn = document.getElementById('closeBatchDetailsModal');
+  const dismissDetailsBtn = document.getElementById('btnDismissBatchDetails');
+  if (closeDetailsBtn && batchDetailsModal) closeDetailsBtn.addEventListener('click', () => { batchDetailsModal.style.display = 'none'; });
+  if (dismissDetailsBtn && batchDetailsModal) dismissDetailsBtn.addEventListener('click', () => { batchDetailsModal.style.display = 'none'; });
+
+  if (addBatchForm) {
+    addBatchForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!activeTrainingCourse) return;
+
+      const submitBtn = document.getElementById('btnSubmitAddBatch');
+
+      // Validate training time offerings (AM / PM)
+      const selBatchTimes = batchTimeController ? batchTimeController.getSelectedTimes() : [];
+      if (selBatchTimes.length === 0) {
+        showToast('Please select at least one training time slot (AM or PM).', 'warning');
+        return;
+      }
+
+      // Validate session days (Monday - Sunday)
+      const selBatchDays = batchDaysController ? batchDaysController.getSelectedDays() : [];
+      if (selBatchDays.length === 0) {
+        showToast('Please select at least one session day (Monday - Sunday).', 'warning');
+        return;
+      }
+
+      const batchDurationVal = document.getElementById('batchInputDuration')?.value.trim() || activeTrainingCourse?.duration || '1 Month';
+      const batchTimeVal = batchTimeController ? batchTimeController.getTimeString() : (document.getElementById('batchInputTime')?.value || '07:00 A.M - 11:00 A.M');
+      const batchSessionVal = `1 per week on ${selBatchDays.join(', ')} in ${batchDurationVal} (4 Sessions each)`;
+
+      if (batchPickerState.mode === 'date-month-year') {
+        // Date, Month & Year Mode
+        const selYear = parseInt(document.getElementById('batchInputScheduleYear')?.value, 10);
+        const selMonth = parseInt(document.getElementById('batchInputScheduleMonth')?.value, 10);
+        const selDay = parseInt(document.getElementById('batchInputScheduleDay')?.value, 10);
+
+        if (!selYear || !selMonth || !selDay) {
+          showToast('Please select a valid Date, Month, and Year for the batch schedule.', 'warning');
+          return;
+        }
+
+        if (isMonthInPast(selYear, selMonth)) {
+          showToast(`Cannot create schedule: The dates for ${MONTH_NAMES[selMonth - 1]} ${selYear} have already passed in the current year.`, 'warning');
+          return;
+        }
+
+        const today = new Date();
+        const curY = today.getFullYear();
+        const curM = today.getMonth() + 1;
+        const curD = today.getDate();
+        if (selYear === curY && selMonth === curM && selDay < curD) {
+          showToast(`Cannot create schedule: Day ${selDay} of this month has already passed in the current year.`, 'warning');
+          return;
+        }
+
+        const monthKey = `${selYear}-${String(selMonth).padStart(2, '0')}`;
+        const isHeadOrAdmin = isHeadOrAdminRole();
+        const courseAvail = new Set(activeTrainingCourse?.available_months || []);
+        if (!isHeadOrAdmin && courseAvail.size > 0 && !courseAvail.has(monthKey)) {
+          showToast(`This month (${MONTH_NAMES[selMonth - 1]} ${selYear}) has not been made available by the HEAD or System Admin.`, 'warning');
+          return;
+        }
+
+        const dateStr = `${selYear}-${String(selMonth).padStart(2, '0')}-${String(selDay).padStart(2, '0')}`;
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating Batch...'; }
+
+        const payload = {
+          course_id: activeTrainingCourse.id,
+          requested_date: dateStr,
+          batch_month: monthKey,
+          duration: batchDurationVal,
+          requested_time: batchTimeVal,
+          available_times: selBatchTimes,
+          requested_day: selBatchDays.join(', '),
+          available_days: selBatchDays,
+          session_schedule: batchSessionVal,
+          participants: document.getElementById('batchInputParticipants')?.value,
+          venue: document.getElementById('batchInputVenue')?.value,
+          assigned_trainer_id: document.getElementById('batchInputTrainer')?.value,
+          email: document.getElementById('batchInputEmail')?.value,
+          payment_status: 'paid',
+          total_php: activeTrainingCourse.student_price || 0,
+          notes: document.getElementById('batchInputNotes')?.value
+        };
+
+        try {
+          const res = await fetch('/api/training/bookings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-session-id': getSessionId(),
+              'x-employee-role': getCurrentUserRole()
+            },
+            body: JSON.stringify(payload)
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || 'Failed to add batch schedule');
+
+          showToast(`Successfully created batch schedule for ${dateStr}!`, 'success');
+          addBatchModal.style.display = 'none';
+          addBatchForm.reset();
+
+          if (result.course) {
+            activeTrainingCourse = result.course;
+          }
+          await loadTrainingCourses();
+          if (activeTrainingCourse?.id) {
+            await selectTrainingCourse(activeTrainingCourse.id);
+          }
+        } catch (err) {
+          showToast(err.message || 'Error creating batch schedule', 'error');
+        } finally {
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Batch'; }
+        }
+      } else {
+        // Multi-Month Mode (Pick by month: 2 or more months)
+        const selectedMonths = Array.from(batchPickerState.selectedMonths).sort();
+        if (selectedMonths.length === 0) {
+          showToast('Please select at least 1 month (recommended 2 or more months) for the batch schedule.', 'warning');
+          return;
+        }
+
+        // Validate none of the selected months are in the past
+        for (const m of selectedMonths) {
+          const [yr, mo] = m.split('-').map(Number);
+          if (isMonthInPast(yr, mo)) {
+            showToast(`Cannot create schedule: ${m} has already passed in the current year.`, 'warning');
+            return;
+          }
+        }
+
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating Batch(es)...'; }
+
+        const payload = {
+          course_id: activeTrainingCourse.id,
+          batch_months: selectedMonths,
+          duration: batchDurationVal,
+          requested_time: batchTimeVal,
+          available_times: selBatchTimes,
+          requested_day: selBatchDays.join(', '),
+          available_days: selBatchDays,
+          session_schedule: batchSessionVal,
+          participants: document.getElementById('batchInputParticipants')?.value,
+          venue: document.getElementById('batchInputVenue')?.value,
+          assigned_trainer_id: document.getElementById('batchInputTrainer')?.value,
+          email: document.getElementById('batchInputEmail')?.value,
+          payment_status: 'paid',
+          total_php: activeTrainingCourse.student_price || 0,
+          notes: document.getElementById('batchInputNotes')?.value
+        };
+
+        try {
+          const res = await fetch('/api/training/bookings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-session-id': getSessionId(),
+              'x-employee-role': getCurrentUserRole()
+            },
+            body: JSON.stringify(payload)
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || 'Failed to add batch schedule');
+
+          const countCreated = result.bookings?.length || selectedMonths.length;
+          showToast(`Successfully created ${countCreated} batch schedule(s) for ${selectedMonths.join(', ')}!`, 'success');
+          addBatchModal.style.display = 'none';
+          addBatchForm.reset();
+
+          if (result.course) {
+            activeTrainingCourse = result.course;
+          }
+          await loadTrainingCourses();
+          if (activeTrainingCourse?.id) {
+            await selectTrainingCourse(activeTrainingCourse.id);
+          }
+        } catch (err) {
+          showToast(err.message || 'Error creating batch schedule', 'error');
+        } finally {
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Batch'; }
+        }
+      }
+    });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTrainingCenterModals);
+} else {
+  initTrainingCenterModals();
+}
+
+window.initTrainingCenterModals = initTrainingCenterModals;
 
 window.selectTrainingCourse = selectTrainingCourse;
 window.assignBookingTrainer = assignBookingTrainer;
 window.updateBookingPayment = updateBookingPayment;
+window.deleteBookingBatch = deleteBookingBatch;
+window.openRemoveStudentModal = openRemoveStudentModal;
+window.closeRemoveStudentModal = closeRemoveStudentModal;
+window.confirmRemoveStudent = confirmRemoveStudent;
+window.deleteActiveCourse = deleteActiveCourse;
+window.openDeleteCourseModal = openDeleteCourseModal;
+window.closeDeleteCourseModal = closeDeleteCourseModal;
+window.confirmDeleteCourse = confirmDeleteCourse;
+window.openEditCourseModal = openEditCourseModal;
+window.openAddBatchModal = openAddBatchModal;
 window.loadTrainingCenterData = loadTrainingCenterData;
+
+window.handleScheduleCardClick = handleScheduleCardClick;
+window.openBatchDetailsModal = openBatchDetailsModal;
+window.isBatchScheduleFinished = isBatchScheduleFinished;
+window.setBookingPaymentFromModal = setBookingPaymentFromModal;
+window.updateModalPaymentButtons = updateModalPaymentButtons;
+window.handlePassedMonthClick = handlePassedMonthClick;
+window.handleLockedMonthClick = handleLockedMonthClick;
+window.toggleBatchMonthSelection = toggleBatchMonthSelection;
+window.selectBatchPickerYear = selectBatchPickerYear;
+window.switchBatchScheduleMode = switchBatchScheduleMode;
+window.initDateMonthYearPicker = initDateMonthYearPicker;
+window.validateDateMonthYearSelection = validateDateMonthYearSelection;
+
+window.selectCreateCourseYear = selectCreateCourseYear;
+window.switchCreateCourseScheduleMode = switchCreateCourseScheduleMode;
+window.toggleCreateCourseMonthSelection = toggleCreateCourseMonthSelection;
+window.initCreateCourseSchedulePicker = initCreateCourseSchedulePicker;
+window.validateCreateCourseDateMonthYearSelection = validateCreateCourseDateMonthYearSelection;
+
+window.selectEditCourseYear = selectEditCourseYear;
+window.switchEditCourseScheduleMode = switchEditCourseScheduleMode;
+window.toggleEditCourseMonthSelection = toggleEditCourseMonthSelection;
+window.initEditCourseSchedulePicker = initEditCourseSchedulePicker;
+window.validateEditCourseDateMonthYearSelection = validateEditCourseDateMonthYearSelection;
 
 window.startResponderLocationTracking = startResponderLocationTracking;
 window.stopResponderLocationTracking = stopResponderLocationTracking;

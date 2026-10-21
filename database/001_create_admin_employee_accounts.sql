@@ -13,7 +13,7 @@ CREATE TABLE employee_accounts (
     CONSTRAINT uq_employee_accounts_employee_id UNIQUE (employee_id),
     CONSTRAINT uq_employee_accounts_employee_email UNIQUE (employee_email),
     CONSTRAINT chk_employee_accounts_role
-        CHECK (employee_role IN ('HEAD', 'System Admin', 'Responder')),
+        CHECK (employee_role IN ('HEAD', 'System Admin', 'Responder', 'Trainer')),
     CONSTRAINT chk_employee_accounts_status
         CHECK (employee_status IN ('Active', 'Inactive', 'Suspended', 'Pending'))
 );

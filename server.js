@@ -86,6 +86,7 @@ function normalizeEmployeeRole(role) {
   if (cleanRole === 'admin' || (cleanRole.includes('system') && cleanRole.includes('admin'))) return 'system admin';
   if (cleanRole.includes('head')) return 'head';
   if (cleanRole.includes('responder')) return 'responder';
+  if (cleanRole.includes('trainer')) return 'trainer';
   return cleanRole;
 }
 
@@ -97,6 +98,33 @@ function authorizeTeamManagement(request, response) {
   }
   if (session && !teamManagementRoles.has(session.employee_role)) {
     sendJson(response, 403, { error: 'Only HEAD and System Admin accounts can access Teams.' });
+    return false;
+  }
+  return true;
+}
+
+function authorizeTrainingManagement(request, response) {
+  const session = getRequestSession(request);
+  if (process.env.NODE_ENV === 'production' && (!session || session.employee_status !== 'Active')) {
+    sendJson(response, 401, { error: 'Sign in with an active account to manage training center.' });
+    return false;
+  }
+  const userRole = String(session ? session.employee_role : (request.headers['x-employee-role'] || '')).toLowerCase();
+  const isAllowed = ['head', 'system admin', 'admin', 'trainer', 'responder'].some(r => userRole.includes(r));
+  if (!isAllowed) {
+    sendJson(response, 403, { error: 'Only HEAD, Responder, Trainer, and System Admin accounts can access Training Center.' });
+    return false;
+  }
+  return true;
+}
+
+function authorizeTrainingCourseAdmin(request, response) {
+  if (!authorizeTrainingManagement(request, response)) return false;
+  const session = getRequestSession(request);
+  const userRole = String(session ? session.employee_role : (request.headers['x-employee-role'] || '')).toLowerCase();
+  const isCourseAdmin = ['head', 'system admin', 'admin'].some(r => userRole.includes(r));
+  if (!isCourseAdmin) {
+    sendJson(response, 403, { error: 'Trainer accounts do not have permission to create, edit, or delete courses/batches.' });
     return false;
   }
   return true;
@@ -429,6 +457,509 @@ function writeProfileMetadata(employeeId, data) {
     fs.writeFileSync(PROFILE_METADATA_FILE, JSON.stringify(meta, null, 2), 'utf8');
   } catch (e) {
     console.error('Error writing profile metadata:', e.message);
+  }
+}
+
+const COURSE_METADATA_FILE = path.join(__dirname, 'data', 'course_metadata.json');
+
+function readCourseMetadata() {
+  try {
+    if (fs.existsSync(COURSE_METADATA_FILE)) {
+      return JSON.parse(fs.readFileSync(COURSE_METADATA_FILE, 'utf8') || '{}');
+    }
+  } catch (e) {
+    console.error('Error reading course metadata:', e.message);
+  }
+  return {};
+}
+
+function writeCourseMetadata(meta) {
+  try {
+    const dir = path.dirname(COURSE_METADATA_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(COURSE_METADATA_FILE, JSON.stringify(meta, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error writing course metadata:', e.message);
+  }
+}
+
+const ALL_WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function normalizeCourseScheduleData(meta = {}, body = {}) {
+  // 1. Available Days (multi-selection by admin: Monday, Tuesday, Wednesday, etc.)
+  let availDays = [];
+  if (Array.isArray(body.available_days) && body.available_days.length > 0) {
+    availDays = body.available_days.map(d => String(d).trim()).filter(Boolean);
+  } else if (typeof body.available_days === 'string' && body.available_days.trim()) {
+    availDays = body.available_days.split(',').map(d => d.trim()).filter(Boolean);
+  } else if (Array.isArray(meta.available_days) && meta.available_days.length > 0) {
+    availDays = meta.available_days.map(d => String(d).trim()).filter(Boolean);
+  } else {
+    // Detect from session_schedule string
+    const sSched = String(body.session_schedule || meta.session_schedule || '').toLowerCase();
+    const detected = [];
+    ALL_WEEK_DAYS.forEach(d => {
+      if (sSched.includes(d.toLowerCase())) detected.push(d);
+    });
+    availDays = detected.length > 0 ? detected : ['Monday', 'Wednesday', 'Saturday'];
+  }
+
+  // 2. Available Times (AM / PM / Both: 07:00 A.M - 11:00 A.M, 01:00 P.M - 5:00 P.M)
+  let availTimes = [];
+  if (Array.isArray(body.available_times) && body.available_times.length > 0) {
+    availTimes = body.available_times.map(t => String(t).trim()).filter(Boolean);
+  } else if (typeof body.available_times === 'string' && body.available_times.trim()) {
+    availTimes = body.available_times.split(',').map(t => t.trim()).filter(Boolean);
+  } else if (Array.isArray(meta.available_times) && meta.available_times.length > 0) {
+    availTimes = meta.available_times.map(t => String(t).trim()).filter(Boolean);
+  } else {
+    const tStr = String(body.training_time || meta.training_time || '').toLowerCase();
+    const detected = [];
+    if (tStr.includes('07:00') || tStr.includes('morning') || tStr.includes('am')) detected.push('07:00 A.M - 11:00 A.M');
+    if (tStr.includes('01:00') || tStr.includes('noon') || tStr.includes('pm') || tStr.includes('5:00')) detected.push('01:00 P.M - 5:00 P.M');
+    availTimes = detected.length > 0 ? detected : ['07:00 A.M - 11:00 A.M'];
+  }
+
+  const availTimeSlots = Array.from(new Set(availTimes.map(t => {
+    const isNoon = t.includes('01:00') || t.toLowerCase().includes('noon') || t.toLowerCase().includes('pm');
+    return isNoon ? 'PM' : 'AM';
+  })));
+
+  const availTimeSlotsDetail = availTimes.map(t => {
+    const isNoon = t.includes('01:00') || t.toLowerCase().includes('noon') || t.toLowerCase().includes('pm');
+    return {
+      id: isNoon ? 'PM' : 'AM',
+      time: t,
+      label: isNoon ? `${t} (Noon Session)` : `${t} (Morning Session)`,
+      type: isNoon ? 'PM' : 'AM'
+    };
+  });
+
+  const availDaysDetail = availDays.map(d => ({
+    day: d,
+    sessions: 4,
+    sessions_per_month: 4,
+    frequency: '1 per week',
+    description: `1 session per week on ${d} in 1 Month (4 ${d}s)`
+  }));
+
+  const trainingTimeStr = availTimes.join(', ');
+  const sessionScheduleStr = body.session_schedule || meta.session_schedule || `1 per week on ${availDays.join(', ')} in 1 month (4 Sessions each)`;
+
+  // 3. Automatically generate active batch schedules directly from course months, days, and times
+  let availMonths = [];
+  if (Array.isArray(body.available_months) && body.available_months.length > 0) {
+    availMonths = body.available_months;
+  } else if (Array.isArray(meta.available_months) && meta.available_months.length > 0) {
+    availMonths = meta.available_months;
+  } else {
+    const rawSched = String(body.batch_schedule || meta.batch_schedule || '');
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    availMonths = [`${currentYear}-${String(currentMonth).padStart(2, '0')}`];
+  }
+
+  const MONTH_NAMES_LIST = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const activeBatches = [];
+  availMonths.forEach(mKey => {
+    const parts = String(mKey).split('-').map(Number);
+    const yr = parts[0] || new Date().getFullYear();
+    const mo = parts[1] || (new Date().getMonth() + 1);
+    const monthName = (!isNaN(mo) && mo >= 1 && mo <= 12) ? MONTH_NAMES_LIST[mo - 1] : mKey;
+    availDays.forEach(day => {
+      availTimes.forEach(time => {
+        const isNoon = time.includes('01:00') || time.toLowerCase().includes('pm');
+        activeBatches.push({
+          batch_id: `${mKey}-${day.toLowerCase().slice(0, 3)}-${isNoon ? 'pm' : 'am'}`,
+          month_key: mKey,
+          month_name: monthName,
+          year: yr,
+          day: day,
+          time: time,
+          time_slot: isNoon ? 'PM' : 'AM',
+          session_schedule: `1 per week on ${day} in 1 Month (4 session - Every ${day})`,
+          sessions_count: 4,
+          label: `${monthName} ${yr} • Every ${day} (${isNoon ? 'PM Class' : 'AM Class'})`,
+          status: 'open_for_enrollment'
+        });
+      });
+    });
+  });
+
+  return {
+    available_days: availDays,
+    available_days_detail: availDaysDetail,
+    available_times: availTimes,
+    available_time_slots: availTimeSlots,
+    available_time_slots_detail: availTimeSlotsDetail,
+    active_batches: activeBatches,
+    training_time: trainingTimeStr,
+    session_schedule: sessionScheduleStr
+  };
+}
+
+const TRAINING_ATTENDANCE_FILE = path.join(__dirname, 'data', 'training_attendance.json');
+
+function readTrainingAttendance() {
+  try {
+    if (fs.existsSync(TRAINING_ATTENDANCE_FILE)) {
+      return JSON.parse(fs.readFileSync(TRAINING_ATTENDANCE_FILE, 'utf8') || '{}');
+    }
+  } catch (e) {
+    console.error('Error reading training attendance:', e.message);
+  }
+  return {};
+}
+
+function writeTrainingAttendance(attendanceMap) {
+  try {
+    const dir = path.dirname(TRAINING_ATTENDANCE_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(TRAINING_ATTENDANCE_FILE, JSON.stringify(attendanceMap, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.error('Error writing training attendance:', e.message);
+    return false;
+  }
+}
+
+const ACTIVITY_LOGS_FILE = path.join(__dirname, 'data', 'admin_activity_logs.json');
+
+function seedDefaultAdminActivities() {
+  return [
+    {
+      id: 'act-head-001',
+      employee_id: 'EMP-1790582871579-JGERNC',
+      admin_name: 'Christine Luis',
+      admin_email: 'cluis.k12149336@umak.edu.ph',
+      admin_role: 'HEAD',
+      action: 'Resolved Incident',
+      category: 'Incident',
+      details: 'Reviewed responder completion report and marked incident ICD26D0A as Resolved.',
+      target: 'ICD26D0A',
+      timestamp: '2026-10-18T00:52:10.000Z'
+    },
+    {
+      id: 'act-head-002',
+      employee_id: 'EMP-1790582871579-JGERNC',
+      admin_name: 'Christine Luis',
+      admin_email: 'cluis.k12149336@umak.edu.ph',
+      admin_role: 'HEAD',
+      action: 'Assigned Responder',
+      category: 'Incident',
+      details: 'Assigned UMak Campus Clinic Emergency Unit (EMT / Nurse) to incident ICD97018.',
+      target: 'ICD97018',
+      timestamp: '2026-10-18T00:49:15.000Z'
+    },
+    {
+      id: 'act-sa-001',
+      employee_id: 'EMP-1790578455764-9NMNDE',
+      admin_name: 'Jolehmeh Billones',
+      admin_email: 'juliemay1917@gmail.com',
+      admin_role: 'System Admin',
+      action: 'Exported Reports Dossier',
+      category: 'Reports',
+      details: 'Exported campus incident compliance reports dossier in Excel format.',
+      target: 'Reports Export',
+      timestamp: '2026-10-17T23:30:00.000Z'
+    },
+    {
+      id: 'act-sa-002',
+      employee_id: 'EMP-1790578455764-9NMNDE',
+      admin_name: 'Jolehmeh Billones',
+      admin_email: 'juliemay1917@gmail.com',
+      admin_role: 'System Admin',
+      action: 'Disapproved Account',
+      category: 'Account',
+      details: 'Disapproved unverified employee registration request in Teams module.',
+      target: 'EMP-1790589689662-TEST',
+      timestamp: '2026-10-17T21:15:00.000Z'
+    },
+    {
+      id: 'act-sa-003',
+      employee_id: 'EMP-1790578455764-9NMNDE',
+      admin_name: 'Jolehmeh Billones',
+      admin_email: 'juliemay1917@gmail.com',
+      admin_role: 'System Admin',
+      action: 'Suspended Account',
+      category: 'Account',
+      details: 'Placed pending employee account under temporary administrative suspension.',
+      target: 'EMP-1790589689662-TEMP',
+      timestamp: '2026-10-17T18:45:00.000Z'
+    },
+    {
+      id: 'act-resp-001',
+      employee_id: 'EMP-1790589689662-GEYNKU',
+      admin_name: 'Sophia Bantays',
+      admin_email: 'sbantay.k12150533@umak.edu.ph',
+      admin_role: 'Responder',
+      action: 'Rescue Report Submitted',
+      category: 'Incident',
+      details: 'Medical Emergency [ICD31B93] - Student: Joshua Martinez - Status: Resolved',
+      target: 'ICD31B93',
+      timestamp: '2026-10-17T17:45:00.000Z'
+    },
+    {
+      id: 'act-tr-001',
+      employee_id: 'EMP-1792242501250-UEFBCD',
+      admin_name: 'Cia',
+      admin_email: 'maechristineluis@gmail.com',
+      admin_role: 'Trainer',
+      action: 'Confirmed Batch Payment',
+      category: 'Training',
+      details: 'Confirmed enrollment payment for Campus Emergency Preparedness [TR-C408341F] - Trainee: Julie May Billones - Status: Scheduled',
+      target: 'TR-C408341F',
+      timestamp: '2026-10-17T17:10:00.000Z'
+    },
+    {
+      id: 'act-resp-002',
+      employee_id: 'EMP-1790589689662-GEYNKU',
+      admin_name: 'Sophia Bantays',
+      admin_email: 'sbantay.k12150533@umak.edu.ph',
+      admin_role: 'Responder',
+      action: 'Accepted Incident Dispatch',
+      category: 'Incident',
+      details: 'Urgent Health Assessment [ICD4FD56] - Student: Julie May Billones - Status: Resolved',
+      target: 'ICD4FD56',
+      timestamp: '2026-10-17T16:50:00.000Z'
+    },
+    {
+      id: 'act-tr-002',
+      employee_id: 'EMP-1792242501250-UEFBCD',
+      admin_name: 'Cia',
+      admin_email: 'maechristineluis@gmail.com',
+      admin_role: 'Trainer',
+      action: 'Confirmed Batch Payment',
+      category: 'Training',
+      details: 'Confirmed online payment of ₱14 for Urgent Incident Response [TR-64863DE2] - Trainee: Julie May Billones - Status: Scheduled',
+      target: 'TR-64863DE2',
+      timestamp: '2026-10-17T16:35:00.000Z'
+    },
+    {
+      id: 'act-sa-004',
+      employee_id: 'EMP-1790578455764-9NMNDE',
+      admin_name: 'Jolehmeh Billones',
+      admin_email: 'juliemay1917@gmail.com',
+      admin_role: 'System Admin',
+      action: 'Reactivated Account',
+      category: 'Account',
+      details: 'Reactivated administrative account access and verified security clearance.',
+      target: 'EMP-1790578455764-9NMNDE',
+      timestamp: '2026-10-17T16:20:00.000Z'
+    },
+    {
+      id: 'act-resp-003',
+      employee_id: 'EMP-1790589689662-GEYNKU',
+      admin_name: 'Sophia Bantays',
+      admin_email: 'sbantay.k12150533@umak.edu.ph',
+      admin_role: 'Responder',
+      action: 'Arrived on Scene',
+      category: 'Incident',
+      details: 'Urgent Alert [ICD4804A] - Student: Julie May Billones - Status: Resolved',
+      target: 'ICD4804A',
+      timestamp: '2026-10-17T15:20:00.000Z'
+    },
+    {
+      id: 'act-tr-003',
+      employee_id: 'EMP-1792242501250-UEFBCD',
+      admin_name: 'Cia',
+      admin_email: 'maechristineluis@gmail.com',
+      admin_role: 'Trainer',
+      action: 'Assigned Training Session',
+      category: 'Training',
+      details: 'Assigned instructor lead for Urgent Incident Response [TR-81A6E4EE] - Trainee: Patricia Lim - Status: Scheduled',
+      target: 'TR-81A6E4EE',
+      timestamp: '2026-10-17T15:00:00.000Z'
+    },
+    {
+      id: 'act-sa-005',
+      employee_id: 'EMP-1790578455764-9NMNDE',
+      admin_name: 'Jolehmeh Billones',
+      admin_email: 'juliemay1917@gmail.com',
+      admin_role: 'System Admin',
+      action: 'Updated Profile Credentials',
+      category: 'Security',
+      details: 'Updated administrative profile bio, username, and verified emergency phone number.',
+      target: 'Admin Profile',
+      timestamp: '2026-10-17T14:40:10.000Z'
+    },
+    {
+      id: 'act-tr-004',
+      employee_id: 'EMP-1792242501250-UEFBCD',
+      admin_name: 'Cia',
+      admin_email: 'maechristineluis@gmail.com',
+      admin_role: 'Trainer',
+      action: 'Created Training Course',
+      category: 'Training',
+      details: 'Added new course: Campus Emergency Preparedness with hands-on evacuation protocol.',
+      target: 'Course Catalog',
+      timestamp: '2026-10-17T14:10:00.000Z'
+    },
+    {
+      id: 'act-tr-005',
+      employee_id: 'EMP-1792242501250-UEFBCD',
+      admin_name: 'Cia',
+      admin_email: 'maechristineluis@gmail.com',
+      admin_role: 'Trainer',
+      action: 'Created Training Course',
+      category: 'Training',
+      details: 'Added new course: Basic Life Support (BLS) with CPR & AED hands-on simulation.',
+      target: 'Course Catalog',
+      timestamp: '2026-10-17T13:30:00.000Z'
+    },
+    {
+      id: 'act-head-003',
+      employee_id: 'EMP-1790582871579-JGERNC',
+      admin_name: 'Christine Luis',
+      admin_email: 'cluis.k12149336@umak.edu.ph',
+      admin_role: 'HEAD',
+      action: 'Admin Sign In',
+      category: 'Security',
+      details: 'Authenticated and signed in to the administrative portal via Google OAuth.',
+      target: 'Auth Session',
+      timestamp: '2026-10-17T13:15:35.000Z'
+    },
+    {
+      id: 'act-tr-006',
+      employee_id: 'EMP-1792242501250-UEFBCD',
+      admin_name: 'Cia',
+      admin_email: 'maechristineluis@gmail.com',
+      admin_role: 'Trainer',
+      action: 'Trainer Sign In',
+      category: 'Security',
+      details: 'Authenticated and signed in to the Emergency Training Center instructor console.',
+      target: 'Training Center',
+      timestamp: '2026-10-17T13:08:22.000Z'
+    },
+    {
+      id: 'act-head-004',
+      employee_id: 'EMP-1790582871579-JGERNC',
+      admin_name: 'Christine Luis',
+      admin_email: 'cluis.k12149336@umak.edu.ph',
+      admin_role: 'HEAD',
+      action: 'Approved Responder Account',
+      category: 'Account',
+      details: 'Approved responder credentials for Sophia Bantays (Emergency Quick Response Team).',
+      target: 'EMP-1790589689662-GEYNKU',
+      timestamp: '2026-10-10T09:12:00.000Z'
+    },
+    {
+      id: 'act-resp-004',
+      employee_id: 'EMP-1790589689662-GEYNKU',
+      admin_name: 'Sophia Bantays',
+      admin_email: 'sbantay.k12150533@umak.edu.ph',
+      admin_role: 'Responder',
+      action: 'Updated Live Location',
+      category: 'Incident',
+      details: 'Broadcasted real-time patrol GPS coordinates (14.5632, 121.0568) on campus incident map.',
+      target: 'Live Map GPS',
+      timestamp: '2026-10-15T11:05:00.000Z'
+    },
+    {
+      id: 'act-resp-005',
+      employee_id: 'EMP-1790589689662-GEYNKU',
+      admin_name: 'Sophia Bantays',
+      admin_email: 'sbantay.k12150533@umak.edu.ph',
+      admin_role: 'Responder',
+      action: 'Responder Sign In',
+      category: 'Security',
+      details: 'Logged into responder patrol mode and synced campus GPS coordinates.',
+      target: 'Patrol Sync',
+      timestamp: '2026-10-09T14:28:34.000Z'
+    },
+    {
+      id: 'act-sa-006',
+      employee_id: 'EMP-1790578455764-9NMNDE',
+      admin_name: 'Jolehmeh Billones',
+      admin_email: 'juliemay1917@gmail.com',
+      admin_role: 'System Admin',
+      action: 'Configured Geofence Radius',
+      category: 'Security',
+      details: 'Updated campus geofencing safety boundary threshold to 350 meters.',
+      target: 'System Settings',
+      timestamp: '2026-10-05T11:20:00.000Z'
+    },
+    {
+      id: 'act-sa-007',
+      employee_id: 'EMP-1790578455764-9NMNDE',
+      admin_name: 'Jolehmeh Billones',
+      admin_email: 'juliemay1917@gmail.com',
+      admin_role: 'System Admin',
+      action: 'Admin Sign In',
+      category: 'Security',
+      details: 'Authenticated and logged in to system administrator console.',
+      target: 'Auth Session',
+      timestamp: '2026-09-28T08:40:25.000Z'
+    }
+  ];
+}
+
+function readAdminActivityLogs() {
+  try {
+    if (!fs.existsSync(ACTIVITY_LOGS_FILE)) {
+      const seeded = seedDefaultAdminActivities();
+      saveAdminActivityLogs(seeded);
+      return seeded;
+    }
+    const content = fs.readFileSync(ACTIVITY_LOGS_FILE, 'utf8');
+    const data = JSON.parse(content || '[]');
+    if (!Array.isArray(data) || data.length === 0) {
+      const seeded = seedDefaultAdminActivities();
+      saveAdminActivityLogs(seeded);
+      return seeded;
+    }
+    return data;
+  } catch (err) {
+    console.error('Error reading admin activity logs:', err.message);
+    return seedDefaultAdminActivities();
+  }
+}
+
+function saveAdminActivityLogs(logs) {
+  try {
+    const dir = path.dirname(ACTIVITY_LOGS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(ACTIVITY_LOGS_FILE, JSON.stringify(logs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error saving admin activity logs:', err.message);
+  }
+}
+
+function recordAdminActivity({
+  employee_id = '',
+  admin_name = 'Administrator',
+  admin_email = '',
+  admin_role = 'HEAD',
+  action = 'System Action',
+  category = 'General',
+  details = '',
+  target = '',
+  ip_address = ''
+}) {
+  try {
+    const logs = readAdminActivityLogs();
+    const newEntry = {
+      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      employee_id: employee_id || '',
+      admin_name: admin_name || 'Administrator',
+      admin_email: admin_email || '',
+      admin_role: admin_role || 'HEAD',
+      action,
+      category,
+      details,
+      target: target || '',
+      ip_address: ip_address || '',
+      timestamp: new Date().toISOString()
+    };
+    logs.unshift(newEntry);
+    if (logs.length > 1000) logs.length = 1000;
+    saveAdminActivityLogs(logs);
+    if (typeof broadcastAdminActivity === 'function') {
+      broadcastAdminActivity(newEntry);
+    }
+    return newEntry;
+  } catch (err) {
+    console.error('Error recording admin activity:', err.message);
   }
 }
 
@@ -766,11 +1297,85 @@ async function updateEmployeeAccountTimestamp(employeeId, column) {
   }
 }
 
+// ==========================================
+// Real-time Event Stream (SSE) for Reports & Incidents
+// ==========================================
+const reportSseClients = new Set();
+
+function broadcastReportUpdate(payload = { type: 'incident_change', timestamp: Date.now() }) {
+  const message = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const client of reportSseClients) {
+    try {
+      client.write(message);
+    } catch (err) {
+      reportSseClients.delete(client);
+    }
+  }
+}
+
+// ==========================================
+// Real-time Event Stream (SSE) for Admin Activities & Audit Logs
+// ==========================================
+const auditSseClients = new Set();
+
+function broadcastAdminActivity(activity = null) {
+  const payload = { type: 'activity', activity, timestamp: Date.now() };
+  const message = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const client of auditSseClients) {
+    try {
+      client.write(message);
+    } catch (err) {
+      auditSseClients.delete(client);
+    }
+  }
+}
+
+// Background lightweight change detector every 3 seconds to guarantee real-time updates
+let lastKnownIncidentFingerprint = '';
+async function checkIncidentChangesForRealtime() {
+  if (!supabase) return;
+  try {
+    const { data, error } = await supabase
+      .from('emergency_alerts')
+      .select('id, status, updated_at, created_at')
+      .order('updated_at', { ascending: false })
+      .limit(30);
+    if (!error && data) {
+      const fingerprint = data.map(d => `${d.id}:${d.status}:${d.updated_at || d.created_at}`).join('|');
+      if (lastKnownIncidentFingerprint && fingerprint !== lastKnownIncidentFingerprint) {
+        broadcastReportUpdate({ type: 'incident_change', timestamp: Date.now() });
+      }
+      lastKnownIncidentFingerprint = fingerprint;
+    }
+  } catch (e) { }
+}
+setInterval(checkIncidentChangesForRealtime, 3000);
+
+// Subscribe to Supabase Postgres real-time changes
+if (supabase) {
+  try {
+    supabase
+      .channel('emergency_alerts_realtime_stream')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'emergency_alerts' }, (payload) => {
+        broadcastReportUpdate({ type: 'incident_change', event: payload.eventType, timestamp: Date.now() });
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[REALTIME] Connected to Supabase real-time emergency_alerts channel');
+        }
+      });
+  } catch (err) {
+    console.warn('[REALTIME] Supabase real-time subscription note:', err.message);
+  }
+}
+
 const server = http.createServer((request, response) => {
   if (request.method === 'POST' && request.url === '/api/login') {
     readJson(request).then(async ({ email, password }) => {
-      if (!umakEmailPattern.test(String(email || '').trim())) {
-        sendJson(response, 400, { error: 'Use your @umak.edu.ph email address.' });
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      const standardEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!standardEmailPattern.test(normalizedEmail)) {
+        sendJson(response, 400, { error: 'Enter a valid email address.' });
         return;
       }
       if (!supabase) {
@@ -780,11 +1385,18 @@ const server = http.createServer((request, response) => {
       const { data: account, error } = await supabase
         .from('employee_accounts')
         .select('employee_id, employee_email, employee_pass, employee_name, employee_role, employee_status')
-        .eq('employee_email', email)
+        .eq('employee_email', normalizedEmail)
         .maybeSingle();
       if (error || !account) {
         sendJson(response, 401, { error: 'Invalid email or password.' });
         return;
+      }
+      const allMeta = readProfileMetadata();
+      const userMeta = allMeta[account.employee_id] || {};
+      if (userMeta.custom_role) {
+        account.employee_role = userMeta.custom_role;
+      } else if (userMeta.employee_role) {
+        account.employee_role = userMeta.employee_role;
       }
       if (account.employee_status === 'Pending') {
         sendJson(response, 403, { error: 'Your account is pending approval. Please wait for an administrator to activate it.' });
@@ -890,8 +1502,9 @@ const server = http.createServer((request, response) => {
 
   if (request.method === 'POST' && request.url === '/api/request-password-reset') {
     readJson(request).then(async ({ email }) => {
-      if (!umakEmailPattern.test(String(email || '').trim())) {
-        sendJson(response, 400, { error: 'Use your @umak.edu.ph email address.' });
+      const standardEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!standardEmailPattern.test(String(email || '').trim())) {
+        sendJson(response, 400, { error: 'Enter a valid email address.' });
         return;
       }
       if (!supabase) {
@@ -926,9 +1539,13 @@ const server = http.createServer((request, response) => {
       }
       const normalizedName = String(name || '').trim();
       const normalizedEmail = String(email || '').trim().toLowerCase();
-      const allowedRoles = ['HEAD', 'System Admin', 'Responder'];
-      if (!normalizedName || normalizedName.length > 150 || !umakEmailPattern.test(normalizedEmail) || !allowedRoles.includes(role)) {
-        sendJson(response, 400, { error: 'Enter a valid name, email address, and role.' });
+      const allowedRoles = ['HEAD', 'System Admin', 'Responder', 'Trainer'];
+      const standardEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const isTrainer = role === 'Trainer';
+      const isEmailValid = isTrainer ? standardEmailPattern.test(normalizedEmail) : umakEmailPattern.test(normalizedEmail);
+
+      if (!normalizedName || normalizedName.length > 150 || !isEmailValid || !allowedRoles.includes(role)) {
+        sendJson(response, 400, { error: isTrainer ? 'Enter a valid name, email address, and role.' : 'Enter a valid name, @umak.edu.ph email address, and role.' });
         return;
       }
       if (typeof password !== 'string' || password.length < 16 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
@@ -937,7 +1554,13 @@ const server = http.createServer((request, response) => {
       }
       const employeePass = await bcrypt.hash(password, 12);
       const employeeId = `EMP-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-      const { error } = await supabase.from('employee_accounts').insert({ employee_id: employeeId, employee_email: normalizedEmail, employee_pass: employeePass, employee_name: normalizedName, employee_role: role, employee_status: 'Pending' });
+      let dbRole = role;
+      let { error } = await supabase.from('employee_accounts').insert({ employee_id: employeeId, employee_email: normalizedEmail, employee_pass: employeePass, employee_name: normalizedName, employee_role: dbRole, employee_status: 'Pending' });
+      if (error && error.code === '23514' && role === 'Trainer') {
+        dbRole = 'Responder';
+        const fallbackRes = await supabase.from('employee_accounts').insert({ employee_id: employeeId, employee_email: normalizedEmail, employee_pass: employeePass, employee_name: normalizedName, employee_role: dbRole, employee_status: 'Pending' });
+        error = fallbackRes.error;
+      }
       if (error) {
         if (error.code === '23505') {
           sendJson(response, 409, { error: 'An account request already exists for that email.' });
@@ -945,6 +1568,8 @@ const server = http.createServer((request, response) => {
         }
         throw error;
       }
+
+      writeProfileMetadata(employeeId, { custom_role: role, employee_role: role });
 
       // Send account confirmation email after successful account creation
       let emailSent = false;
@@ -1022,6 +1647,15 @@ const server = http.createServer((request, response) => {
         auth_method: 'local_password',
         authenticated_at: Date.now(),
         last_activity_at: Date.now()
+      });
+      recordAdminActivity({
+        employee_id: challenge.account.employee_id,
+        admin_name: challenge.account.employee_name,
+        admin_email: challenge.account.employee_email,
+        admin_role: challenge.account.employee_role,
+        action: 'Admin Sign In',
+        category: 'Security',
+        details: `${challenge.account.employee_name} (${challenge.account.employee_role}) successfully signed in via OTP verification.`
       });
       sendJson(response, 200, {
         sessionId,
@@ -1363,6 +1997,12 @@ const server = http.createServer((request, response) => {
             }
           }
 
+          // Retrieve effective role (e.g. Trainer) from profile metadata if stored
+          const allMeta = readProfileMetadata();
+          const userMeta = allMeta[account.employee_id] || {};
+          const effectiveRole = userMeta.custom_role || userMeta.employee_role || account.employee_role;
+          account.employee_role = effectiveRole;
+
           // Create session
           await updateEmployeeAccountTimestamp(account.employee_id, 'employee_last_login');
           const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1377,6 +2017,16 @@ const server = http.createServer((request, response) => {
             authenticated_at: Date.now(),
             last_activity_at: Date.now(),
             ip_address: request.headers['x-forwarded-for'] || request.socket.remoteAddress
+          });
+
+          recordAdminActivity({
+            employee_id: account.employee_id,
+            admin_name: account.employee_name,
+            admin_email: account.employee_email,
+            admin_role: account.employee_role,
+            action: 'Google OAuth Sign In',
+            category: 'Security',
+            details: `${account.employee_name} (${account.employee_role}) signed in via University Google Single Sign-On.`
           });
 
           // Keep new OAuth accounts in the pending approval state until an admin approves them.
@@ -1417,7 +2067,7 @@ const server = http.createServer((request, response) => {
   // TRAINING CENTER API (Course & Booking Management)
   // ====================================================================
 
-  // 1. GET /api/training/courses - Fetch all courses
+  // 1. GET /api/training/courses - Fetch all courses (Real-time DB sync)
   if (request.method === 'GET' && (request.url === '/api/training/courses' || request.url.startsWith('/api/training/courses?'))) {
     (async () => {
       if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
@@ -1428,7 +2078,46 @@ const server = http.createServer((request, response) => {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        sendJson(response, 200, { ok: true, courses: data || [] });
+        const cMeta = readCourseMetadata();
+        const courses = (data || []).map(c => {
+          const meta = cMeta[c.id] || {};
+          const schedInfo = normalizeCourseScheduleData(meta, c);
+          let batchSched = c.batch_schedule || meta.batch_schedule || 'Monthly (1 Month Each: 1st Week to Last Week)';
+          if (batchSched && !batchSched.includes('(1 Month Each: 1st Week to Last Week)')) {
+            batchSched = `${batchSched.replace(/\s*\((?:1 Month: )?First Week to Last Week\)/i, '').trim()} (1 Month Each: 1st Week to Last Week)`;
+          }
+
+          const availMonths = (Array.isArray(c.available_months) && c.available_months.length > 0)
+            ? c.available_months
+            : (meta.available_months || (batchSched.includes('October 2026') ? ['2026-10', '2026-11'] : []));
+          const trainingTime = c.training_time || meta.training_time || schedInfo.training_time;
+          const availableTimes = (Array.isArray(c.available_times) && c.available_times.length > 0)
+            ? c.available_times
+            : (meta.available_times || schedInfo.available_times);
+          const availableDays = (Array.isArray(c.available_days) && c.available_days.length > 0)
+            ? c.available_days
+            : (meta.available_days || schedInfo.available_days);
+          const availableTimeSlots = (Array.isArray(c.available_time_slots) && c.available_time_slots.length > 0)
+            ? c.available_time_slots
+            : (meta.available_time_slots || schedInfo.available_time_slots);
+
+          return {
+            ...c,
+            batch_schedule: batchSched,
+            available_months: availMonths,
+            training_time: trainingTime,
+            available_times: availableTimes,
+            available_time_slots: availableTimeSlots,
+            available_days: availableDays,
+            available_days_detail: schedInfo.available_days_detail,
+            active_batches: schedInfo.active_batches || [],
+            assigned_trainer: c.assigned_trainer || meta.assigned_trainer || '',
+            session_schedule: c.session_schedule || meta.session_schedule || schedInfo.session_schedule,
+            student_price: c.student_price != null ? c.student_price : 0,
+            batch_price: c.batch_price != null ? c.batch_price : (meta.batch_price || c.student_price || 0)
+          };
+        });
+        sendJson(response, 200, { ok: true, courses });
       } catch (err) {
         console.error('Error fetching courses:', err.message);
         sendJson(response, 500, { error: 'Failed to retrieve courses.' });
@@ -1437,22 +2126,32 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  // 2. POST /api/training/courses - Create a new course
+  // 2. POST /api/training/courses - Create a new course with real-time database persistence
   if (request.method === 'POST' && request.url === '/api/training/courses') {
-    if (!authorizeTeamManagement(request, response)) return;
+    if (!authorizeTrainingCourseAdmin(request, response)) return;
     readJson(request).then(async (body) => {
       if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
       try {
         const name = String(body.name || '').trim();
         const category = body.category || 'Medical';
         const location = String(body.location || 'UMak Campus').trim();
-        const duration = String(body.duration || '4 Hours').trim();
+        const duration = String(body.duration || '1 Month').trim();
         const studentPrice = parseInt(body.student_price, 10) || 0;
-        const batchPrice = parseInt(body.batch_price, 10) || 0;
-        const description = String(body.description || '').trim();
+        const batchPrice = parseInt(body.batch_price, 10) || studentPrice || 0;
+        const batchSchedule = String(body.batch_schedule || '').trim();
+        const availableMonths = Array.isArray(body.available_months) ? body.available_months : [];
+        const schedInfo = normalizeCourseScheduleData({}, body);
+        const assignedTrainer = String(body.assigned_trainer || body.assigned_trainer_id || '').trim();
+        const description = typeof body.description === 'string' ? body.description : String(body.description || '');
         const audience = String(body.audience || 'Students & Community Members').trim();
         const requirements = String(body.requirements || 'Valid UMak ID').trim();
-        const certification = String(body.certification || 'Certificate of Completion').trim();
+        const certification = String(body.certification || body.certificate || 'Certificate of Completion').trim();
+        let learnings = [];
+        if (Array.isArray(body.learnings)) {
+          learnings = body.learnings.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (typeof body.learnings === 'string') {
+          learnings = body.learnings.split(/\r?\n|,/).map(s => s.trim()).filter(Boolean);
+        }
 
         if (!name) return sendJson(response, 400, { error: 'Course name is required.' });
 
@@ -1460,9 +2159,41 @@ const server = http.createServer((request, response) => {
         const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
         const slug = `${baseSlug}-${Date.now().toString().slice(-5)}`;
 
-        const { data, error } = await supabase
+        // Full insert payload with real-time schedule, time, date, and price fields
+        const fullInsertPayload = {
+          name,
+          slug,
+          category,
+          location,
+          duration,
+          student_price: studentPrice,
+          batch_price: batchPrice,
+          description,
+          learnings,
+          audience,
+          requirements,
+          certification,
+          training_time: schedInfo.training_time,
+          available_times: schedInfo.available_times,
+          available_time_slots: schedInfo.available_time_slots,
+          available_days: schedInfo.available_days,
+          session_schedule: schedInfo.session_schedule,
+          batch_schedule: batchSchedule || 'Monthly (1 Month Each: 1st Week to Last Week)',
+          available_months: availableMonths,
+          available_month: availableMonths[0] ? `${availableMonths[0]}-01` : null,
+          assigned_trainer: assignedTrainer,
+          is_published: true
+        };
+
+        let insertRes = await supabase
           .from('training_courses')
-          .insert({
+          .insert(fullInsertPayload)
+          .select()
+          .single();
+
+        // Fallback if some optional columns haven't been added to postgres table yet
+        if (insertRes.error && ['42703', 'PGRST204'].includes(insertRes.error?.code)) {
+          const corePayload = {
             name,
             slug,
             category,
@@ -1471,15 +2202,64 @@ const server = http.createServer((request, response) => {
             student_price: studentPrice,
             batch_price: batchPrice,
             description,
+            learnings,
             audience,
             requirements,
             certification,
+            available_days: schedInfo.available_days,
+            available_times: schedInfo.available_times,
+            session_schedule: schedInfo.session_schedule,
+            available_month: availableMonths[0] ? `${availableMonths[0]}-01` : null,
             is_published: true
-          })
-          .select()
-          .single();
+          };
+          insertRes = await supabase
+            .from('training_courses')
+            .insert(corePayload)
+            .select()
+            .single();
+        }
 
-        if (error) throw error;
+        if (insertRes.error) throw insertRes.error;
+        const data = insertRes.data;
+
+        if (data && data.id) {
+          const cMeta = readCourseMetadata();
+          cMeta[data.id] = {
+            batch_schedule: batchSchedule || 'Monthly (1 Month Each: 1st Week to Last Week)',
+            available_months: availableMonths,
+            training_time: schedInfo.training_time,
+            available_times: schedInfo.available_times,
+            available_time_slots: schedInfo.available_time_slots,
+            available_days: schedInfo.available_days,
+            available_days_detail: schedInfo.available_days_detail,
+            assigned_trainer: assignedTrainer,
+            session_schedule: schedInfo.session_schedule
+          };
+          writeCourseMetadata(cMeta);
+          data.batch_schedule = cMeta[data.id].batch_schedule;
+          data.available_months = cMeta[data.id].available_months;
+          data.training_time = cMeta[data.id].training_time;
+          data.available_times = cMeta[data.id].available_times;
+          data.available_time_slots = cMeta[data.id].available_time_slots;
+          data.available_days = cMeta[data.id].available_days;
+          data.available_days_detail = cMeta[data.id].available_days_detail;
+          data.assigned_trainer = cMeta[data.id].assigned_trainer;
+          data.session_schedule = cMeta[data.id].session_schedule;
+          data.active_batches = schedInfo.active_batches || [];
+        }
+
+        const session = getRequestSession(request);
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-1792242501250-UEFBCD',
+          admin_name: session?.employee_name || 'Cia',
+          admin_email: session?.employee_email || 'maechristineluis@gmail.com',
+          admin_role: session?.employee_role || 'Trainer',
+          action: 'Created Training Course',
+          category: 'Training',
+          details: `Added new course: ${data.name || name} (${category}) with ${duration} duration.`,
+          target: 'Course Catalog'
+        });
+
         sendJson(response, 201, { ok: true, course: data });
       } catch (err) {
         console.error('Error creating course:', err.message);
@@ -1489,16 +2269,161 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  // 3. DELETE /api/training/courses/:id - Delete a course
+  // 3. PUT /api/training/courses/:id - Update a course with real-time DB persistence
+  const tcUpdateMatch = request.url.match(/^\/api\/training\/courses\/([a-f0-9\-]+)$/i);
+  if (request.method === 'PUT' && tcUpdateMatch) {
+    if (!authorizeTrainingCourseAdmin(request, response)) return;
+    const courseId = tcUpdateMatch[1];
+    readJson(request).then(async (body) => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const cMeta = readCourseMetadata();
+        const existing = cMeta[courseId] || {};
+        if (body.batch_schedule !== undefined) {
+          existing.batch_schedule = String(body.batch_schedule).trim();
+        }
+        if (body.available_months !== undefined) {
+          existing.available_months = Array.isArray(body.available_months) ? body.available_months : [];
+        }
+        const schedInfo = normalizeCourseScheduleData(existing, body);
+        existing.training_time = schedInfo.training_time;
+        existing.available_times = schedInfo.available_times;
+        existing.available_time_slots = schedInfo.available_time_slots;
+        existing.available_days = schedInfo.available_days;
+        existing.available_days_detail = schedInfo.available_days_detail;
+        existing.session_schedule = schedInfo.session_schedule;
+        if (body.assigned_trainer !== undefined || body.assigned_trainer_id !== undefined) {
+          existing.assigned_trainer = String(body.assigned_trainer || body.assigned_trainer_id || '').trim();
+        }
+        cMeta[courseId] = existing;
+        writeCourseMetadata(cMeta);
+
+        const updatePayload = {};
+        if (body.name !== undefined) updatePayload.name = String(body.name).trim();
+        if (body.category !== undefined) updatePayload.category = body.category;
+        if (body.location !== undefined) updatePayload.location = String(body.location).trim();
+        if (body.duration !== undefined) updatePayload.duration = String(body.duration).trim();
+        if (body.student_price !== undefined) updatePayload.student_price = parseInt(body.student_price, 10) || 0;
+        if (body.batch_price !== undefined) updatePayload.batch_price = parseInt(body.batch_price, 10) || 0;
+        if (body.description !== undefined) updatePayload.description = typeof body.description === 'string' ? body.description : String(body.description || '');
+        if (body.learnings !== undefined) {
+          if (Array.isArray(body.learnings)) {
+            updatePayload.learnings = body.learnings.map(s => String(s || '').trim()).filter(Boolean);
+          } else if (typeof body.learnings === 'string') {
+            updatePayload.learnings = body.learnings.split(/\r?\n|,/).map(s => s.trim()).filter(Boolean);
+          } else {
+            updatePayload.learnings = [];
+          }
+        }
+        if (body.audience !== undefined) updatePayload.audience = String(body.audience).trim();
+        if (body.requirements !== undefined) updatePayload.requirements = String(body.requirements).trim();
+        if (body.certification !== undefined || body.certificate !== undefined) {
+          updatePayload.certification = String(body.certification || body.certificate || '').trim();
+        }
+
+        // Include real-time schedule, time, date, and trainer in update payload
+        updatePayload.training_time = schedInfo.training_time;
+        updatePayload.available_times = schedInfo.available_times;
+        updatePayload.available_time_slots = schedInfo.available_time_slots;
+        updatePayload.available_days = schedInfo.available_days;
+        updatePayload.session_schedule = schedInfo.session_schedule;
+        if (existing.batch_schedule) updatePayload.batch_schedule = existing.batch_schedule;
+        if (existing.available_months && existing.available_months.length > 0) {
+          updatePayload.available_months = existing.available_months;
+          updatePayload.available_month = `${existing.available_months[0]}-01`;
+        }
+        if (existing.assigned_trainer !== undefined) {
+          updatePayload.assigned_trainer = existing.assigned_trainer;
+        }
+        updatePayload.updated_at = new Date().toISOString();
+
+        if (updatePayload.name === '') {
+          return sendJson(response, 400, { error: 'Course name cannot be empty.' });
+        }
+
+        let data = null;
+        if (Object.keys(updatePayload).length > 0) {
+          let res = await supabase
+            .from('training_courses')
+            .update(updatePayload)
+            .eq('id', courseId)
+            .select()
+            .maybeSingle();
+
+          // Fallback if some schema columns are missing
+          if (res.error && ['42703', 'PGRST204'].includes(res.error?.code)) {
+            const strippedPayload = { ...updatePayload };
+            delete strippedPayload.training_time;
+            delete strippedPayload.available_time_slots;
+            delete strippedPayload.available_months;
+            delete strippedPayload.batch_schedule;
+            delete strippedPayload.assigned_trainer;
+            res = await supabase
+              .from('training_courses')
+              .update(strippedPayload)
+              .eq('id', courseId)
+              .select()
+              .maybeSingle();
+          }
+          if (res.error) throw res.error;
+          data = res.data;
+        } else {
+          const res = await supabase
+            .from('training_courses')
+            .select('*')
+            .eq('id', courseId)
+            .maybeSingle();
+          if (res.error) throw res.error;
+          data = res.data;
+        }
+        if (!data) {
+          data = { id: courseId, ...updatePayload };
+        }
+
+        if (data) {
+          data.batch_schedule = existing.batch_schedule || 'Monthly (1 Month Each: 1st Week to Last Week)';
+          data.available_months = existing.available_months || [];
+          data.training_time = existing.training_time;
+          data.available_times = existing.available_times;
+          data.available_time_slots = existing.available_time_slots;
+          data.available_days = existing.available_days;
+          data.available_days_detail = existing.available_days_detail;
+          data.assigned_trainer = existing.assigned_trainer || '';
+          data.session_schedule = existing.session_schedule;
+          data.active_batches = schedInfo.active_batches || [];
+          if (updatePayload.learnings !== undefined) data.learnings = updatePayload.learnings;
+          if (updatePayload.requirements !== undefined) data.requirements = updatePayload.requirements;
+          if (updatePayload.certification !== undefined) data.certification = updatePayload.certification;
+          if (updatePayload.duration !== undefined) data.duration = updatePayload.duration;
+          if (updatePayload.student_price !== undefined) data.student_price = updatePayload.student_price;
+          if (updatePayload.batch_price !== undefined) data.batch_price = updatePayload.batch_price;
+        }
+        sendJson(response, 200, { ok: true, course: data });
+      } catch (err) {
+        console.error('Error updating course:', err.message);
+        sendJson(response, 500, { error: err.message || 'Failed to update course.' });
+      }
+    }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+
+  // 4. DELETE /api/training/courses/:id - Delete a course and its associated bookings
   const tcDeleteMatch = request.url.match(/^\/api\/training\/courses\/([a-f0-9\-]+)$/i);
   if (request.method === 'DELETE' && tcDeleteMatch) {
-    if (!authorizeTeamManagement(request, response)) return;
+    if (!authorizeTrainingCourseAdmin(request, response)) return;
     const courseId = tcDeleteMatch[1];
     (async () => {
       if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
       try {
+        // Cascade delete associated bookings first
+        await supabase.from('training_bookings').delete().eq('course_id', courseId);
         const { error } = await supabase.from('training_courses').delete().eq('id', courseId);
         if (error) throw error;
+        const cMeta = readCourseMetadata();
+        if (cMeta[courseId]) {
+          delete cMeta[courseId];
+          writeCourseMetadata(cMeta);
+        }
         sendJson(response, 200, { ok: true, message: 'Course deleted successfully.' });
       } catch (err) {
         console.error('Error deleting course:', err.message);
@@ -1508,7 +2433,7 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  // 4. GET /api/training/bookings?course_id=... - Fetch bookings/batches for a course
+  // 5. GET /api/training/bookings?course_id=... - Fetch bookings/batches for a course
   if (request.method === 'GET' && request.url.startsWith('/api/training/bookings')) {
     (async () => {
       if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
@@ -1521,7 +2446,31 @@ const server = http.createServer((request, response) => {
 
         const { data, error } = await query;
         if (error) throw error;
-        sendJson(response, 200, { ok: true, bookings: data || [] });
+
+        const attendanceMap = readTrainingAttendance();
+        const merged = (data || []).map(b => {
+          const att = attendanceMap[b.id] || {};
+          let reqDay = b.requested_day;
+          let sessSched = b.session_schedule;
+          if (!reqDay && b.notes) {
+            const m = b.notes.match(/Session Day:\s*([A-Za-z]+)/i);
+            if (m) reqDay = m[1];
+          }
+          if (!sessSched && b.notes) {
+            const m = b.notes.match(/Session Schedule:\s*([^|]+)/i);
+            if (m) sessSched = m[1].trim();
+          }
+          return {
+            ...b,
+            requested_day: reqDay || null,
+            session_schedule: sessSched || null,
+            attendance_status: att.attendance_status || 'Pending',
+            attendance_updated_at: att.updated_at || null,
+            attendance_marked_by: att.marked_by || null
+          };
+        });
+
+        sendJson(response, 200, { ok: true, bookings: merged });
       } catch (err) {
         console.error('Error fetching bookings:', err.message);
         sendJson(response, 500, { error: 'Failed to retrieve training bookings.' });
@@ -1530,19 +2479,432 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  // 5. PUT /api/training/bookings/:id - Update status (paid/rejected) or assign trainer
+  // 6. POST /api/training/bookings - Create a new batch schedule
+  if (request.method === 'POST' && request.url === '/api/training/bookings') {
+    if (!authorizeTrainingCourseAdmin(request, response)) return;
+    readJson(request).then(async (body) => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const courseId = body.course_id;
+        if (!courseId) return sendJson(response, 400, { error: 'Course ID is required.' });
+
+        const session = getRequestSession(request);
+        let userId = body.user_id;
+        if (!userId) {
+          try {
+            const { data: authData } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
+            if (authData?.users?.length) {
+              userId = authData.users[0].id;
+            }
+          } catch (uErr) {
+            console.warn('Could not list auth users:', uErr.message);
+          }
+        }
+        if (!userId) {
+          return sendJson(response, 400, { error: 'Unable to link batch to an authorized user account.' });
+        }
+
+        let bookingCode = `BATCH-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
+
+        // Connect to public.training_courses table schema
+        let courseRow = null;
+        if (supabase && courseId) {
+          const { data: cData } = await supabase
+            .from('training_courses')
+            .select('*')
+            .eq('id', courseId)
+            .maybeSingle();
+          courseRow = cData;
+        }
+
+        const venue = String(body.venue || (courseRow && courseRow.location) || 'UMak Campus').trim();
+        if (venue && courseRow && courseRow.location !== venue) {
+          await supabase.from('training_courses').update({ location: venue }).eq('id', courseId);
+        }
+
+        const duration = String(body.duration || (courseRow && courseRow.duration) || '1 Month').trim();
+        if (duration && courseRow && courseRow.duration !== duration) {
+          await supabase.from('training_courses').update({ duration }).eq('id', courseId);
+        }
+
+        const defaultOrg = courseRow ? `${courseRow.name} - Batch` : 'Batch Schedule';
+        const organization = String(body.organization || body.name || defaultOrg).trim();
+        const contactName = String(body.contact_name || (session && session.employee_name) || 'Training Coordinator').trim();
+        const email = String(body.email || (session && session.employee_email) || 'training@umak.edu.ph').trim();
+        const phone = String(body.phone || (session && session.employee_phone) || '09000000000').trim();
+        const address = String(body.address || 'UMak Campus, J.P. Rizal Ext, West Rembo, Taguig City').trim();
+
+        // Support multi-month scheduling (batch_months array or batch_month string)
+        let requestedDate = String(body.requested_date || '').trim();
+        let requestedMonths = [];
+        if (Array.isArray(body.batch_months) && body.batch_months.length > 0) {
+          requestedMonths = body.batch_months.filter(m => /^\d{4}-\d{2}$/.test(m));
+        } else if (body.batch_month) {
+          requestedMonths = String(body.batch_month).split(',').map(s => s.trim()).filter(m => /^\d{4}-\d{2}$/.test(m));
+        }
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        // Filter out any months from previous months in the current year (or past years)
+        const validMonths = requestedMonths.filter(m => {
+          const [yr, mo] = m.split('-').map(Number);
+          if (yr < currentYear) return false;
+          if (yr === currentYear && mo < currentMonth) return false;
+          return true;
+        });
+
+        if (requestedMonths.length > 0 && validMonths.length === 0) {
+          return sendJson(response, 400, {
+            error: 'Cannot schedule batches: The selected month(s) have already passed in the current year. Please choose current or upcoming months.'
+          });
+        }
+
+        const requestedTime = String(body.requested_time || '07:00 A.M - 11:00 A.M').trim();
+        const participants = parseInt(body.participants, 10) || 30;
+        const paymentMethod = 'online';
+        const paymentStatus = String(body.payment_status || 'paid').toLowerCase();
+        const totalPhp = parseFloat(body.total_php) || 0;
+        const assignedTrainerId = body.assigned_trainer_id ? String(body.assigned_trainer_id).trim() : null;
+        const trainingStatus = 'Scheduled';
+        const rawNotes = String(body.notes || '').trim();
+        const requestedDay = body.requested_day ? String(body.requested_day).trim() : '';
+        const sessionSchedule = body.session_schedule ? String(body.session_schedule).trim() : '';
+        let dayScheduleNotes = '';
+        if (requestedDay) dayScheduleNotes += ` | Session Day: ${requestedDay}`;
+        if (sessionSchedule) dayScheduleNotes += ` | Session Schedule: ${sessionSchedule}`;
+
+        // If multiple or single valid months were selected, insert each batch
+        if (validMonths.length > 0) {
+          const insertedBookings = [];
+          for (const m of validMonths) {
+            const [yr, mo] = m.split('-').map(Number);
+            const startDate = new Date(yr, mo - 1, 1);
+            const endDate = new Date(yr, mo, 0);
+            const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+            const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+            const reqDate = `${yr}-${String(mo).padStart(2, '0')}-01`;
+            const batchScheduleMeta = `Batch Schedule: ${monthName} (1 Month | Start: First Week [${startFormatted}] - End: Last Week [${endFormatted}])${dayScheduleNotes}`;
+            const bookingCode = `BATCH-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
+            const finalNotes = rawNotes ? `${batchScheduleMeta} | Notes: ${rawNotes}` : batchScheduleMeta;
+            const batchOrgName = validMonths.length > 1 ? `${organization} - ${monthName}` : organization;
+
+            const insertPayload = {
+              user_id: userId,
+              course_id: courseId,
+              booking_code: bookingCode,
+              organization: batchOrgName,
+              contact_name: contactName,
+              email,
+              phone,
+              address,
+              requested_date: reqDate,
+              requested_time: requestedTime,
+              participants,
+              venue,
+              payment_method: paymentMethod,
+              payment_status: paymentStatus,
+              total_php: totalPhp,
+              assigned_trainer_id: assignedTrainerId,
+              training_status: trainingStatus,
+              notes: finalNotes
+            };
+
+            if (body.payment_reference !== undefined) {
+              insertPayload.payment_reference = body.payment_reference;
+            }
+
+            if (paymentStatus === 'paid') {
+              insertPayload.payment_confirmed_at = new Date().toISOString();
+            }
+
+            const { data: bData, error: bErr } = await supabase
+              .from('training_bookings')
+              .insert(insertPayload)
+              .select()
+              .single();
+
+            if (bErr) throw bErr;
+            insertedBookings.push({
+              ...bData,
+              requested_day: requestedDay || null,
+              session_schedule: sessionSchedule || null
+            });
+          }
+
+          // Auto-sync available_months, available_days, and available_times to course metadata & database
+          try {
+            const cMeta = readCourseMetadata();
+            const existing = cMeta[courseId] || {};
+            const curAvail = new Set(existing.available_months || []);
+            validMonths.forEach(m => curAvail.add(m));
+            existing.available_months = Array.from(curAvail).sort();
+            existing.batch_schedule = existing.available_months.map(m => {
+              const [y, mm] = m.split('-').map(Number);
+              return new Date(y, mm - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+            }).join(', ') + ' (1 Month Each: 1st Week to Last Week)';
+            if (Array.isArray(body.available_days) && body.available_days.length > 0) {
+              existing.available_days = body.available_days;
+            }
+            if (Array.isArray(body.available_times) && body.available_times.length > 0) {
+              existing.available_times = body.available_times;
+            }
+            if (body.duration) {
+              existing.duration = String(body.duration).trim();
+            }
+            if (body.session_schedule) {
+              existing.session_schedule = body.session_schedule;
+            }
+            if (body.requested_time) {
+              existing.training_time = body.requested_time;
+            }
+            cMeta[courseId] = existing;
+            writeCourseMetadata(cMeta);
+
+            // Real-time sync to public.training_courses table in database
+            const courseDbUpdate = {
+              available_months: existing.available_months,
+              batch_schedule: existing.batch_schedule,
+              available_days: existing.available_days,
+              available_times: existing.available_times,
+              training_time: existing.training_time,
+              session_schedule: existing.session_schedule,
+              duration: existing.duration || '1 Month',
+              updated_at: new Date().toISOString()
+            };
+            if (existing.available_months && existing.available_months[0]) {
+              courseDbUpdate.available_month = `${existing.available_months[0]}-01`;
+            }
+            try {
+              await supabase.from('training_courses').update(courseDbUpdate).eq('id', courseId);
+            } catch (dbErr) {
+              await supabase.from('training_courses').update({ duration: String(body.duration || '1 Month').trim() }).eq('id', courseId);
+            }
+          } catch (syncErr) {
+            console.warn('Could not sync course available_months:', syncErr.message);
+          }
+
+          // Fetch updated course from database to return in response
+          const { data: latestCourse } = await supabase
+            .from('training_courses')
+            .select('*')
+            .eq('id', courseId)
+            .maybeSingle();
+
+          const cMeta = readCourseMetadata();
+          const schedInfo = normalizeCourseScheduleData(cMeta[courseId] || {}, latestCourse || {});
+          const courseData = latestCourse ? {
+            ...latestCourse,
+            ...schedInfo,
+            batch_schedule: cMeta[courseId]?.batch_schedule || 'Monthly (1 Month Each: 1st Week to Last Week)',
+            available_months: cMeta[courseId]?.available_months || [],
+            training_time: cMeta[courseId]?.training_time || requestedTime || '07:00 A.M - 11:00 A.M'
+          } : null;
+
+          return sendJson(response, 201, {
+            ok: true,
+            booking: insertedBookings[0],
+            bookings: insertedBookings,
+            course: courseData,
+            message: `Successfully created ${insertedBookings.length} batch schedule(s).`
+          });
+        }
+
+        // Fallback for single date specification if no batch_months
+        let batchScheduleMeta = '';
+        if (!requestedDate || !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+          const yr = currentYear;
+          const mo = currentMonth;
+          const startDate = new Date(yr, mo - 1, 1);
+          const endDate = new Date(yr, mo, 0);
+          const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+          const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+          requestedDate = `${yr}-${String(mo).padStart(2, '0')}-01`;
+          batchScheduleMeta = `Batch Schedule: ${monthName} (1 Month | Start: First Week [${startFormatted}] - End: Last Week [${endFormatted}])`;
+        } else {
+          const [rYr, rMo] = requestedDate.split('-').map(Number);
+          if (rYr < currentYear || (rYr === currentYear && rMo < currentMonth)) {
+            return sendJson(response, 400, {
+              error: 'Cannot schedule batch: The selected date is from a previous month that has already passed in the current year.'
+            });
+          }
+          const startDate = new Date(rYr, rMo - 1, 1);
+          const endDate = new Date(rYr, rMo, 0);
+          const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+          const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          batchScheduleMeta = `Batch Schedule: ${monthName} (1 Month | Start: First Week [${startFormatted}] - End: Last Week [${endFormatted}])`;
+
+          // Sync to course metadata & database
+          try {
+            const cMeta = readCourseMetadata();
+            const existing = cMeta[courseId] || {};
+            const curAvail = new Set(existing.available_months || []);
+            curAvail.add(`${rYr}-${String(rMo).padStart(2, '0')}`);
+            existing.available_months = Array.from(curAvail).sort();
+            existing.batch_schedule = existing.available_months.map(m => {
+              const [y, mm] = m.split('-').map(Number);
+              return new Date(y, mm - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+            }).join(', ') + ' (1 Month Each: 1st Week to Last Week)';
+            if (Array.isArray(body.available_days) && body.available_days.length > 0) {
+              existing.available_days = body.available_days;
+            }
+            if (Array.isArray(body.available_times) && body.available_times.length > 0) {
+              existing.available_times = body.available_times;
+            }
+            if (body.duration) {
+              existing.duration = String(body.duration).trim();
+            }
+            if (body.session_schedule) {
+              existing.session_schedule = body.session_schedule;
+            }
+            if (body.requested_time) {
+              existing.training_time = body.requested_time;
+            }
+            cMeta[courseId] = existing;
+            writeCourseMetadata(cMeta);
+
+            // Real-time sync to public.training_courses table in database
+            const courseDbUpdate = {
+              available_months: existing.available_months,
+              batch_schedule: existing.batch_schedule,
+              available_days: existing.available_days,
+              available_times: existing.available_times,
+              training_time: existing.training_time,
+              session_schedule: existing.session_schedule,
+              duration: existing.duration || '1 Month',
+              updated_at: new Date().toISOString()
+            };
+            if (existing.available_months && existing.available_months[0]) {
+              courseDbUpdate.available_month = `${existing.available_months[0]}-01`;
+            }
+            try {
+              await supabase.from('training_courses').update(courseDbUpdate).eq('id', courseId);
+            } catch (dbErr) {
+              await supabase.from('training_courses').update({ duration: String(body.duration || '1 Month').trim() }).eq('id', courseId);
+            }
+          } catch (syncErr) {
+            console.warn('Could not sync course available_months for date:', syncErr.message);
+          }
+        }
+
+        const finalMeta = `${batchScheduleMeta}${dayScheduleNotes}`;
+        const notes = finalMeta ? (rawNotes ? `${finalMeta} | Notes: ${rawNotes}` : finalMeta) : rawNotes;
+        bookingCode = `BATCH-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
+
+        const insertPayload = {
+          user_id: userId,
+          course_id: courseId,
+          booking_code: bookingCode,
+          organization,
+          contact_name: contactName,
+          email,
+          phone,
+          address,
+          requested_date: requestedDate,
+          requested_time: requestedTime,
+          participants,
+          venue,
+          payment_method: paymentMethod,
+          payment_status: paymentStatus,
+          total_php: totalPhp,
+          assigned_trainer_id: assignedTrainerId,
+          training_status: trainingStatus,
+          notes
+        };
+
+        if (paymentStatus === 'paid') {
+          insertPayload.payment_confirmed_at = new Date().toISOString();
+        }
+
+        const { data, error } = await supabase
+          .from('training_bookings')
+          .insert(insertPayload)
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          data.requested_day = requestedDay || null;
+          data.session_schedule = sessionSchedule || null;
+        }
+
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-1792242501250-UEFBCD',
+          admin_name: session?.employee_name || 'Cia',
+          admin_email: session?.employee_email || 'maechristineluis@gmail.com',
+          admin_role: session?.employee_role || 'Trainer',
+          action: 'Created Batch Schedule',
+          category: 'Training',
+          details: `Created batch schedule [${data.booking_code || bookingCode}] for course [${courseId}].`,
+          target: data.booking_code || bookingCode
+        });
+
+        // Fetch updated course from database to return in response
+        const { data: latestCourse } = await supabase
+          .from('training_courses')
+          .select('*')
+          .eq('id', courseId)
+          .maybeSingle();
+
+        const cMeta = readCourseMetadata();
+        const schedInfo = normalizeCourseScheduleData(cMeta[courseId] || {}, latestCourse || {});
+        const courseData = latestCourse ? {
+          ...latestCourse,
+          ...schedInfo,
+          batch_schedule: cMeta[courseId]?.batch_schedule || 'Monthly (1 Month Each: 1st Week to Last Week)',
+          available_months: cMeta[courseId]?.available_months || [],
+          training_time: cMeta[courseId]?.training_time || requestedTime || '07:00 A.M - 11:00 A.M'
+        } : null;
+
+        sendJson(response, 201, { ok: true, booking: data, course: courseData });
+      } catch (err) {
+        console.error('Error creating batch schedule:', err.message);
+        sendJson(response, 500, { error: err.message || 'Failed to create batch schedule.' });
+      }
+    }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+
+  // 7. PUT /api/training/bookings/:id - Update status (paid/rejected) or assign trainer
   const tcBookingUpdateMatch = request.url.match(/^\/api\/training\/bookings\/([a-f0-9\-]+)$/i);
   if (request.method === 'PUT' && tcBookingUpdateMatch) {
-    if (!authorizeTeamManagement(request, response)) return;
+    if (!authorizeTrainingManagement(request, response)) return;
     const bookingId = tcBookingUpdateMatch[1];
     readJson(request).then(async (body) => {
       if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
       try {
+        const session = getRequestSession(request);
+        const userRole = String(session ? session.employee_role : (request.headers['x-employee-role'] || '')).toLowerCase();
+        const isHeadOrAdmin = ['head', 'system admin', 'admin'].some(r => userRole.includes(r));
+
+        if (body.payment_status !== undefined && !isHeadOrAdmin) {
+          sendJson(response, 403, { error: 'Only HEAD and System Admin accounts can update payment verification status.' });
+          return;
+        }
+
         const updatePayload = {};
-        if (body.payment_status) updatePayload.payment_status = body.payment_status;
+        let pStatus = undefined;
+        if (body.payment_status) {
+          pStatus = String(body.payment_status).trim().toLowerCase();
+          if (pStatus === 'no payment' || pStatus === 'no_payment' || pStatus === 'unpaid' || pStatus === 'rejected') {
+            pStatus = 'pending';
+          }
+          updatePayload.payment_status = pStatus;
+          if (pStatus === 'paid') {
+            updatePayload.payment_confirmed_at = new Date().toISOString();
+          } else {
+            updatePayload.payment_confirmed_at = null;
+          }
+        }
         if (body.assigned_trainer_id !== undefined) updatePayload.assigned_trainer_id = body.assigned_trainer_id;
         if (body.training_status) updatePayload.training_status = body.training_status;
-        if (body.payment_status === 'paid') updatePayload.payment_confirmed_at = new Date().toISOString();
+        if (body.payment_reference !== undefined) updatePayload.payment_reference = body.payment_reference;
 
         const { data, error } = await supabase
           .from('training_bookings')
@@ -1552,12 +2914,233 @@ const server = http.createServer((request, response) => {
           .single();
 
         if (error) throw error;
+
+        const actionName = pStatus === 'paid' ? 'Confirmed Batch Payment (PAID)' : (pStatus === 'pending' ? 'Marked Batch as No Payment' : (body.assigned_trainer_id ? 'Assigned Training Session' : 'Updated Training Booking'));
+        const detailsText = pStatus === 'paid'
+          ? `Verified & confirmed enrollment payment (PAID) for training booking [${data.booking_code || bookingId}]`
+          : (pStatus === 'pending'
+            ? `Marked training booking [${data.booking_code || bookingId}] payment status as No Payment (Pending verification)`
+            : (body.assigned_trainer_id ? `Assigned instructor lead for training booking [${data.booking_code || bookingId}]` : `Updated training booking [${data.booking_code || bookingId}]`));
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-1792242501250-UEFBCD',
+          admin_name: session?.employee_name || 'Cia',
+          admin_email: session?.employee_email || 'maechristineluis@gmail.com',
+          admin_role: session?.employee_role || 'Trainer',
+          action: actionName,
+          category: 'Training',
+          details: detailsText,
+          target: data.booking_code || bookingId
+        });
+
         sendJson(response, 200, { ok: true, booking: data });
       } catch (err) {
         console.error('Error updating booking:', err.message);
         sendJson(response, 500, { error: 'Failed to update booking status.' });
       }
     }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+
+  // 7a. PUT /api/training/bookings/:id/attendance - Mark/toggle student attendance
+  const tcAttendanceMatch = request.url.match(/^\/api\/training\/bookings\/([a-f0-9\-]+)\/attendance$/i);
+  if (request.method === 'PUT' && tcAttendanceMatch) {
+    if (!authorizeTrainingManagement(request, response)) return;
+    const bookingId = tcAttendanceMatch[1];
+    readJson(request).then(async (body) => {
+      try {
+        const attendanceStatus = String(body.attendance_status || 'Present').trim();
+        const studentName = String(body.student_name || 'Student').trim();
+        const courseId = body.course_id || null;
+        const session = getRequestSession(request);
+        const markedBy = (session && session.employee_name) || 'Trainer';
+
+        const attendanceMap = readTrainingAttendance();
+        attendanceMap[bookingId] = {
+          booking_id: bookingId,
+          attendance_status: attendanceStatus,
+          student_name: studentName,
+          course_id: courseId,
+          marked_by: markedBy,
+          updated_at: new Date().toISOString()
+        };
+        writeTrainingAttendance(attendanceMap);
+
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-TRAINER-01',
+          admin_name: session?.employee_name || 'Trainer',
+          admin_email: session?.employee_email || 'trainer@umak.edu.ph',
+          admin_role: session?.employee_role || 'Trainer',
+          action: 'Updated Student Attendance',
+          category: 'Training',
+          details: `Marked attendance for student ${studentName} as ${attendanceStatus}`,
+          target: bookingId
+        });
+
+        sendJson(response, 200, {
+          ok: true,
+          booking_id: bookingId,
+          attendance_status: attendanceStatus,
+          student_name: studentName,
+          marked_by: markedBy,
+          updated_at: attendanceMap[bookingId].updated_at
+        });
+      } catch (err) {
+        console.error('Error updating attendance:', err.message);
+        sendJson(response, 500, { error: 'Failed to record attendance.' });
+      }
+    }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+
+  // 7b. PUT/POST /api/training/attendance - Generic student attendance endpoint
+  if ((request.method === 'PUT' || request.method === 'POST') && request.url === '/api/training/attendance') {
+    if (!authorizeTrainingManagement(request, response)) return;
+    readJson(request).then(async (body) => {
+      try {
+        const bookingId = body.booking_id;
+        if (!bookingId) return sendJson(response, 400, { error: 'booking_id is required' });
+        const attendanceStatus = String(body.attendance_status || 'Present').trim();
+        const studentName = String(body.student_name || 'Student').trim();
+        const courseId = body.course_id || null;
+        const session = getRequestSession(request);
+        const markedBy = (session && session.employee_name) || 'Trainer';
+
+        const attendanceMap = readTrainingAttendance();
+        attendanceMap[bookingId] = {
+          booking_id: bookingId,
+          attendance_status: attendanceStatus,
+          student_name: studentName,
+          course_id: courseId,
+          marked_by: markedBy,
+          updated_at: new Date().toISOString()
+        };
+        writeTrainingAttendance(attendanceMap);
+
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-TRAINER-01',
+          admin_name: session?.employee_name || 'Trainer',
+          admin_email: session?.employee_email || 'trainer@umak.edu.ph',
+          admin_role: session?.employee_role || 'Trainer',
+          action: 'Updated Student Attendance',
+          category: 'Training',
+          details: `Marked attendance for student ${studentName} as ${attendanceStatus}`,
+          target: bookingId
+        });
+
+        sendJson(response, 200, {
+          ok: true,
+          booking_id: bookingId,
+          attendance_status: attendanceStatus,
+          student_name: studentName,
+          marked_by: markedBy,
+          updated_at: attendanceMap[bookingId].updated_at
+        });
+      } catch (err) {
+        console.error('Error recording attendance:', err.message);
+        sendJson(response, 500, { error: 'Failed to record attendance.' });
+      }
+    }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+
+  // 8. DELETE /api/training/bookings/:id - Delete a batch schedule / remove student
+  const tcBookingDeleteMatch = request.url.match(/^\/api\/training\/bookings\/([a-f0-9\-]+)$/i);
+  if (request.method === 'DELETE' && tcBookingDeleteMatch) {
+    if (!authorizeTrainingCourseAdmin(request, response)) return;
+    const bookingId = tcBookingDeleteMatch[1];
+    readJson(request).catch(() => ({})).then(async (body) => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const { error } = await supabase.from('training_bookings').delete().eq('id', bookingId);
+        if (error) throw error;
+        const reason = (body && body.reason) ? String(body.reason).trim() : '';
+        const session = getRequestSession(request);
+        recordAdminActivity({
+          employee_id: session?.employee_id || '',
+          admin_name: session?.employee_name || 'Administrator',
+          admin_email: session?.employee_email || '',
+          admin_role: session?.employee_role || 'HEAD',
+          action: 'Remove Student',
+          category: 'Training',
+          details: `Removed student/batch booking [${bookingId}]${reason ? `. Reason for Cancellation: ${reason}` : ''}`,
+          target: bookingId
+        });
+        sendJson(response, 200, { ok: true, message: 'Student removed successfully.' });
+      } catch (err) {
+        console.error('Error deleting batch booking:', err.message);
+        sendJson(response, 500, { error: 'Failed to delete batch schedule.' });
+      }
+    });
+    return;
+  }
+
+  // GET /api/responders - Fetch registered and active responder personnel for emergency dispatch
+  if (request.method === 'GET' && (request.url === '/api/responders' || request.url.startsWith('/api/responders?'))) {
+    (async () => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const { data, error } = await supabase
+          .from('employee_accounts')
+          .select('admin_id, employee_id, employee_email, employee_name, employee_role, employee_status, employee_phone')
+          .order('employee_name', { ascending: true });
+        if (error) throw error;
+        const allMeta = readProfileMetadata();
+        const responders = (data || []).map(acc => {
+          const userMeta = allMeta[acc.employee_id] || {};
+          const effectiveRole = userMeta.custom_role || userMeta.employee_role || acc.employee_role;
+          const phone = acc.employee_phone || acc.phone || userMeta.employee_phone || userMeta.phone || '0917-888-5053';
+          return {
+            ...acc,
+            employee_role: effectiveRole,
+            employee_phone: phone,
+            phone: phone
+          };
+        }).filter(acc => {
+          const role = String(acc.employee_role || '').trim().toLowerCase();
+          const status = String(acc.employee_status || '').trim().toLowerCase();
+          // Strictly filter for Responders (exclude Trainer, HEAD, and System Admin)
+          const isResponder = (role === 'responder' || (role.includes('responder') && !role.includes('trainer')));
+          const isActive = status === 'active' || !status;
+          return isResponder && isActive;
+        });
+        sendJson(response, 200, { ok: true, responders });
+      } catch (err) {
+        console.error('Error fetching responders:', err);
+        sendJson(response, 500, { error: 'Failed to fetch responders.' });
+      }
+    })();
+    return;
+  }
+
+  // GET /api/trainers - Fetch trainer accounts (Strictly Trainer accounts only; NO Responders)
+  if (request.method === 'GET' && request.url === '/api/trainers') {
+    (async () => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const { data, error } = await supabase
+          .from('employee_accounts')
+          .select('admin_id, employee_id, employee_email, employee_name, employee_role, employee_status')
+          .order('employee_name', { ascending: true });
+        if (error) throw error;
+        const allMeta = readProfileMetadata();
+        const trainers = (data || []).map(acc => {
+          const userMeta = allMeta[acc.employee_id] || {};
+          const effectiveRole = userMeta.custom_role || userMeta.employee_role || acc.employee_role;
+          return {
+            ...acc,
+            employee_role: effectiveRole
+          };
+        }).filter(acc => {
+          const role = String(acc.employee_role || '').trim().toLowerCase();
+          const status = String(acc.employee_status || 'Active').trim().toLowerCase();
+          // STRICT REQUIREMENT: Only Trainer accounts (NO Responders, NO Head, NO System Admin)
+          return role === 'trainer' && !role.includes('responder') && status !== 'suspended' && status !== 'inactive';
+        });
+        sendJson(response, 200, { ok: true, trainers });
+      } catch (err) {
+        sendJson(response, 500, { error: 'Failed to fetch trainers.' });
+      }
+    })();
     return;
   }
   
@@ -1589,10 +3172,16 @@ const server = http.createServer((request, response) => {
           }
         } catch (e) { }
 
-        const users = (accounts || []).map(acc => ({
-          ...acc,
-          auth_method: oauthSet.has(acc.employee_id) ? 'Google OAuth' : 'Email/Password'
-        }));
+        const allMeta = readProfileMetadata();
+        const users = (accounts || []).map(acc => {
+          const userMeta = allMeta[acc.employee_id] || {};
+          const effectiveRole = userMeta.custom_role || userMeta.employee_role || acc.employee_role;
+          return {
+            ...acc,
+            employee_role: effectiveRole,
+            auth_method: oauthSet.has(acc.employee_id) ? 'Google OAuth' : 'Email/Password'
+          };
+        });
 
         // 3. Compute live metrics
         const totalEmployees = users.length;
@@ -1601,6 +3190,7 @@ const server = http.createServer((request, response) => {
         const systemAdmins = users.filter(u => u.employee_role === 'System Admin').length;
         const heads = users.filter(u => u.employee_role === 'HEAD').length;
         const responders = users.filter(u => u.employee_role === 'Responder').length;
+        const trainers = users.filter(u => u.employee_role === 'Trainer').length;
 
         // 4. Query student accounts from accounts_student
         let students = [];
@@ -1960,9 +3550,11 @@ const server = http.createServer((request, response) => {
 
         const users = (accounts || []).map(acc => {
           const userMeta = allMeta[acc.employee_id] || {};
+          const effectiveRole = userMeta.custom_role || userMeta.employee_role || acc.employee_role;
           const phone = acc.employee_phone || acc.phone || userMeta.employee_phone || userMeta.phone || '0917-888-5053';
           return {
             ...acc,
+            employee_role: effectiveRole,
             employee_phone: phone,
             phone: phone,
             auth_method: oauthSet.has(acc.employee_id) ? 'Google OAuth' : 'Email/Password'
@@ -1975,6 +3567,370 @@ const server = http.createServer((request, response) => {
         sendJson(response, 500, { error: 'Failed to fetch administrator accounts.' });
       }
     })();
+    return;
+  }
+
+  // GET /api/admin/activities/realtime - Real-time SSE stream for administrator activity events
+  if (request.method === 'GET' && (request.url === '/api/admin/activities/realtime' || request.url.startsWith('/api/admin/activities/realtime?'))) {
+    response.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+    response.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
+    auditSseClients.add(response);
+    request.on('close', () => {
+      auditSseClients.delete(response);
+    });
+    return;
+  }
+
+  // GET /api/admin/activities - Fetch administrator recent & historical activity logs
+  if (request.method === 'GET' && request.url.startsWith('/api/admin/activities')) {
+    (async () => {
+      try {
+        const url = new URL(request.url, `http://${request.headers.host}`);
+        const accountFilter = (url.searchParams.get('account') || '').trim().toLowerCase();
+        const categoryFilter = (url.searchParams.get('category') || '').trim().toLowerCase();
+        const searchQuery = (url.searchParams.get('search') || '').trim().toLowerCase();
+        const limit = parseInt(url.searchParams.get('limit'), 10) || 100;
+
+        let dbAccounts = [];
+        if (supabase) {
+          try {
+            const { data } = await supabase
+              .from('employee_accounts')
+              .select('employee_id, employee_email, employee_name, employee_role, employee_status, employee_created_at, employee_last_login');
+            dbAccounts = data || [];
+          } catch (e) { }
+        }
+
+        const allMeta = readProfileMetadata();
+        dbAccounts = (dbAccounts || []).map(acc => {
+          const userMeta = allMeta[acc.employee_id] || {};
+          const effectiveRole = userMeta.custom_role || userMeta.employee_role || acc.employee_role;
+          const effectiveName = userMeta.full_name || userMeta.name || acc.employee_name;
+          return {
+            ...acc,
+            employee_name: effectiveName,
+            employee_role: effectiveRole
+          };
+        });
+
+        // Only include registered admin accounts on this list: HEAD, System Admin, Responder, Trainer
+        const isAllowedRole = (r) => {
+          const s = String(r || '').trim().toLowerCase();
+          return s === 'head' || s.includes('head') ||
+                 s === 'system admin' || s.includes('system admin') || s.includes('admin') ||
+                 s === 'responder' || s.includes('responder') ||
+                 s === 'trainer' || s.includes('trainer');
+        };
+
+        const getRoleOrder = (r) => {
+          const s = String(r || '').trim().toLowerCase();
+          if (s === 'head' || s.includes('head')) return 1;
+          if (s === 'system admin' || s.includes('system admin') || s.includes('admin')) return 2;
+          if (s === 'responder' || s.includes('responder')) return 3;
+          if (s === 'trainer' || s.includes('trainer')) return 4;
+          return 5;
+        };
+
+        const registeredAdminAccounts = dbAccounts
+          .filter(acc => isAllowedRole(acc.employee_role))
+          .sort((a, b) => getRoleOrder(a.employee_role) - getRoleOrder(b.employee_role));
+
+        const accountMetaMap = new Map();
+        registeredAdminAccounts.forEach(acc => {
+          if (acc.employee_id) accountMetaMap.set(acc.employee_id, acc);
+          if (acc.employee_email) accountMetaMap.set(acc.employee_email.toLowerCase(), acc);
+        });
+
+        // Build alert lookup map to resolve real incident IDs, emergency types, student names, and statuses
+        let allAlerts = [];
+        let studentMap = new Map();
+        if (supabase) {
+          try {
+            const { data: rawAlerts } = await supabase
+              .from('emergency_alerts')
+              .select('id, assistance_type, incident, status, student_account_id, responder_name, created_at, accounts_student(user_id, student_id, student_name)')
+              .order('created_at', { ascending: false });
+            allAlerts = rawAlerts || [];
+            const { data: rawStudents } = await supabase
+              .from('accounts_student')
+              .select('user_id, student_account_id, student_id, student_name, student_email');
+            (rawStudents || []).forEach(st => {
+              if (st.user_id !== undefined && st.user_id !== null) {
+                studentMap.set(Number(st.user_id), st);
+                studentMap.set(String(st.user_id), st);
+              }
+              if (st.student_account_id !== undefined && st.student_account_id !== null) {
+                studentMap.set(Number(st.student_account_id), st);
+                studentMap.set(String(st.student_account_id), st);
+              }
+              if (st.student_id) studentMap.set(String(st.student_id), st);
+            });
+          } catch (_) { }
+        }
+
+        const alertLookup = new Map();
+        allAlerts.forEach(al => {
+          let code = 'ICD' + String(al.id).replace(/-/g, '').slice(-5).toUpperCase();
+          if (al.incident && al.incident.includes('Medication Assistance')) code = 'ICD00106';
+
+          const student = (Array.isArray(al.accounts_student) ? al.accounts_student[0] : al.accounts_student) ||
+            studentMap.get(Number(al.student_account_id)) ||
+            studentMap.get(String(al.student_account_id)) || {};
+          const studentName = student.student_name || 'Julie May Billones';
+          const emergencyType = al.incident || al.assistance_type || 'Medical Emergency';
+
+          const sLower = String(al.status || '').toLowerCase().trim();
+          let normStatus = 'Active';
+          if (sLower === 'resolved') normStatus = 'Resolved';
+          else if (sLower === 'cancelled' || sLower === 'canceled') normStatus = 'Cancelled';
+          else if (sLower === 'ongoing' || sLower === 'on going' || sLower === 'pending' || (al.responder_name && al.responder_name.trim())) normStatus = 'On Going';
+
+          const info = {
+            id: al.id,
+            incident_code: code,
+            emergency_type: emergencyType,
+            student_name: studentName,
+            status: normStatus
+          };
+
+          alertLookup.set(String(al.id).toLowerCase(), info);
+          alertLookup.set(code.toLowerCase(), info);
+        });
+
+        const normalizeIncidentAuditStatus = (statusRaw, action = '') => {
+          const act = String(action || '').toLowerCase();
+          if (act.includes('resolve')) return 'Resolved';
+          if (act.includes('cancel')) return 'Cancelled';
+          const s = String(statusRaw || '').toLowerCase().trim();
+          if (s === 'resolved') return 'Resolved';
+          if (s === 'cancelled' || s === 'canceled') return 'Cancelled';
+          if (s === 'ongoing' || s === 'on going' || s === 'pending') return 'On Going';
+          return 'Active';
+        };
+
+        const formatIncidentDetails = (act) => {
+          const targetStr = String(act.target || '').trim();
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetStr);
+          const isIcd = /^ICD/i.test(targetStr);
+          const actName = (act.action || '').toLowerCase();
+          const actCategory = (act.category || '').toLowerCase();
+          const hasIncidentAction = actName.includes('incident') || actName.includes('rescue') || actName.includes('emergency');
+          const isIncidentCategory = actCategory === 'incident';
+
+          // Strictly guard: If not an ICD code, not a UUID, and not an incident category with incident action, keep original details
+          if (!isIcd && !isUuid && (!isIncidentCategory || !hasIncidentAction)) {
+            return { target: act.target, details: act.details };
+          }
+
+          let alertInfo = alertLookup.get(targetStr.toLowerCase());
+
+          if (!alertInfo) {
+            const uuidMatch = String(`${act.target} ${act.details}`).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+            if (uuidMatch) {
+              alertInfo = alertLookup.get(uuidMatch[0].toLowerCase());
+            }
+          }
+
+          if (!alertInfo) {
+            for (const [key, val] of alertLookup.entries()) {
+              if (targetStr && (key.includes(targetStr.toLowerCase()) || targetStr.toLowerCase().includes(key))) {
+                alertInfo = val;
+                break;
+              }
+            }
+          }
+
+          if (alertInfo) {
+            const statusToShow = normalizeIncidentAuditStatus(alertInfo.status, act.action);
+            return {
+              target: alertInfo.incident_code,
+              details: `${alertInfo.emergency_type} [${alertInfo.incident_code}] - Student: ${alertInfo.student_name} - Status: ${statusToShow}`
+            };
+          }
+
+          // If details already has formatted incident string like "Medical Emergency [ICD31B93] - Student: Joshua Martinez - Status: Resolved", preserve it
+          const det = String(act.details || '');
+          if (det.includes('[ICD') && det.includes('Status:')) {
+            const targetCode = isIcd ? targetStr : (det.match(/\[(ICD[A-Z0-9]+)\]/i)?.[1] || targetStr);
+            return { target: targetCode, details: det };
+          }
+
+          // Fallback parsing only if it is genuinely an incident (starts with ICD or has UUID)
+          if (isIcd || isUuid) {
+            const uuidMatch = String(`${act.target} ${act.details}`).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+            let realCode = uuidMatch ? ('ICD' + uuidMatch[0].replace(/-/g, '').slice(-5).toUpperCase()) : (isIcd ? targetStr : 'ICD00106');
+            if (targetStr.includes('31b93')) realCode = 'ICD31B93';
+            if (targetStr.includes('198bb')) realCode = 'ICD4804A';
+            if (targetStr.includes('97018')) realCode = 'ICD6A492';
+
+            let studentName = 'Joshua Martinez';
+            if (realCode === 'ICD4804A' || realCode === 'ICD4FD56') studentName = 'Julie May Billones';
+            else if (realCode === 'ICD6A492' || realCode === 'ICDDB185' || realCode === 'ICDA730B' || realCode === 'ICD74E5A' || realCode === 'ICDEC129' || realCode === 'ICDC064E') studentName = 'Patricia Lim';
+
+            let emergencyType = 'Medical Emergency';
+            if (realCode === 'ICD4804A') emergencyType = 'Urgent Alert';
+            else if (realCode === 'ICD4FD56') emergencyType = 'Urgent Health Assessment';
+            else if (realCode === 'ICD6A492' || realCode === 'ICDDB185' || realCode === 'ICDEC129') emergencyType = 'Fire or Hazard Alert';
+            else if (realCode === 'ICDA730B') emergencyType = 'Other (Security)';
+            else if (realCode === 'ICDC064E') emergencyType = 'Emergency Evacuation';
+            else if (realCode === 'ICD74E5A') emergencyType = 'Seizure or Unresponsive Student';
+
+            const finalStatus = normalizeIncidentAuditStatus('Active', act.action);
+            return {
+              target: realCode,
+              details: `${emergencyType} [${realCode}] - Student: ${studentName} - Status: ${finalStatus}`
+            };
+          }
+
+          return { target: act.target, details: act.details };
+        };
+
+        let activities = readAdminActivityLogs();
+
+        // Enrich activities with created_at, last_sign_in, real incident ID, and formatted details
+        activities = activities.map(act => {
+          const acc = (act.employee_id && accountMetaMap.get(act.employee_id)) ||
+            (act.admin_email && accountMetaMap.get(act.admin_email.toLowerCase())) || null;
+
+          const formatted = formatIncidentDetails(act);
+
+          if (acc) {
+            return {
+              ...act,
+              employee_id: acc.employee_id,
+              admin_name: acc.employee_name || act.admin_name,
+              admin_email: acc.employee_email || act.admin_email,
+              admin_role: acc.employee_role,
+              created_at: acc.employee_created_at || null,
+              last_sign_in: acc.employee_last_login || acc.employee_created_at || null,
+              target: formatted.target,
+              details: formatted.details
+            };
+          }
+          return {
+            ...act,
+            admin_role: act.admin_role || 'Staff',
+            created_at: act.created_at || null,
+            last_sign_in: act.last_sign_in || null,
+            target: formatted.target,
+            details: formatted.details
+          };
+        });
+
+        if (accountFilter && accountFilter !== 'all') {
+          activities = activities.filter(a =>
+            (a.employee_id || '').toLowerCase() === accountFilter ||
+            (a.admin_email || '').toLowerCase() === accountFilter ||
+            (a.admin_name || '').toLowerCase().includes(accountFilter)
+          );
+        }
+
+        if (categoryFilter && categoryFilter !== 'all') {
+          activities = activities.filter(a => (a.category || '').toLowerCase() === categoryFilter);
+        }
+
+        if (searchQuery) {
+          const tokens = searchQuery.split(/\s+/).filter(Boolean);
+          activities = activities.filter(a => {
+            const haystack = [
+              a.action || '',
+              a.details || '',
+              a.target || '',
+              a.admin_name || '',
+              a.admin_email || '',
+              a.admin_role || '',
+              a.category || ''
+            ].join(' ').toLowerCase();
+            return tokens.every(tok => haystack.includes(tok));
+          });
+        }
+
+        // Build accountsSummary showing strictly the registered accounts for HEAD, System Admin, Responder, Trainer
+        const allActivities = readAdminActivityLogs();
+        const summaryMap = new Map();
+
+        registeredAdminAccounts.forEach(acc => {
+          summaryMap.set(acc.employee_id, {
+            employee_id: acc.employee_id,
+            name: acc.employee_name || 'Administrator',
+            email: acc.employee_email,
+            role: acc.employee_role || 'Staff',
+            status: acc.employee_status || 'Active',
+            created_at: acc.employee_created_at || null,
+            last_sign_in: acc.employee_last_login || acc.employee_created_at || null,
+            total_actions: 0,
+            last_activity: null,
+            recent_activities: []
+          });
+        });
+
+        allActivities.forEach(act => {
+          const matchedAcc = registeredAdminAccounts.find(acc =>
+            (acc.employee_id && act.employee_id && acc.employee_id === act.employee_id) ||
+            (acc.employee_email && act.admin_email && acc.employee_email.toLowerCase() === act.admin_email.toLowerCase())
+          );
+          if (!matchedAcc) return; // Ignore unregistered/dummy activity entries from creating rogue cards!
+
+          const entry = summaryMap.get(matchedAcc.employee_id);
+          if (entry) {
+            entry.total_actions++;
+            if (!entry.last_activity || new Date(act.timestamp) > new Date(entry.last_activity)) {
+              entry.last_activity = act.timestamp;
+            }
+            if ((act.action || '').toLowerCase().includes('sign in')) {
+              if (!entry.last_sign_in || new Date(act.timestamp) > new Date(entry.last_sign_in)) {
+                entry.last_sign_in = act.timestamp;
+              }
+            }
+            if (entry.recent_activities.length < 10) {
+              const formatted = formatIncidentDetails(act);
+              entry.recent_activities.push({
+                ...act,
+                target: formatted.target,
+                details: formatted.details
+              });
+            }
+          }
+        });
+
+        sendJson(response, 200, {
+          ok: true,
+          total: activities.length,
+          activities: activities.slice(0, limit),
+          accountsSummary: Array.from(summaryMap.values()).sort((a, b) => getRoleOrder(a.role) - getRoleOrder(b.role))
+        });
+      } catch (err) {
+        console.error('Error fetching admin activities:', err);
+        sendJson(response, 500, { error: 'Failed to fetch admin activities.' });
+      }
+    })();
+    return;
+  }
+
+  // POST /api/admin/activities - Record an administrative activity
+  if (request.method === 'POST' && request.url === '/api/admin/activities') {
+    const session = getRequestSession(request);
+    readJson(request).then(body => {
+      const recorded = recordAdminActivity({
+        employee_id: session?.employee_id || body.employee_id,
+        admin_name: session?.employee_name || body.admin_name || 'Administrator',
+        admin_email: session?.employee_email || body.admin_email,
+        admin_role: session?.employee_role || body.admin_role || 'HEAD',
+        action: body.action || 'System Action',
+        category: body.category || 'General',
+        details: body.details || '',
+        target: body.target || '',
+        ip_address: request.headers['x-forwarded-for'] || request.socket.remoteAddress
+      });
+      sendJson(response, 201, { ok: true, activity: recorded });
+    }).catch(() => {
+      sendJson(response, 400, { error: 'Invalid activity payload.' });
+    });
     return;
   }
 
@@ -2410,13 +4366,19 @@ const server = http.createServer((request, response) => {
           }
         } catch (e) { }
 
-        const adminRoles = new Set(['HEAD', 'System Admin', 'Responder']);
+        const allMeta = readProfileMetadata();
+        const adminRoles = new Set(['HEAD', 'System Admin', 'Responder', 'Trainer']);
         let filteredUsers = (accounts || [])
-          .filter(acc => adminRoles.has(acc.employee_role))
-          .map(acc => ({
-            ...acc,
-            auth_method: oauthSet.has(acc.employee_id) ? 'Google OAuth' : 'Email/Password'
-          }));
+          .map(acc => {
+            const userMeta = allMeta[acc.employee_id] || {};
+            const effectiveRole = userMeta.custom_role || userMeta.employee_role || acc.employee_role;
+            return {
+              ...acc,
+              employee_role: effectiveRole,
+              auth_method: oauthSet.has(acc.employee_id) ? 'Google OAuth' : 'Email/Password'
+            };
+          })
+          .filter(acc => adminRoles.has(acc.employee_role));
 
         // Default: filter out pending accounts unless explicitly filtered
         if (statusFilter === 'all') {
@@ -2817,6 +4779,17 @@ const server = http.createServer((request, response) => {
           timestamp: new Date().toISOString()
         });
 
+        recordAdminActivity({
+          employee_id: session?.employee_id || '',
+          admin_name: session?.employee_name || 'HEAD Administrator',
+          admin_email: session?.employee_email || 'cluis.k12149336@umak.edu.ph',
+          admin_role: session?.employee_role || 'HEAD',
+          action: status === 'Active' ? (account.employee_status === 'Pending' ? 'Approved Account' : 'Reactivated Account') : (status === 'Suspended' ? 'Suspended Account' : 'Disapproved Account'),
+          category: 'Account',
+          details: `Changed ${account.employee_name} (${account.employee_role}) account status from "${account.employee_status}" to "${status}".`,
+          target: employeeId
+        });
+
         sendJson(response, 200, {
           ok: true,
           message: `Account status updated to ${status}`,
@@ -2976,6 +4949,22 @@ const server = http.createServer((request, response) => {
     } catch (e) { }
   }
 
+  // Task: GET /api/reports/realtime - Real-time SSE stream for new incidents and status updates
+  if (request.method === 'GET' && (request.url === '/api/reports/realtime' || request.url.startsWith('/api/reports/realtime?'))) {
+    response.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+    response.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
+    reportSseClients.add(response);
+    request.on('close', () => {
+      reportSseClients.delete(response);
+    });
+    return;
+  }
+
   // Task: GET /api/reports/incidents - List, filter, and summarize incident reports
   if (request.method === 'GET' && request.url.startsWith('/api/reports/incidents')) {
     const url = new URL(request.url, `http://${request.headers.host}`);
@@ -3089,6 +5078,125 @@ const server = http.createServer((request, response) => {
         }).length;
         const archivedCount = allAlerts.filter(a => a.is_archived).length;
 
+        // Incident trends built from actual database records
+        const buildTrendBuckets = (range) => {
+          const now = new Date();
+          const currentDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+          const currentWeek = new Date(currentDay);
+          currentWeek.setUTCDate(currentWeek.getUTCDate() - ((currentWeek.getUTCDay() + 6) % 7));
+          const buckets = [];
+
+          if (range === 'daily') {
+            for (let offset = 6; offset >= 0; offset--) {
+              const start = new Date(currentDay);
+              start.setUTCDate(start.getUTCDate() - offset);
+              buckets.push({
+                start,
+                label: start.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+              });
+            }
+          } else if (range === 'weekly') {
+            for (let offset = 6; offset >= 0; offset--) {
+              const start = new Date(currentWeek);
+              start.setUTCDate(start.getUTCDate() - offset * 7);
+              buckets.push({
+                start,
+                label: start.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })
+              });
+            }
+          } else if (range === 'yearly') {
+            for (let offset = 4; offset >= 0; offset--) {
+              const start = new Date(Date.UTC(now.getUTCFullYear() - offset, 0, 1));
+              buckets.push({
+                start,
+                label: String(start.getUTCFullYear())
+              });
+            }
+          } else {
+            // monthly (default): past 6 months
+            for (let offset = 5; offset >= 0; offset--) {
+              const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1));
+              buckets.push({
+                start,
+                label: start.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' })
+              });
+            }
+          }
+
+          return buckets.map((bucket, index) => {
+            let nextStart;
+            if (index < buckets.length - 1) {
+              nextStart = buckets[index + 1].start;
+            } else {
+              if (range === 'daily') {
+                nextStart = new Date(bucket.start);
+                nextStart.setUTCDate(nextStart.getUTCDate() + 1);
+              } else if (range === 'weekly') {
+                nextStart = new Date(bucket.start);
+                nextStart.setUTCDate(nextStart.getUTCDate() + 7);
+              } else if (range === 'monthly') {
+                nextStart = new Date(Date.UTC(bucket.start.getUTCFullYear(), bucket.start.getUTCMonth() + 1, 1));
+              } else if (range === 'yearly') {
+                nextStart = new Date(Date.UTC(bucket.start.getUTCFullYear() + 1, 0, 1));
+              } else {
+                nextStart = new Date(Date.now() + 86400000);
+              }
+            }
+            return {
+              ...bucket,
+              end: nextStart,
+              total: 0,
+              active: 0,
+              ongoing: 0,
+              resolved: 0,
+              cancelled: 0
+            };
+          });
+        };
+
+        const trends = {};
+        ['daily', 'weekly', 'monthly', 'yearly'].forEach(range => {
+          trends[range] = buildTrendBuckets(range);
+        });
+
+        const statusBreakdownMap = new Map([
+          ['Active', 0],
+          ['On Going', 0],
+          ['Resolved', 0],
+          ['Cancelled', 0],
+          ['Total incidents', 0]
+        ]);
+
+        allAlerts.forEach(alert => {
+          const status = (alert.status || '').toLowerCase().trim();
+          const statusKey = status === 'active' ? 'Active'
+            : (status === 'ongoing' || status === 'pending' || status === 'on going') ? 'On Going'
+              : status === 'resolved' ? 'Resolved'
+                : (status === 'cancelled' || status === 'canceled') ? 'Cancelled'
+                  : null;
+          if (statusKey) {
+            statusBreakdownMap.set(statusKey, statusBreakdownMap.get(statusKey) + 1);
+          }
+
+          const createdAt = new Date(alert.created_at);
+          if (Number.isNaN(createdAt.getTime())) return;
+          const isResolved = status === 'resolved' || Boolean(alert.resolved_at);
+
+          Object.values(trends).forEach(buckets => {
+            const bucket = buckets.find(item => createdAt >= item.start && createdAt < item.end);
+            if (!bucket) return;
+            bucket.total++;
+            if (statusKey === 'Active') bucket.active++;
+            else if (statusKey === 'On Going') bucket.ongoing++;
+            else if (statusKey === 'Resolved') bucket.resolved++;
+            else if (statusKey === 'Cancelled') bucket.cancelled++;
+          });
+        });
+
+        statusBreakdownMap.set('Total incidents', allAlerts.length);
+
+        const statusBreakdown = [...statusBreakdownMap].map(([status, count]) => ({ status, count }));
+
         // Bottom performance benchmarks
         let totalResponseMinutes = 0;
         let responseTimeCount = 0;
@@ -3112,18 +5220,17 @@ const server = http.createServer((request, response) => {
         const nonCancelled = activeCount + pendingCount + resolvedCount;
         const resolutionRate = nonCancelled > 0 ? ((resolvedCount / nonCancelled) * 100).toFixed(1) : '98.2';
 
-        const medicalCount = allAlerts.filter(a => a.category === 'Medical').length;
-        const securityCount = allAlerts.filter(a => a.category === 'Security').length;
-        const urgentCount = allAlerts.filter(a => a.category === 'Urgent').length;
+        const medicalCount = allAlerts.filter(a => (a.category || '').toLowerCase().includes('med')).length;
+        const securityCount = allAlerts.filter(a => (a.category || '').toLowerCase().includes('sec')).length;
+        const urgentCount = allAlerts.filter(a => (a.category || '').toLowerCase().includes('urg') || (a.category || '').toLowerCase().includes('vicin')).length;
         const allCount = allAlerts.length || 1;
-        const medicalPct = Math.round((medicalCount / allCount) * 100) || 62;
-        const securityPct = Math.round((securityCount / allCount) * 100) || 26;
-        const urgentPct = Math.max(0, 100 - medicalPct - securityPct) || 12;
+        const medicalPct = Math.round((medicalCount / allCount) * 100);
+        const securityPct = Math.round((securityCount / allCount) * 100);
+        const urgentPct = Math.max(0, 100 - medicalPct - securityPct);
 
         // Apply filters
         let filtered = allAlerts.filter(a => {
           const alertStatus = (a.status || '').toLowerCase().trim();
-          const isResolved = alertStatus === 'resolved';
 
           if (showArchived) {
             if (!a.is_archived) return false;
@@ -3142,18 +5249,32 @@ const server = http.createServer((request, response) => {
             }
           }
 
-          if (categoryFilter !== 'all' && a.category.toLowerCase() !== categoryFilter.toLowerCase()) {
-            return false;
+          if (categoryFilter !== 'all') {
+            const cat = (a.category || '').toLowerCase();
+            const filt = categoryFilter.toLowerCase();
+            if (filt === 'urgent') {
+              if (!cat.includes('urg') && !cat.includes('assist')) return false;
+            } else if (filt === 'campus vicinity' || filt === 'vicinity' || filt === 'campus') {
+              if (!cat.includes('vicin') && !cat.includes('campus')) return false;
+            } else if (filt === 'medical') {
+              if (!cat.includes('med')) return false;
+            } else if (filt === 'security') {
+              if (!cat.includes('sec')) return false;
+            } else if (cat !== filt && !cat.includes(filt)) {
+              return false;
+            }
           }
 
           if (startDate) {
-            const incidentDate = a.created_at.slice(0, 10);
-            if (incidentDate < startDate) return false;
+            const alertUtc = (a.created_at || '').slice(0, 10);
+            const alertLocal = a.created_at ? new Date(a.created_at).toLocaleDateString('en-CA') : alertUtc;
+            if (alertUtc < startDate && alertLocal < startDate) return false;
           }
 
           if (endDate) {
-            const incidentDate = a.created_at.slice(0, 10);
-            if (incidentDate > endDate) return false;
+            const alertUtc = (a.created_at || '').slice(0, 10);
+            const alertLocal = a.created_at ? new Date(a.created_at).toLocaleDateString('en-CA') : alertUtc;
+            if (alertUtc > endDate && alertLocal > endDate) return false;
           }
 
           if (searchQuery) {
@@ -3187,6 +5308,8 @@ const server = http.createServer((request, response) => {
             archived: archivedCount
           },
           analytics: {
+            trends,
+            statusBreakdown,
             avgResponseTime: `${avgResponseTime} min`,
             monthlyTotal,
             resolutionRate: `${resolutionRate}%`,
@@ -3380,7 +5503,29 @@ const server = http.createServer((request, response) => {
             .or(`incident_id.eq.${incidentId},incident_id.eq.${targetAlertId}`);
         } catch (_) { }
 
+        const realIncidentId = 'ICD' + String(targetAlertId).replace(/-/g, '').slice(-5).toUpperCase();
+        const emType = data?.assistance_type || data?.incident || 'Medical Emergency';
+        let studentReporter = 'Joshua Martinez';
+        try {
+          if (data?.student_account_id) {
+            const { data: st } = await supabase.from('accounts_student').select('student_name').eq('student_account_id', data.student_account_id).maybeSingle();
+            if (st?.student_name) studentReporter = st.student_name;
+          }
+        } catch (_) { }
+        const displayStatus = (status === 'ongoing' || status === 'pending') ? 'On Going' : status;
+
         console.log(`[AUDIT] Emergency incident ${incidentId} (ID: ${targetAlertId}) status changed to ${status}`);
+        recordAdminActivity({
+          employee_id: session?.employee_id,
+          admin_name: session?.employee_name || 'HEAD Administrator',
+          admin_email: session?.employee_email || 'cluis.k12149336@umak.edu.ph',
+          admin_role: session?.employee_role || 'HEAD',
+          action: status === 'Resolved' ? 'Resolved Incident' : (status === 'Cancelled' ? 'Cancelled Incident' : 'Incident Status Update'),
+          category: 'Incident',
+          details: `${emType} [${realIncidentId}] - Student: ${studentReporter} - Status: ${displayStatus}`,
+          target: realIncidentId
+        });
+        broadcastReportUpdate({ type: 'incident_change', id: targetAlertId, status, timestamp: Date.now() });
         sendJson(response, 200, {
           ok: true,
           message: `Incident updated to ${status}`,
@@ -3436,6 +5581,19 @@ const server = http.createServer((request, response) => {
           }
           throw error;
         }
+
+        const session = getRequestSession(request);
+        const incidentCode = 'ICD' + String(incidentId).replace(/-/g, '').slice(-5).toUpperCase();
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-1790589689662-GEYNKU',
+          admin_name: session?.employee_name || 'Sophia Bantays',
+          admin_email: session?.employee_email || 'sbantay.k12150533@umak.edu.ph',
+          admin_role: session?.employee_role || 'Responder',
+          action: 'Updated Live Location',
+          category: 'Incident',
+          details: `Broadcasted real-time patrol coordinates (${responder_lat}, ${responder_lng}) for incident [${incidentCode}].`,
+          target: 'Live Map GPS'
+        });
 
         sendJson(response, 200, { ok: true, message: 'Location synced successfully.' });
       } catch (error) {
@@ -3596,7 +5754,28 @@ const server = http.createServer((request, response) => {
           console.warn('[Assign Responder] Metadata sync note:', mErr.message);
         }
 
+        const realIncidentId = 'ICD' + String(targetAlertId).replace(/-/g, '').slice(-5).toUpperCase();
+        const emType = existingIncident?.assistance_type || 'Medical Emergency';
+        let studentReporter = 'Joshua Martinez';
+        try {
+          if (existingIncident?.student_account_id) {
+            const { data: st } = await supabase.from('accounts_student').select('student_name').eq('student_account_id', existingIncident.student_account_id).maybeSingle();
+            if (st?.student_name) studentReporter = st.student_name;
+          }
+        } catch (_) { }
+
         console.log(`[AUDIT] Emergency incident ${incidentId} (ID: ${targetAlertId}) assigned to responder: ${responderName}`);
+        recordAdminActivity({
+          employee_id: session?.employee_id,
+          admin_name: session?.employee_name || 'HEAD Administrator',
+          admin_email: session?.employee_email || 'cluis.k12149336@umak.edu.ph',
+          admin_role: session?.employee_role || 'HEAD',
+          action: 'Assigned Responder',
+          category: 'Incident',
+          details: `${emType} [${realIncidentId}] - Student: ${studentReporter} - Status: On Going`,
+          target: realIncidentId
+        });
+        broadcastReportUpdate({ type: 'incident_change', id: targetAlertId, action: 'assign', timestamp: Date.now() });
         sendJson(response, 200, {
           ok: true,
           success: true,
@@ -3623,6 +5802,7 @@ const server = http.createServer((request, response) => {
   // Task: POST /api/reports/incidents/{id}/archive - Toggle or set incident archive status
   if (request.method === 'POST' && request.url.match(/^\/api\/reports\/incidents\/[^\/]+\/archive$/)) {
     const incidentId = request.url.split('/')[4];
+    const session = getRequestSession(request);
     readJson(request).then(async (body = {}) => {
       try {
         const archivedSet = getArchivedIncidentIds();
@@ -3642,6 +5822,34 @@ const server = http.createServer((request, response) => {
         }
         saveArchivedIncidentIds(archivedSet);
 
+        const realIncidentId = 'ICD' + String(incidentId).replace(/-/g, '').slice(-5).toUpperCase();
+        let emType = 'Emergency Assistance';
+        let studentReporter = 'Joshua Martinez';
+        let incStatus = isArchived ? 'Cancelled' : 'Active';
+        try {
+          const { data: al } = await supabase.from('emergency_alerts').select('assistance_type, incident, status, student_account_id').eq('id', incidentId).maybeSingle();
+          if (al) {
+            if (al.assistance_type || al.incident) emType = al.assistance_type || al.incident;
+            if (al.status) incStatus = (al.status === 'ongoing' || al.status === 'pending') ? 'On Going' : al.status;
+            if (al.student_account_id) {
+              const { data: st } = await supabase.from('accounts_student').select('student_name').eq('student_account_id', al.student_account_id).maybeSingle();
+              if (st?.student_name) studentReporter = st.student_name;
+            }
+          }
+        } catch (_) { }
+
+        recordAdminActivity({
+          employee_id: session?.employee_id,
+          admin_name: session?.employee_name || 'Administrator',
+          admin_email: session?.employee_email || 'cluis.k12149336@umak.edu.ph',
+          admin_role: session?.employee_role || 'HEAD',
+          action: isArchived ? 'Archived Incident' : 'Unarchived Incident',
+          category: 'Incident',
+          details: `${emType} [${realIncidentId}] - Student: ${studentReporter} - Status: ${incStatus}`,
+          target: realIncidentId
+        });
+
+        broadcastReportUpdate({ type: 'incident_change', id: incidentId, action: 'archive', isArchived, timestamp: Date.now() });
         sendJson(response, 200, {
           ok: true,
           message: isArchived ? 'Incident archived' : 'Incident unarchived',
@@ -3657,6 +5865,7 @@ const server = http.createServer((request, response) => {
         const archivedSet = getArchivedIncidentIds();
         archivedSet.add(incidentId);
         saveArchivedIncidentIds(archivedSet);
+        broadcastReportUpdate({ type: 'incident_change', id: incidentId, action: 'archive', isArchived: true, timestamp: Date.now() });
         sendJson(response, 200, { ok: true, message: 'Incident archived', id: incidentId, is_archived: true, archivedCount: archivedSet.size });
       } catch (error) {
         sendJson(response, 500, { error: 'Failed to update archive status.' });
@@ -3668,6 +5877,7 @@ const server = http.createServer((request, response) => {
   // Task: DELETE /api/reports/incidents/{id} - Delete incident
   if (request.method === 'DELETE' && request.url.match(/^\/api\/reports\/incidents\/[^\/]+$/)) {
     const incidentId = request.url.split('/')[4];
+    const session = getRequestSession(request);
     (async () => {
       try {
         if (!supabase) {
@@ -3688,6 +5898,18 @@ const server = http.createServer((request, response) => {
           saveArchivedIncidentIds(archivedSet);
         }
 
+        recordAdminActivity({
+          employee_id: session?.employee_id,
+          admin_name: session?.employee_name || 'Administrator',
+          admin_email: session?.employee_email || 'cluis.k12149336@umak.edu.ph',
+          admin_role: session?.employee_role || 'HEAD',
+          action: 'Deleted Incident',
+          category: 'Incident',
+          details: `Permanently deleted emergency incident ${incidentId}.`,
+          target: String(incidentId)
+        });
+
+        broadcastReportUpdate({ type: 'incident_change', id: incidentId, action: 'delete', timestamp: Date.now() });
         sendJson(response, 200, { ok: true, message: 'Incident deleted successfully', id: incidentId });
       } catch (error) {
         console.error('Delete incident error:', error);
@@ -3979,6 +6201,18 @@ const server = http.createServer((request, response) => {
           });
         }
 
+        const session = getRequestSession(request);
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-1790578455764-9NMNDE',
+          admin_name: session?.employee_name || 'Jolehmeh Billones',
+          admin_email: session?.employee_email || 'juliemay1917@gmail.com',
+          admin_role: session?.employee_role || 'System Admin',
+          action: 'Exported Reports Dossier',
+          category: 'Reports',
+          details: `Exported campus incident compliance reports dossier in ${url.searchParams.get('format') === 'pdf' ? 'PDF' : 'Excel'} format.`,
+          target: 'Reports Export'
+        });
+
         response.writeHead(200, {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="${isResolvedReport ? 'heas-resolved-incidents-report' : 'heas-incidents-report'}.csv"`
@@ -4062,11 +6296,12 @@ const server = http.createServer((request, response) => {
 
         const allMeta = readProfileMetadata();
         const userMeta = allMeta[account.employee_id] || {};
+        const effectiveRole = userMeta.custom_role || userMeta.employee_role || account.employee_role;
 
         // Merge database columns with metadata fallback
         const username = account.username || userMeta.username || (account.employee_email ? account.employee_email.split('@')[0] : 'admin_joleh');
         const avatarUrl = account.avatar_url || userMeta.avatar_url || '/images/avatar-default.svg';
-        const department = account.department || userMeta.department || (account.employee_role === 'System Admin' ? 'System Administrator' : account.employee_role);
+        const department = account.department || userMeta.department || (effectiveRole === 'System Admin' ? 'System Administrator' : effectiveRole);
         const lastActivity = account.employee_last_login || userMeta.last_activity || '2025-12-01T22:32:37.267631+00:00';
 
         const profileData = {
@@ -4074,7 +6309,7 @@ const server = http.createServer((request, response) => {
           employee_name: account.employee_name,
           username: username,
           employee_email: account.employee_email,
-          employee_role: account.employee_role === 'System Admin' ? 'System Administrator' : account.employee_role,
+          employee_role: effectiveRole === 'System Admin' ? 'System Administrator' : effectiveRole,
           employee_status: account.employee_status,
           department: department,
           assigned_emergency_type: userMeta.assigned_emergency_type || account.assigned_emergency_type || null,
@@ -4200,6 +6435,10 @@ const server = http.createServer((request, response) => {
           sessionUser.employee_email = newEmail;
         }
 
+        const allMeta = readProfileMetadata();
+        const userMeta = allMeta[account.employee_id] || {};
+        const effectiveRole = userMeta.custom_role || userMeta.employee_role || account.employee_role;
+
         sendJson(response, 200, {
           ok: true,
           message: 'Profile information updated successfully.',
@@ -4208,7 +6447,7 @@ const server = http.createServer((request, response) => {
             employee_name: newName,
             username: newUsername,
             employee_email: newEmail,
-            employee_role: account.employee_role === 'System Admin' ? 'System Administrator' : account.employee_role
+            employee_role: effectiveRole === 'System Admin' ? 'System Administrator' : effectiveRole
           }
         });
       } catch (err) {

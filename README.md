@@ -33,8 +33,8 @@ GOOGLE_OAUTH_CLIENT_ID=ask_team_lead_for_id
 GOOGLE_OAUTH_CLIENT_SECRET=ask_team_lead_for_secret
 ```
 
-### 3. Apply the Responder Completion Migration
-In the Supabase SQL Editor, run `database/013_add_responder_completion_report.sql` against the project database. The responder-to-HEAD review flow requires the completion report columns on `public.emergency_alerts`.
+### 3. Apply the Database Migrations
+In the Supabase SQL Editor, run `database/013_add_responder_completion_report.sql` and `database/014_add_trainer_role.sql` against the project database. The responder-to-HEAD review flow requires the completion report columns on `public.emergency_alerts`, and the Trainer role migration updates `chk_employee_accounts_role` to allow `Trainer` in `public.employee_accounts`.
 
 ### 4. Start the Local Server
 ```bash

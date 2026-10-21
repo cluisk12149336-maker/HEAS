@@ -36,7 +36,15 @@
     "resolved_at": "2026-09-28T17:19:03.226Z"
   },
   "cb656f8b-943c-4b12-b898-dc0df62db185": {
-    "summary": "dd",
-    "resolved_at": "2026-09-28T17:47:15.517Z"
+    "summary": "Responder coordinated support and confirmed the incident was safely resolved.",
+    "resolved_at": "2026-10-18T19:17:41.879Z"
+  },
+  "31b93ded-1a19-4363-899b-8cf97383f4d0": {
+    "summary": "Responder coordinated support and confirmed the incident was safely resolved.",
+    "resolved_at": "2026-10-18T13:47:54.711Z"
+  },
+  "00000000-0000-4000-8000-000000000000": {
+    "summary": "System Admin action permission probe.",
+    "resolved_at": "2026-10-18T19:17:40.359Z"
   }
 }
