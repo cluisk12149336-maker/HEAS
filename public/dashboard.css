@@ -6775,16 +6775,33 @@ body.trainer-mode .tc-btn-remove-student {
 .tc-course-title-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.tc-action-btn-group {
+.tc-course-title-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.tc-course-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tc-course-management-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
 }
 
 .tc-btn-action {
@@ -6965,26 +6982,31 @@ body.trainer-mode .tc-btn-remove-student {
   }
 
   .tc-course-title-row {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
   }
 
-  .tc-action-btn-group {
-    width: 100%;
-    margin-top: 8px;
+  .tc-course-title-row > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
-  .tc-action-btn-group button {
+  .tc-course-title-actions {
+    margin-left: auto;
+  }
+
+  .tc-course-title-actions .tc-btn-add-batch {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .tc-course-management-actions button {
     flex: 1;
   }
 
   .tc-schedules-toolbar {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .tc-btn-add-batch {
-    width: 100%;
   }
 
   .tc-modal-dialog {
@@ -7801,3 +7823,83 @@ body.trainer-mode .tc-btn-remove-student {
   margin-bottom: 8px;
 }
 
+.tc-roster-payment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.tc-roster-payment-btn iconify-icon { font-size: 16px; }
+.tc-roster-payment-btn.is-confirm {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(21, 128, 61, .18);
+}
+.tc-roster-payment-btn.is-confirm:hover { background: #166534; border-color: #166534; box-shadow: 0 3px 8px rgba(21, 128, 61, .2); }
+.tc-roster-payment-btn.is-revert {
+  background: #fff;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+.tc-roster-payment-btn.is-revert:hover { background: #fff7ed; border-color: #fdba74; }
+.tc-roster-payment-btn:focus-visible { outline: 3px solid rgba(2, 132, 199, .35); outline-offset: 2px; }
+.tc-roster-payment-btn:active { transform: translateY(1px); }
+@media (max-width: 540px) {
+  .tc-roster-payment-btn { min-height: 34px; padding: 0 10px; font-size: 11px; }
+}
+
+.tc-batch-details-dialog { width: min(1120px, calc(100vw - 40px)) !important; }
+.tc-batch-roster { width: 100%; }
+.tc-batch-student-row {
+  display: grid;
+  grid-template-columns: 190px minmax(280px, 1fr) minmax(180px, 230px);
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid #dbe4e0;
+  border-radius: 11px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.tc-batch-student-actions { display: flex; flex-direction: column; align-items: stretch; gap: 7px; }
+.tc-batch-student-info { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; color: #334155; font-size: 12px; overflow-wrap: anywhere; }
+.tc-batch-student-info > strong { color: #0f172a; font-size: 14px; }
+.tc-batch-student-info dl { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 8px 18px; margin: 7px 0 0; width: 100%; }
+.tc-batch-student-info dl div { min-width: 0; }
+.tc-batch-student-info dt { color: #64748b; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .035em; }
+.tc-batch-student-info dd { margin: 2px 0 0; color: #0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.tc-batch-payment-status { font-size: 11px; font-weight: 700; }
+.tc-batch-payment-status.is-paid { color: #15803d; }
+.tc-batch-payment-status.is-pending { color: #b45309; }
+.tc-batch-payment-status.is-cancelled { color: #64748b; }
+.tc-roster-payment-btn.is-decline { background: #fff; border-color: #fecaca; color: #b91c1c; }
+.tc-roster-payment-btn.is-decline:hover { background: #fef2f2; border-color: #fca5a5; }
+.tc-roster-payment-btn.is-view { background: #f8fafc; border-color: #cbd5e1; color: #334155; text-decoration: none; }
+.tc-roster-payment-btn.is-view:hover { background: #eff6ff; border-color: #93c5fd; color: #075985; }
+.tc-roster-payment-btn.is-view:disabled { cursor: not-allowed; opacity: .55; }
+.tc-batch-review-status { display: inline-flex; justify-content: center; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; }
+.tc-batch-review-status.is-enrolled { background: #dcfce7; color: #166534; }
+.tc-batch-review-status.is-declined { background: #f1f5f9; color: #64748b; }
+.tc-batch-receipt-preview { display: flex; align-items: center; justify-content: center; min-height: 130px; padding: 7px; overflow: hidden; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; text-decoration: none; }
+.tc-batch-receipt-preview img { display: block; max-width: 100%; max-height: 170px; object-fit: contain; border-radius: 5px; }
+.tc-batch-receipt-preview span { color: #0369a1; font-size: 12px; font-weight: 600; }
+.tc-batch-no-receipt { display: flex; align-items: center; justify-content: center; min-height: 130px; padding: 12px; color: #94a3b8; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 9px; font-size: 12px; text-align: center; }
+@media (max-width: 760px) {
+  .tc-batch-details-dialog { width: calc(100vw - 20px) !important; }
+  .tc-batch-student-row { grid-template-columns: 1fr; gap: 12px; }
+  .tc-batch-student-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .tc-batch-student-proof { grid-row: 3; }
+  .tc-batch-receipt-preview, .tc-batch-no-receipt { min-height: 100px; }
+}

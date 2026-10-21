@@ -477,10 +477,12 @@ function applyRoleBasedAccessControl(userRole) {
   const btnEditCourse = document.getElementById('btnEditCourse');
   const btnDeleteCourse = document.getElementById('btnDeleteCourse');
   const btnAddSchedule = document.getElementById('btnAddSchedule');
+  const courseManagementActions = document.querySelector('.tc-course-management-actions');
   if (btnCreateCourse) btnCreateCourse.style.display = isTrainer ? 'none' : '';
-  if (btnEditCourse) btnEditCourse.style.display = '';
-  if (btnDeleteCourse) btnDeleteCourse.style.display = '';
-  if (btnAddSchedule) btnAddSchedule.style.display = '';
+  if (btnEditCourse) btnEditCourse.style.display = isTrainer ? 'none' : '';
+  if (btnDeleteCourse) btnDeleteCourse.style.display = isTrainer ? 'none' : '';
+  if (courseManagementActions) courseManagementActions.style.display = isTrainer ? 'none' : '';
+  if (btnAddSchedule) btnAddSchedule.style.display = !isTrainer && activeTrainingCourse ? '' : 'none';
 
   const sidebarLinks = document.querySelectorAll('.dashboard-sidebar nav a[data-roles], dashboard-navigation nav a[data-roles]');
   sidebarLinks.forEach((link) => {
@@ -8052,6 +8054,7 @@ document.addEventListener('error', function(event) {
 let allTrainingCourses = [];
 let activeTrainingCourse = null;
 let allTrainersList = [];
+let trainingCoursesLoadInProgress = false;
 
 async function loadTrainingCenterData() {
   initTrainingCenterModals();
@@ -8148,7 +8151,8 @@ function renderActiveCourseHeader(course) {
 
 async function loadTrainingCourses(silent = false) {
   const container = document.getElementById('tcCourseList');
-  if (!container) return;
+  if (!container || trainingCoursesLoadInProgress) return;
+  trainingCoursesLoadInProgress = true;
 
   try {
     const res = await fetch('/api/training/courses');
@@ -8200,25 +8204,14 @@ async function loadTrainingCourses(silent = false) {
     if (!silent) {
       container.innerHTML = `<div style="text-align:center; padding: 20px; color:#dc2626; font-size:12px;">Error: ${escapeHtml(err.message)}</div>`;
     }
+  } finally {
+    trainingCoursesLoadInProgress = false;
   }
 }
 
-// Real-time synchronization for Training Course Library
-let trainingRealtimeTimer = null;
-function startTrainingRealtimeSync() {
-  if (trainingRealtimeTimer) return;
-  trainingRealtimeTimer = setInterval(() => {
-    const activeView = document.querySelector('.dashboard-view.active');
-    if (activeView && activeView.id === 'view-training') {
-      loadTrainingCourses(true);
-      if (activeTrainingCourse?.id && typeof loadCourseBookings === 'function') {
-        loadCourseBookings(activeTrainingCourse.id);
-      }
-    }
-  }, 4000);
-}
-
 let currentLoadedBookings = [];
+let currentLoadedBatches = [];
+let currentActiveTrainingBatchId = null;
 
 function isMonthInPast(year, month) {
   const now = new Date();
@@ -8247,6 +8240,11 @@ function isBatchScheduleFinished(b) {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1 to 12
   const currentDay = now.getDate();
+
+  if (b.end_date) {
+    const endAt = new Date(`${String(b.end_date).slice(0, 10)}T23:59:59`);
+    return !Number.isNaN(endAt.getTime()) && now > endAt;
+  }
 
   if (bYr < currentYear) return true;
   if (bYr === currentYear && bMo < currentMonth) return true;
@@ -8374,7 +8372,7 @@ function initBatchSchedulePicker() {
       if (!isMonthInPast(y, mm)) batchPickerState.selectedMonths.add(m);
     });
   }
-  if (batchPickerState.selectedMonths.size === 0) {
+  if (batchPickerState.selectedMonths.size === 0 && courseAvail.length === 0) {
     let m1 = currentMonth;
     let y1 = currentYear;
     if (m1 > 12) { m1 = 1; y1++; }
@@ -8431,19 +8429,22 @@ function initBatchSchedulePicker() {
   const selectRemainingBtn = document.getElementById('batchPickerSelectAllUpcoming');
   if (selectRemainingBtn) {
     selectRemainingBtn.onclick = () => {
-      const isHeadOrAdminNow = isHeadOrAdminRole();
       const courseAvailSet = new Set(activeTrainingCourse?.available_months || []);
+      let added = 0;
       for (let m = 1; m <= 12; m++) {
         const mKey = `${batchPickerState.viewYear}-${String(m).padStart(2, '0')}`;
-        if (!isMonthInPast(batchPickerState.viewYear, m)) {
-          if (isHeadOrAdminNow || courseAvailSet.size === 0 || courseAvailSet.has(mKey)) {
-            batchPickerState.selectedMonths.add(mKey);
-          }
+        if (!isMonthInPast(batchPickerState.viewYear, m) &&
+            (courseAvailSet.size === 0 || courseAvailSet.has(mKey)) &&
+            !batchPickerState.selectedMonths.has(mKey)) {
+          batchPickerState.selectedMonths.add(mKey);
+          added++;
         }
       }
       renderBatchMonthGrid();
       updateBatchMultiMonthPreview();
-      showToast(`Selected all upcoming months for ${batchPickerState.viewYear}.`, 'info');
+      showToast(added
+        ? `Selected ${added} available course month${added === 1 ? '' : 's'} for ${batchPickerState.viewYear}.`
+        : `No unselected course months are available in ${batchPickerState.viewYear}.`, 'info');
     };
   }
 
@@ -8468,7 +8469,9 @@ function initBatchSchedulePicker() {
   }
 
   initDateMonthYearPicker();
-  switchBatchScheduleMode('multi-month');
+  // A batch is one class cohort with one start date, never one record per
+  // configured availability month.
+  switchBatchScheduleMode('date-month-year');
 
   renderYearQuickPills();
   renderBatchMonthGrid();
@@ -8609,8 +8612,13 @@ function validateDateMonthYearSelection() {
       notice.style.display = 'block';
       notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Date Expired:</strong> ${MONTH_NAMES[m - 1]} ${y} has already passed in the current year. Please pick an upcoming month.`;
     } else {
+      const monthKey = `${y}-${String(m).padStart(2, '0')}`;
+      const courseAvail = new Set(activeTrainingCourse?.available_months || []);
       const today = new Date();
-      if (y === today.getFullYear() && m === (today.getMonth() + 1) && d < today.getDate()) {
+      if (courseAvail.size > 0 && !courseAvail.has(monthKey)) {
+        notice.style.display = 'block';
+        notice.innerHTML = `<iconify-icon icon="solar:lock-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Month not offered:</strong> ${MONTH_NAMES[m - 1]} ${y} is not available for this course. Update the course schedule first.`;
+      } else if (y === today.getFullYear() && m === (today.getMonth() + 1) && d < today.getDate()) {
         notice.style.display = 'block';
         notice.innerHTML = `<iconify-icon icon="solar:danger-triangle-bold" style="vertical-align: -2px; font-size: 14px;"></iconify-icon> <strong>Day Passed:</strong> Day ${d} of this month has already passed in the current year. Please select a current or future day.`;
       } else {
@@ -8653,13 +8661,13 @@ function renderBatchMonthGrid() {
           <span class="tc-month-sub"><iconify-icon icon="solar:lock-bold" style="font-size:10px; vertical-align:-1px;"></iconify-icon> Passed</span>
         </div>
       `;
-    } else if (!isHeadOrAdmin && courseAvail.size > 0 && !courseAvail.has(monthKey)) {
-      // For Trainer / Responder: not opened by HEAD / Admin
+    } else if (courseAvail.size > 0 && !courseAvail.has(monthKey)) {
+      // Batches must use months offered by the course for every role.
       html += `
-        <div class="tc-month-btn not-available-by-head" title="${escapeHtml(fullName)} ${yr} has not been designated as available by the HEAD or System Admin account."
+        <div class="tc-month-btn not-available-by-head" title="${escapeHtml(fullName)} ${yr} is not available for this course."
              onclick="handleLockedMonthClick('${escapeHtml(fullName)}', ${yr})">
           <span class="tc-month-name">${shortName}</span>
-          <span class="tc-month-sub"><iconify-icon icon="solar:lock-bold" style="font-size:10px; vertical-align:-1px;"></iconify-icon> Locked</span>
+          <span class="tc-month-sub"><iconify-icon icon="solar:lock-bold" style="font-size:10px; vertical-align:-1px;"></iconify-icon> Not offered</span>
         </div>
       `;
     } else {
@@ -8684,10 +8692,16 @@ function handlePassedMonthClick(monthName, year) {
 }
 
 function handleLockedMonthClick(monthName, year) {
-  showToast(`This month (${monthName} ${year}) has not been made available by the HEAD or System Admin account. Please choose from the months opened by HEAD / Admin.`, 'warning');
+  showToast(`${monthName} ${year} is not available for this course. Update the course schedule first if you want to offer it.`, 'warning');
 }
 
 function toggleBatchMonthSelection(monthKey) {
+  const courseAvail = new Set(activeTrainingCourse?.available_months || []);
+  if (courseAvail.size > 0 && !courseAvail.has(monthKey)) {
+    const [year, month] = monthKey.split('-').map(Number);
+    handleLockedMonthClick(MONTH_NAMES[month - 1], year);
+    return;
+  }
   if (batchPickerState.selectedMonths.has(monthKey)) {
     batchPickerState.selectedMonths.delete(monthKey);
   } else {
@@ -8794,6 +8808,10 @@ function initCourseDaysPicker(prefix, initialDays) {
 
   if (!gridEl) return null;
 
+  const allowedDays = prefix === 'batch' && Array.isArray(initialDays) && initialDays.length > 0
+    ? new Set(initialDays.map(day => String(day).trim().toLowerCase()))
+    : null;
+
   let selectedSet = new Set();
   if (Array.isArray(initialDays) && initialDays.length > 0) {
     initialDays.forEach(d => {
@@ -8811,6 +8829,11 @@ function initCourseDaysPicker(prefix, initialDays) {
     selectedSet.add('Monday');
     selectedSet.add('Wednesday');
     selectedSet.add('Saturday');
+  }
+  if (allowedDays) {
+    selectedSet = new Set([...selectedSet].filter(day => allowedDays.has(day.toLowerCase())));
+    if (selectedSet.size === 0) selectedSet.add(COURSE_DAYS_LIST.find(item => allowedDays.has(item.day.toLowerCase()))?.day);
+    selectedSet.delete(undefined);
   }
 
   const syncDayState = (reRenderDom = true) => {
@@ -8857,9 +8880,10 @@ function initCourseDaysPicker(prefix, initialDays) {
   const renderGrid = () => {
     gridEl.innerHTML = COURSE_DAYS_LIST.map(item => {
       const isChecked = selectedSet.has(item.day);
+      const isAllowed = !allowedDays || allowedDays.has(item.day.toLowerCase());
       return `
-        <label style="display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 6px; border: 1px solid ${isChecked ? '#0284c7' : '#cbd5e1'}; background: ${isChecked ? '#eff6ff' : '#ffffff'}; cursor: pointer; transition: all 0.15s ease; user-select: none;">
-          <input type="checkbox" data-day="${item.day}" ${isChecked ? 'checked' : ''} style="accent-color: #0284c7; width: 15px; height: 15px; cursor: pointer; margin: 0;">
+        <label title="${isAllowed ? '' : 'This day is not offered by the course.'}" style="display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 6px; border: 1px solid ${isChecked ? '#0284c7' : '#cbd5e1'}; background: ${isChecked ? '#eff6ff' : '#ffffff'}; opacity: ${isAllowed ? '1' : '0.45'}; cursor: ${isAllowed ? 'pointer' : 'not-allowed'}; transition: all 0.15s ease; user-select: none;">
+          <input type="checkbox" data-day="${item.day}" ${isChecked ? 'checked' : ''} ${isAllowed ? '' : 'disabled'} style="accent-color: #0284c7; width: 15px; height: 15px; cursor: ${isAllowed ? 'pointer' : 'not-allowed'}; margin: 0;">
           <div style="line-height: 1.2;">
             <div class="tc-day-title" style="font-size: 12px; font-weight: 600; color: ${isChecked ? '#0369a1' : '#334155'};">${escapeHtml(item.day)}</div>
             <div class="tc-day-sub" style="font-size: 10px; color: ${isChecked ? '#0284c7' : '#94a3b8'};">4 sess/mo</div>
@@ -8886,20 +8910,20 @@ function initCourseDaysPicker(prefix, initialDays) {
   if (btnWeekdays) {
     btnWeekdays.onclick = () => {
       selectedSet.clear();
-      ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(d => selectedSet.add(d));
+      ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].filter(d => !allowedDays || allowedDays.has(d.toLowerCase())).forEach(d => selectedSet.add(d));
       syncDayState(true);
     };
   }
   if (btnWeekends) {
     btnWeekends.onclick = () => {
       selectedSet.clear();
-      ['Saturday', 'Sunday'].forEach(d => selectedSet.add(d));
+      ['Saturday', 'Sunday'].filter(d => !allowedDays || allowedDays.has(d.toLowerCase())).forEach(d => selectedSet.add(d));
       syncDayState(true);
     };
   }
   if (btnAll) {
     btnAll.onclick = () => {
-      COURSE_DAYS_LIST.forEach(i => selectedSet.add(i.day));
+      COURSE_DAYS_LIST.filter(i => !allowedDays || allowedDays.has(i.day.toLowerCase())).forEach(i => selectedSet.add(i.day));
       syncDayState(true);
     };
   }
@@ -8913,10 +8937,10 @@ function initCourseDaysPicker(prefix, initialDays) {
   renderGrid();
 
   return {
-    getSelectedDays: () => COURSE_DAYS_LIST.map(i => i.day).filter(d => selectedSet.has(d)),
+    getSelectedDays: () => COURSE_DAYS_LIST.map(i => i.day).filter(d => selectedSet.has(d) && (!allowedDays || allowedDays.has(d.toLowerCase()))),
     setSelectedDays: (days) => {
       selectedSet.clear();
-      (days || []).forEach(d => selectedSet.add(d));
+      (days || []).filter(d => !allowedDays || allowedDays.has(String(d).toLowerCase())).forEach(d => selectedSet.add(d));
       syncDayState(true);
     }
   };
@@ -8967,13 +8991,21 @@ function initCourseTimePicker(prefix, initialTimes) {
     if (!hasAM && !hasPM) { hasAM = true; hasPM = true; }
   }
 
+  const allowedAM = hasAM;
+  const allowedPM = hasPM;
+
   amCb.checked = hasAM;
   pmCb.checked = hasPM;
+  if (prefix === 'batchTime') {
+    amCb.disabled = !allowedAM;
+    pmCb.disabled = !allowedPM;
+  }
 
   const syncTimeState = () => {
     if (!amCb.checked && !pmCb.checked) {
       showToast('At least one training time slot (AM or PM) must be selected.', 'warning');
-      amCb.checked = true;
+      amCb.checked = allowedAM;
+      pmCb.checked = !allowedAM && allowedPM;
     }
 
     const curAM = amCb.checked;
@@ -9008,6 +9040,7 @@ function initCourseTimePicker(prefix, initialTimes) {
 
   if (btnOnlyAM) {
     btnOnlyAM.onclick = () => {
+      if (!allowedAM) return;
       amCb.checked = true;
       pmCb.checked = false;
       syncTimeState();
@@ -9015,6 +9048,7 @@ function initCourseTimePicker(prefix, initialTimes) {
   }
   if (btnOnlyPM) {
     btnOnlyPM.onclick = () => {
+      if (!allowedPM) return;
       amCb.checked = false;
       pmCb.checked = true;
       syncTimeState();
@@ -9022,8 +9056,8 @@ function initCourseTimePicker(prefix, initialTimes) {
   }
   if (btnBoth) {
     btnBoth.onclick = () => {
-      amCb.checked = true;
-      pmCb.checked = true;
+      amCb.checked = allowedAM;
+      pmCb.checked = allowedPM;
       syncTimeState();
     };
   }
@@ -9723,11 +9757,68 @@ function handleScheduleCardClick(bookingId, isPassed, monthName, year) {
 }
 
 function openBatchDetailsModal(bookingId) {
+  const batchRecord = (currentLoadedBatches || []).find(item => String(item.id) === String(bookingId));
+  if (batchRecord) {
+    currentActiveTrainingBatchId = String(batchRecord.id);
+    const modal = document.getElementById('batchDetailsModal');
+    if (!modal) return;
+    const roster = (currentLoadedBookings || []).filter(item => String(item.training_batch_id || '') === String(batchRecord.id));
+    const activeRoster = roster.filter(item => !['cancelled', 'withdrawn', 'rejected'].includes(String(item.training_status || '').toLowerCase()) && item.payment_status !== 'cancelled');
+    const seatCount = activeRoster.reduce((sum, item) => sum + Math.max(1, Number(item.participants) || 1), 0);
+    const putText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    putText('batchDetailsCode', `#${batchRecord.batch_code}`);
+    putText('batchDetailsMonthTitle', `Batch: ${batchRecord.start_date} – ${batchRecord.end_date}`);
+    putText('batchDetailsStart', batchRecord.start_date);
+    putText('batchDetailsEnd', batchRecord.end_date);
+    putText('batchDetailsScheduleTime', batchRecord.requested_time || '');
+    putText('batchDetailsTimePill', 'Class time');
+    putText('batchDetailsSessionsText', batchRecord.session_schedule || batchRecord.requested_day || '');
+    putText('batchDetailsSessionsPill', batchRecord.requested_day || '');
+    putText('batchDetailsSessionsDay', batchRecord.requested_day || '');
+    putText('batchDetailsOrg', activeTrainingCourse?.name || 'Course batch');
+    putText('batchDetailsCourse', activeTrainingCourse?.name || 'Selected course');
+    putText('batchDetailsTime', batchRecord.requested_time || '');
+    putText('batchDetailsVenue', batchRecord.venue || '');
+    putText('batchDetailsTrainer', batchRecord.assigned_trainer_id || 'Unassigned');
+    const paidSeats = activeRoster.filter(item => item.payment_status === 'paid').reduce((sum, item) => sum + Math.max(1, Number(item.participants) || 1), 0);
+    putText('batchDetailsCapacityCount', `${seatCount} seats reserved · ${paidSeats} enrolled · ${batchRecord.capacity} max`);
+    ['batchDetailsBatchPaymentRow', 'batchDetailsBatchPaymentRefRow', 'batchDetailsBatchPaymentIdRow', 'batchDetailsPaymentPicRow', 'batchDetailsPaymentActions', 'batchDetailsLegacyStudentRow'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const rosterEl = document.getElementById('batchDetailsCapacity');
+    if (rosterEl) rosterEl.innerHTML = roster.length ? roster.map(student => {
+      const isPaid = student.payment_status === 'paid';
+      const isCancelled = student.payment_status === 'cancelled' || String(student.training_status || '').toLowerCase() === 'cancelled';
+      const enrollmentLabel = isCancelled ? 'DECLINED' : (isPaid ? 'ENROLLED' : 'AWAITING PAYMENT CONFIRMATION');
+      const receiptUrl = student.payment_receipt_upload_path || student.paymongo_receipt_url || '';
+      const payId = student.paymongo_payment_id || student.paymongo_checkout_session_id || '';
+      const receiptPreview = student.payment_receipt_upload_path
+        ? `<a class="tc-batch-receipt-preview" href="${escapeHtml(receiptUrl)}" target="_blank" rel="noopener noreferrer" title="Open payment picture"><img src="${escapeHtml(student.payment_receipt_upload_path)}" alt="Payment picture from ${escapeHtml(student.contact_name || 'student')}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span style="display:none">Open receipt</span></a>`
+        : `<span class="tc-batch-no-receipt">No payment picture uploaded</span>`;
+      const reviewActions = isHeadOrAdminRole() && !isPaid && !isCancelled
+        ? `<button class="tc-roster-payment-btn is-confirm" type="button" onclick="updateBookingPayment('${escapeHtml(student.id)}','paid')"><iconify-icon icon="solar:check-circle-bold"></iconify-icon><span>Confirm</span></button><button class="tc-roster-payment-btn is-decline" type="button" onclick="declineTrainingBooking('${escapeHtml(student.id)}')"><iconify-icon icon="solar:close-circle-bold"></iconify-icon><span>Decline</span></button>`
+        : `<span class="tc-batch-review-status ${isPaid ? 'is-enrolled' : 'is-declined'}">${isPaid ? 'Enrolled' : 'Declined'}</span>`;
+      const viewReceiptAction = receiptUrl
+        ? `<a class="tc-roster-payment-btn is-view" href="${escapeHtml(receiptUrl)}" target="_blank" rel="noopener noreferrer"><iconify-icon icon="solar:gallery-wide-bold"></iconify-icon><span>View payment picture</span></a>`
+        : `<button class="tc-roster-payment-btn is-view" type="button" disabled title="No payment picture was uploaded"><iconify-icon icon="solar:gallery-wide-bold"></iconify-icon><span>No picture</span></button>`;
+      return `<article class="tc-batch-student-row"><div class="tc-batch-student-actions">${reviewActions}${viewReceiptAction}</div><div class="tc-batch-student-info"><strong>${escapeHtml(student.contact_name || student.organization || 'Applicant')}</strong><span>${escapeHtml(student.email || 'No email')} · ${escapeHtml(student.phone || 'No phone')}</span><span class="tc-batch-payment-status ${isPaid ? 'is-paid' : (isCancelled ? 'is-cancelled' : 'is-pending')}">${enrollmentLabel} · Payment ${escapeHtml(String(student.payment_status || 'pending').toUpperCase())}</span><dl><div><dt>Payment reference</dt><dd>${escapeHtml(student.payment_reference || 'Not provided')}</dd></div><div><dt>Payment ID</dt><dd>${escapeHtml(payId || 'Not available')}</dd></div><div><dt>Amount</dt><dd>₱${Number(student.total_php || 0).toLocaleString()}</dd></div></dl></div><div class="tc-batch-student-proof">${receiptPreview}</div></article>`;
+    }).join('') : '<span style="font-size:12px;color:#64748b">No student applications have been linked to this batch yet.</span>';
+    const payment = document.getElementById('batchDetailsPayment');
+    if (payment) payment.textContent = 'Payment is tracked per enrolled student.';
+    const paymentActions = document.getElementById('batchDetailsPaymentActions');
+    if (paymentActions) paymentActions.style.display = 'none';
+    putText('batchDetailsPaymentReference', '');
+    putText('batchDetailsPaymentId', '');
+    currentActiveBookingInModal = null;
+    modal.style.display = 'flex';
+    return;
+  }
   const b = currentLoadedBookings.find(item => String(item.id) === String(bookingId));
   if (!b) return;
 
   const [bYr, bMo] = (b.requested_date || '').split('-').map(Number);
-  if (isMonthInPast(bYr, bMo) && !isHeadOrAdminRole()) {
+  if (isBatchScheduleFinished(b) && !isHeadOrAdminRole()) {
     const monthName = b.requested_date ? new Date(bYr, bMo - 1, 1).toLocaleString('en-US', { month: 'long' }) : '';
     showToast(`Cannot open schedule: The training schedule for ${monthName || 'this month'} ${bYr || ''} has already passed in the current year.`, 'warning');
     return;
@@ -9742,7 +9833,7 @@ function openBatchDetailsModal(bookingId) {
   if (codeEl) codeEl.textContent = `#${b.booking_code || 'BATCH-0000'}`;
 
   const titleEl = document.getElementById('batchDetailsMonthTitle');
-  if (titleEl) titleEl.textContent = `Batch Schedule: ${sched.monthName} (1 Month Duration)`;
+  if (titleEl) titleEl.textContent = `Batch Schedule: ${b.requested_date}${b.end_date ? ` – ${String(b.end_date).slice(0, 10)}` : ` (${sched.monthName})`}`;
 
   const statusBadge = document.getElementById('batchDetailsScheduleStatusBadge');
   if (statusBadge) {
@@ -9761,10 +9852,10 @@ function openBatchDetailsModal(bookingId) {
   }
 
   const startEl = document.getElementById('batchDetailsStart');
-  if (startEl) startEl.textContent = sched.startText;
+  if (startEl) startEl.textContent = b.requested_date || sched.startText;
 
   const endEl = document.getElementById('batchDetailsEnd');
-  if (endEl) endEl.textContent = sched.endText;
+  if (endEl) endEl.textContent = b.end_date ? String(b.end_date).slice(0, 10) : sched.endText;
 
   // Training Time Display (Clean 07:00 A.M - 11:00 A.M Morning vs 01:00 P.M - 5:00 P.M Noon)
   const rawTime = b.requested_time || activeTrainingCourse?.training_time || '07:00 A.M - 11:00 A.M';
@@ -10006,8 +10097,10 @@ function showTrainingEmptyState() {
   activeTrainingCourse = null;
   const emptyState = document.getElementById('tcEmptyState');
   const activeView = document.getElementById('tcActiveCourseView');
+  const addBatchButton = document.getElementById('btnAddSchedule');
   if (emptyState) emptyState.style.display = 'flex';
   if (activeView) activeView.style.display = 'none';
+  if (addBatchButton) addBatchButton.style.display = 'none';
 }
 
 async function selectTrainingCourse(courseId) {
@@ -10032,18 +10125,20 @@ async function selectTrainingCourse(courseId) {
   const btnEditCourse = document.getElementById('btnEditCourse');
   const btnDeleteCourse = document.getElementById('btnDeleteCourse');
   const btnAddSchedule = document.getElementById('btnAddSchedule');
+  const courseManagementActions = document.querySelector('.tc-course-management-actions');
   if (btnEditCourse) {
-    btnEditCourse.style.display = '';
+    btnEditCourse.style.display = isTrainer ? 'none' : '';
     btnEditCourse.disabled = false;
     btnEditCourse.onclick = openEditCourseModal;
   }
   if (btnDeleteCourse) {
-    btnDeleteCourse.style.display = '';
+    btnDeleteCourse.style.display = isTrainer ? 'none' : '';
     btnDeleteCourse.disabled = false;
     btnDeleteCourse.onclick = deleteActiveCourse;
   }
+  if (courseManagementActions) courseManagementActions.style.display = isTrainer ? 'none' : '';
   if (btnAddSchedule) {
-    btnAddSchedule.style.display = '';
+    btnAddSchedule.style.display = isTrainer ? 'none' : '';
     btnAddSchedule.disabled = false;
     btnAddSchedule.onclick = openAddBatchModal;
   }
@@ -10083,6 +10178,24 @@ async function loadCourseBookings(courseId) {
     const data = await res.json();
     const bookings = data.bookings || [];
     currentLoadedBookings = bookings;
+    currentLoadedBatches = data.batches || [];
+
+    // A cohort schedule is its own record. Student bookings are shown only in
+    // the roster for the batch they are linked to.
+    if (!isTrainer) {
+      const batches = currentLoadedBatches;
+      if (!batches.length) {
+        container.innerHTML = '<div style="border:2px dashed #cbd5e1;border-radius:10px;padding:24px;text-align:center;color:#64748b">No batches yet. Create a batch schedule to open enrollment.</div>';
+        return;
+      }
+      container.innerHTML = batches.map(batch => {
+        const linked = bookings.filter(item => String(item.training_batch_id || '') === String(batch.id));
+        const reserved = linked.filter(item => item.payment_status !== 'cancelled' && !['cancelled', 'withdrawn', 'rejected'].includes(String(item.training_status || '').toLowerCase())).reduce((sum, item) => sum + Math.max(1, Number(item.participants) || 1), 0);
+        const enrolled = linked.filter(item => item.payment_status === 'paid').reduce((sum, item) => sum + Math.max(1, Number(item.participants) || 1), 0);
+        return `<article style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:12px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap"><div><strong>${escapeHtml(batch.batch_code)}</strong><div style="margin-top:7px;color:#334155">${escapeHtml(batch.start_date)} – ${escapeHtml(batch.end_date)}</div><small style="color:#64748b">${escapeHtml(batch.requested_day)} · ${escapeHtml(batch.requested_time)} · ${escapeHtml(batch.venue || '')}</small><div style="margin-top:5px;font-size:12px;color:#0369a1">${reserved} / ${Number(batch.capacity || 0)} seats reserved · ${enrolled} enrolled · Trainer: ${escapeHtml(batch.assigned_trainer_id || 'Unassigned')}</div></div><button type="button" class="filter-btn" onclick="openBatchDetailsModal('${escapeHtml(batch.id)}')">View roster & payments</button></article>`;
+      }).join('');
+      return;
+    }
 
     if (bookings.length === 0) {
       if (isTrainer) {
@@ -10190,7 +10303,7 @@ async function loadCourseBookings(courseId) {
               </div>
               <div>
                 <strong style="color: #475569;">Batch Schedule:</strong><br>
-                <span style="color: #0f172a; font-weight: 500;">${escapeHtml(b.requested_date || 'Current Month')} (${escapeHtml(b.requested_time || '08:00 AM - 12:00 PM')})</span>
+                <span style="color: #0f172a; font-weight: 500;">${escapeHtml(b.requested_date || 'Current Month')}${b.end_date ? ` – ${escapeHtml(String(b.end_date).slice(0, 10))}` : ''} (${escapeHtml(b.requested_time || '08:00 AM - 12:00 PM')})</span>
               </div>
               <div>
                 <strong style="color: #475569;">Campus Venue:</strong><br>
@@ -10213,6 +10326,7 @@ async function loadCourseBookings(courseId) {
       const [bYr, bMo] = (b.requested_date || '').split('-').map(Number);
       const isFinished = isBatchScheduleFinished(b);
       const monthName = b.requested_date ? new Date(bYr, bMo - 1, 1).toLocaleString('en-US', { month: 'long' }) : '';
+      const batchDateRange = `${b.requested_date || ''}${b.end_date ? ` – ${String(b.end_date).slice(0, 10)}` : ''}`;
 
       return `
         <div class="tc-batch-card ${isFinished ? 'tc-batch-passed tc-batch-done' : 'tc-batch-ongoing'}" 
@@ -10240,7 +10354,7 @@ async function loadCourseBookings(courseId) {
               <iconify-icon icon="${isFinished ? 'solar:check-circle-bold' : 'solar:calendar-bold-duotone'}" style="font-size: 18px; color: ${isFinished ? '#15803d' : '#15803d'};"></iconify-icon>
               <div>
                 <strong>Batch Schedule (1 Month):</strong>
-                <span style="font-weight: 600; margin-left: 4px; color: ${isFinished ? '#334155' : '#14532d'};">${escapeHtml(b.requested_date)}</span>
+                <span style="font-weight: 600; margin-left: 4px; color: ${isFinished ? '#334155' : '#14532d'};">${escapeHtml(batchDateRange)}</span>
               </div>
             </div>
             <span style="font-size: 11px; background: ${isFinished ? '#dcfce7' : '#dcfce7'}; color: ${isFinished ? '#15803d' : '#15803d'}; font-weight: 700; padding: 3px 10px; border-radius: 9999px; border: 1px solid ${isFinished ? '#86efac' : '#86efac'};">
@@ -10354,12 +10468,13 @@ async function updateBookingPayment(bookingId, status) {
     const updated = (currentLoadedBookings || []).find(b => String(b.id) === String(bookingId));
     if (updated) {
       updated.payment_status = status;
+      updated.training_status = status === 'paid' ? 'Enrolled' : (status === 'cancelled' ? 'Cancelled' : 'Pending Payment');
       if (status === 'paid') updated.payment_confirmed_at = new Date().toISOString();
       else updated.payment_confirmed_at = null;
     }
 
     const isPaid = status === 'paid';
-    const statusLabel = isPaid ? 'PAID' : 'No Payment';
+    const statusLabel = isPaid ? 'PAID' : (status === 'cancelled' ? 'DECLINED' : 'Pending');
     showToast(`Payment marked as ${statusLabel}!`, 'success');
 
     // If batch details modal is currently open for this booking, update its display in place
@@ -10377,10 +10492,22 @@ async function updateBookingPayment(bookingId, status) {
       updateModalPaymentButtons(status);
     }
 
-    if (activeTrainingCourse) loadCourseBookings(activeTrainingCourse.id);
+    if (activeTrainingCourse) {
+      await loadCourseBookings(activeTrainingCourse.id);
+      const modal = document.getElementById('batchDetailsModal');
+      if (modal?.style.display === 'flex' && currentActiveTrainingBatchId) {
+        openBatchDetailsModal(currentActiveTrainingBatchId);
+      }
+    }
   } catch (err) {
     showToast(err.message || 'Error updating payment', 'error');
   }
+}
+
+function declineTrainingBooking(bookingId) {
+  const booking = (currentLoadedBookings || []).find(item => String(item.id) === String(bookingId));
+  if (!booking || !window.confirm(`Decline enrollment for ${booking.contact_name || 'this applicant'}? Their reserved seat will be released.`)) return;
+  updateBookingPayment(bookingId, 'cancelled');
 }
 
 // Remove Student Confirmation Modal & Actions
@@ -10690,10 +10817,27 @@ function openAddBatchModal() {
     });
     trainerSelect.innerHTML = '<option value="">-- Select Trainer --</option>' +
       onlyTrainers.map(t => `<option value="${escapeHtml(t.employee_name)}">${escapeHtml(t.employee_name)} (${escapeHtml(t.employee_role)})</option>`).join('');
+    // The course trainer is the default for new batches, but each batch can
+    // still be assigned to a different trainer when its schedule is created.
+    trainerSelect.value = activeTrainingCourse.assigned_trainer || '';
   }
 
   // Initialize Professional Multi-Month Batch Schedule Picker
   initBatchSchedulePicker();
+  const offeredMonths = (activeTrainingCourse.available_months || [])
+    .filter(monthKey => /^\d{4}-\d{2}$/.test(monthKey))
+    .filter(monthKey => {
+      const [year, month] = monthKey.split('-').map(Number);
+      return !isMonthInPast(year, month);
+    }).sort();
+  if (offeredMonths.length) {
+    const [year, month] = offeredMonths[0].split('-').map(Number);
+    const yearSelect = document.getElementById('batchInputScheduleYear');
+    const monthSelect = document.getElementById('batchInputScheduleMonth');
+    if (yearSelect) yearSelect.value = String(year);
+    if (monthSelect) monthSelect.value = String(month);
+    updateDaysList();
+  }
 
   const venueInput = document.getElementById('batchInputVenue');
   if (venueInput) venueInput.value = activeTrainingCourse.location || 'UMak Campus';
@@ -10717,8 +10861,6 @@ function openAddBatchModal() {
 
 // Wire up Training Center Modals & Buttons
 function initTrainingCenterModals() {
-  startTrainingRealtimeSync();
-
   // 1. Create Course Modal
   const createModal = document.getElementById('createCourseModal');
   const btnCreateCourse = document.getElementById('btnCreateCourse');
@@ -10750,7 +10892,10 @@ function initTrainingCenterModals() {
   if (closeCreateBtn && createModal) closeCreateBtn.addEventListener('click', () => { createModal.style.display = 'none'; });
   if (cancelCreateBtn && createModal) cancelCreateBtn.addEventListener('click', () => { createModal.style.display = 'none'; });
 
-  if (createForm) {
+  // loadTrainingCenterData can run each time the view is opened. Bind the
+  // submit handler once so repeated visits cannot send duplicate POSTs.
+  if (createForm && createForm.dataset.submitHandlerBound !== 'true') {
+    createForm.dataset.submitHandlerBound = 'true';
     createForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = document.getElementById('btnSubmitCourse');
@@ -10850,8 +10995,16 @@ function initTrainingCenterModals() {
         createModal.style.display = 'none';
         createForm.reset();
         await loadTrainingCourses();
-        if (result.course?.id) selectTrainingCourse(result.course.id);
+        if (result.course?.id) {
+          // A background refresh may already be in flight. Make the newly
+          // created course selectable immediately; the next refresh reconciles it.
+          if (!allTrainingCourses.some(course => course.id === result.course.id)) {
+            allTrainingCourses.unshift(result.course);
+          }
+          selectTrainingCourse(result.course.id);
+        }
       } catch (err) {
+        console.error('Failed to create training course:', err?.message || err, err);
         showToast(err.message || 'Error saving course', 'error');
       } finally {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Course'; }
@@ -11072,12 +11225,14 @@ function initTrainingCenterModals() {
   if (closeDetailsBtn && batchDetailsModal) closeDetailsBtn.addEventListener('click', () => { batchDetailsModal.style.display = 'none'; });
   if (dismissDetailsBtn && batchDetailsModal) dismissDetailsBtn.addEventListener('click', () => { batchDetailsModal.style.display = 'none'; });
 
-  if (addBatchForm) {
+  if (addBatchForm && addBatchForm.dataset.trainingSubmitBound !== 'true') {
+    addBatchForm.dataset.trainingSubmitBound = 'true';
     addBatchForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!activeTrainingCourse) return;
 
       const submitBtn = document.getElementById('btnSubmitAddBatch');
+      if (submitBtn?.disabled) return;
 
       // Validate training time offerings (AM / PM)
       const selBatchTimes = batchTimeController ? batchTimeController.getSelectedTimes() : [];
@@ -11123,10 +11278,9 @@ function initTrainingCenterModals() {
         }
 
         const monthKey = `${selYear}-${String(selMonth).padStart(2, '0')}`;
-        const isHeadOrAdmin = isHeadOrAdminRole();
         const courseAvail = new Set(activeTrainingCourse?.available_months || []);
-        if (!isHeadOrAdmin && courseAvail.size > 0 && !courseAvail.has(monthKey)) {
-          showToast(`This month (${MONTH_NAMES[selMonth - 1]} ${selYear}) has not been made available by the HEAD or System Admin.`, 'warning');
+        if (courseAvail.size > 0 && !courseAvail.has(monthKey)) {
+          handleLockedMonthClick(MONTH_NAMES[selMonth - 1], selYear);
           return;
         }
 
@@ -11153,7 +11307,7 @@ function initTrainingCenterModals() {
         };
 
         try {
-          const res = await fetch('/api/training/bookings', {
+          const res = await fetch('/api/training/batches', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -11196,6 +11350,11 @@ function initTrainingCenterModals() {
             showToast(`Cannot create schedule: ${m} has already passed in the current year.`, 'warning');
             return;
           }
+          const courseAvail = new Set(activeTrainingCourse?.available_months || []);
+          if (courseAvail.size > 0 && !courseAvail.has(m)) {
+            handleLockedMonthClick(MONTH_NAMES[mo - 1] || m, yr);
+            return;
+          }
         }
 
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating Batch(es)...'; }
@@ -11219,7 +11378,7 @@ function initTrainingCenterModals() {
         };
 
         try {
-          const res = await fetch('/api/training/bookings', {
+          const res = await fetch('/api/training/batches', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

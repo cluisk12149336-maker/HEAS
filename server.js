@@ -485,6 +485,27 @@ function writeCourseMetadata(meta) {
 
 const ALL_WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+function calculateTrainingEndDate(startDateValue, durationValue = '1 Month') {
+  const match = String(durationValue || '').match(/(\d+)\s*(year|month|week|day|hour)s?/i);
+  const start = new Date(`${String(startDateValue || '').slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime())) return String(startDateValue || '').slice(0, 10);
+
+  const amount = Math.max(1, parseInt(match?.[1] || '1', 10));
+  const unit = String(match?.[2] || 'month').toLowerCase();
+  const boundary = new Date(start);
+  if (unit === 'year' || unit === 'month') {
+    const originalDay = boundary.getUTCDate();
+    boundary.setUTCDate(1);
+    boundary.setUTCMonth(boundary.getUTCMonth() + amount * (unit === 'year' ? 12 : 1));
+    const lastTargetDay = new Date(Date.UTC(boundary.getUTCFullYear(), boundary.getUTCMonth() + 1, 0)).getUTCDate();
+    boundary.setUTCDate(Math.min(originalDay, lastTargetDay));
+  } else {
+    boundary.setUTCDate(boundary.getUTCDate() + (unit === 'week' ? amount * 7 : unit === 'day' ? amount : 1));
+  }
+  boundary.setUTCDate(boundary.getUTCDate() - 1);
+  return boundary.toISOString().slice(0, 10);
+}
+
 function normalizeCourseScheduleData(meta = {}, body = {}) {
   // 1. Available Days (multi-selection by admin: Monday, Tuesday, Wednesday, etc.)
   let availDays = [];
@@ -2155,6 +2176,9 @@ const server = http.createServer((request, response) => {
 
         if (!name) return sendJson(response, 400, { error: 'Course name is required.' });
 
+        const session = getRequestSession(request);
+        const createdByEmployeeId = session?.employee_id || null;
+
         // Generate unique slug
         const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
         const slug = `${baseSlug}-${Date.now().toString().slice(-5)}`;
@@ -2182,6 +2206,7 @@ const server = http.createServer((request, response) => {
           available_months: availableMonths,
           available_month: availableMonths[0] ? `${availableMonths[0]}-01` : null,
           assigned_trainer: assignedTrainer,
+          created_by_employee_id: createdByEmployeeId,
           is_published: true
         };
 
@@ -2209,7 +2234,12 @@ const server = http.createServer((request, response) => {
             available_days: schedInfo.available_days,
             available_times: schedInfo.available_times,
             session_schedule: schedInfo.session_schedule,
+            // Keep the selected month list in the database even when another
+            // optional schedule column forces this reduced insert path.
+            available_months: availableMonths,
             available_month: availableMonths[0] ? `${availableMonths[0]}-01` : null,
+            assigned_trainer: assignedTrainer,
+            created_by_employee_id: createdByEmployeeId,
             is_published: true
           };
           insertRes = await supabase
@@ -2217,6 +2247,58 @@ const server = http.createServer((request, response) => {
             .insert(corePayload)
             .select()
             .single();
+
+          // The creator employee ID was added after the legacy course schema.
+          // If that is the missing column, retry without it while retaining
+          // assigned_trainer and the months in the database.
+          if (insertRes.error && ['42703', 'PGRST204'].includes(insertRes.error?.code) &&
+              String(insertRes.error?.message || '').includes('created_by_employee_id')) {
+            const coreWithoutCreator = { ...corePayload };
+            delete coreWithoutCreator.created_by_employee_id;
+            insertRes = await supabase
+              .from('training_courses')
+              .insert(coreWithoutCreator)
+              .select()
+              .single();
+          }
+
+          // Older deployments may still be on the original training_courses
+          // schema, which does not have the schedule columns above. Keep a
+          // final insert containing only columns required by migration 015;
+          // schedule details are also stored in course_metadata.json below.
+          if (insertRes.error && ['42703', 'PGRST204'].includes(insertRes.error?.code)) {
+            const legacyPayload = {
+              name,
+              slug,
+              category,
+              location,
+              duration,
+              student_price: studentPrice,
+              description,
+              learnings,
+              audience,
+              requirements,
+              certification,
+              assigned_trainer: assignedTrainer,
+              is_published: true
+            };
+            insertRes = await supabase
+              .from('training_courses')
+              .insert(legacyPayload)
+              .select()
+              .single();
+
+            // The earliest table version did not have assigned_trainer either.
+            if (insertRes.error && ['42703', 'PGRST204'].includes(insertRes.error?.code) &&
+                String(insertRes.error?.message || '').includes('assigned_trainer')) {
+              delete legacyPayload.assigned_trainer;
+              insertRes = await supabase
+                .from('training_courses')
+                .insert(legacyPayload)
+                .select()
+                .single();
+            }
+          }
         }
 
         if (insertRes.error) throw insertRes.error;
@@ -2248,7 +2330,6 @@ const server = http.createServer((request, response) => {
           data.active_batches = schedInfo.active_batches || [];
         }
 
-        const session = getRequestSession(request);
         recordAdminActivity({
           employee_id: session?.employee_id || 'EMP-1792242501250-UEFBCD',
           admin_name: session?.employee_name || 'Cia',
@@ -2262,7 +2343,7 @@ const server = http.createServer((request, response) => {
 
         sendJson(response, 201, { ok: true, course: data });
       } catch (err) {
-        console.error('Error creating course:', err.message);
+        console.error('Error creating course:', err);
         sendJson(response, 500, { error: err.message || 'Failed to create training course.' });
       }
     }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
@@ -2355,9 +2436,7 @@ const server = http.createServer((request, response) => {
             const strippedPayload = { ...updatePayload };
             delete strippedPayload.training_time;
             delete strippedPayload.available_time_slots;
-            delete strippedPayload.available_months;
             delete strippedPayload.batch_schedule;
-            delete strippedPayload.assigned_trainer;
             res = await supabase
               .from('training_courses')
               .update(strippedPayload)
@@ -2447,6 +2526,11 @@ const server = http.createServer((request, response) => {
         const { data, error } = await query;
         if (error) throw error;
 
+        let batchQuery = supabase.from('training_batches').select('*').order('start_date', { ascending: true });
+        if (courseId) batchQuery = batchQuery.eq('course_id', courseId);
+        const { data: batchData, error: batchError } = await batchQuery;
+        if (batchError) throw batchError;
+
         const attendanceMap = readTrainingAttendance();
         const merged = (data || []).map(b => {
           const att = attendanceMap[b.id] || {};
@@ -2470,7 +2554,7 @@ const server = http.createServer((request, response) => {
           };
         });
 
-        sendJson(response, 200, { ok: true, bookings: merged });
+        sendJson(response, 200, { ok: true, bookings: merged, batches: batchData || [] });
       } catch (err) {
         console.error('Error fetching bookings:', err.message);
         sendJson(response, 500, { error: 'Failed to retrieve training bookings.' });
@@ -2479,8 +2563,84 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  // Create a cohort schedule without creating a fake student booking.
+  if (request.method === 'POST' && request.url === '/api/training/batches') {
+    if (!authorizeTrainingCourseAdmin(request, response)) return;
+    readJson(request).then(async (body) => {
+      if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
+      try {
+        const courseId = String(body.course_id || '').trim();
+        let startDate = String(body.start_date || body.requested_date || '').slice(0, 10);
+        const requestedStarts = Array.isArray(body.batch_months) && body.batch_months.length
+          ? body.batch_months.filter(v => /^\d{4}-(0[1-9]|1[0-2])$/.test(v)).map(v => `${v}-01`)
+          : [startDate];
+        const requestedDays = Array.isArray(body.available_days) ? body.available_days.map(v => String(v).trim()).filter(Boolean) : String(body.requested_day || '').split(',').map(v => v.trim()).filter(Boolean);
+        const requestedTimes = Array.isArray(body.available_times) ? body.available_times.map(v => String(v).trim()).filter(Boolean) : String(body.requested_time || '').split(',').map(v => v.trim()).filter(Boolean);
+        if (!courseId || !requestedStarts.length || requestedStarts.some(v => !/^\d{4}-\d{2}-\d{2}$/.test(v))) return sendJson(response, 400, { error: 'Course and a valid batch start date are required.' });
+        if (requestedStarts.length !== 1) return sendJson(response, 400, { error: 'Create one batch at a time. Each batch is one class cohort with its own schedule and capacity.' });
+        if (!requestedDays.length || !requestedTimes.length) return sendJson(response, 400, { error: 'Select at least one course day and training time.' });
+
+        const { data: course, error: courseError } = await supabase.from('training_courses').select('*').eq('id', courseId).maybeSingle();
+        if (courseError) throw courseError;
+        if (!course) return sendJson(response, 404, { error: 'Course not found.' });
+        const meta = readCourseMetadata()[courseId] || {};
+        const schedule = normalizeCourseScheduleData(meta, course);
+        const allowedMonths = Array.isArray(course.available_months) && course.available_months.length ? course.available_months : (meta.available_months || []);
+        for (startDate of requestedStarts) {
+          const [year, month, day] = startDate.split('-').map(Number);
+          const start = new Date(Date.UTC(year, month - 1, day));
+          if (start.getUTCFullYear() !== year || start.getUTCMonth() !== month - 1 || start.getUTCDate() !== day) return sendJson(response, 400, { error: 'Batch start date is invalid.' });
+          if (allowedMonths.length && !allowedMonths.includes(startDate.slice(0, 7))) return sendJson(response, 400, { error: `${startDate.slice(0, 7)} is not an available month for this course.` });
+        }
+        const allowedDays = new Set((schedule.available_days || []).map(v => String(v).toLowerCase()));
+        const badDay = requestedDays.find(v => !allowedDays.has(v.toLowerCase()));
+        if (badDay) return sendJson(response, 400, { error: `${badDay} is not an available day for this course.` });
+        const timeSlot = v => /01:00|pm|noon|5:00/i.test(v) ? 'PM' : 'AM';
+        const allowedTimes = new Set((schedule.available_times || []).map(timeSlot));
+        const badTime = requestedTimes.find(v => !allowedTimes.has(timeSlot(v)));
+        if (badTime) return sendJson(response, 400, { error: `${badTime} is not an available time for this course.` });
+
+        const duration = String(body.duration || course.duration || '1 Month').trim();
+        const session = getRequestSession(request);
+        const batchCode = `BATCH-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const inserts = [];
+        for (const batchStartDate of requestedStarts) {
+          const batchCode = `BATCH-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+          const payload = {
+            course_id: courseId, batch_code: batchCode, start_date: batchStartDate,
+            end_date: calculateTrainingEndDate(batchStartDate, duration),
+            requested_time: requestedTimes.join(', '), requested_day: requestedDays.join(', '),
+            session_schedule: String(body.session_schedule || '').trim(),
+            capacity: Math.max(1, parseInt(body.participants, 10) || 30),
+            venue: String(body.venue || course.location || '').trim(),
+            assigned_trainer_id: body.assigned_trainer_id ? String(body.assigned_trainer_id).trim() : null,
+            notes: String(body.notes || '').trim(), created_by_employee_id: session?.employee_id || null
+          };
+          const { data: batch, error } = await supabase.from('training_batches').insert(payload).select().single();
+          if (error) throw error;
+          inserts.push(batch);
+        }
+        recordAdminActivity({
+          employee_id: session?.employee_id || 'EMP-1792242501250-UEFBCD',
+          admin_name: session?.employee_name || 'Training Coordinator',
+          admin_email: session?.employee_email || '',
+          admin_role: session?.employee_role || 'Admin',
+          action: 'Created Training Batch', category: 'Training',
+          details: `Created ${inserts.length} batch schedule(s) for course ${courseId}.`, target: inserts[0]?.batch_code
+        });
+        sendJson(response, 201, { ok: true, batch: inserts[0], batches: inserts, message: 'Batch schedule created.' });
+      } catch (err) {
+        console.error('Error creating training batch:', err.message);
+        sendJson(response, 500, { error: err.message || 'Failed to create batch schedule.' });
+      }
+    }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
+    return;
+  }
+
   // 6. POST /api/training/bookings - Create a new batch schedule
   if (request.method === 'POST' && request.url === '/api/training/bookings') {
+    return sendJson(response, 410, { error: 'Batch creation moved to /api/training/batches. Student registrations must be created as enrollments.' });
+    /* Legacy implementation retained temporarily for reference; do not re-enable.
     if (!authorizeTrainingCourseAdmin(request, response)) return;
     readJson(request).then(async (body) => {
       if (!supabase) return sendJson(response, 503, { error: 'Database is not configured.' });
@@ -2536,11 +2696,12 @@ const server = http.createServer((request, response) => {
 
         // Support multi-month scheduling (batch_months array or batch_month string)
         let requestedDate = String(body.requested_date || '').trim();
+        let requestedEndDate = '';
         let requestedMonths = [];
         if (Array.isArray(body.batch_months) && body.batch_months.length > 0) {
-          requestedMonths = body.batch_months.filter(m => /^\d{4}-\d{2}$/.test(m));
+          requestedMonths = body.batch_months.filter(m => /^\d{4}-(0[1-9]|1[0-2])$/.test(m));
         } else if (body.batch_month) {
-          requestedMonths = String(body.batch_month).split(',').map(s => s.trim()).filter(m => /^\d{4}-\d{2}$/.test(m));
+          requestedMonths = String(body.batch_month).split(',').map(s => s.trim()).filter(m => /^\d{4}-(0[1-9]|1[0-2])$/.test(m));
         }
 
         const now = new Date();
@@ -2555,9 +2716,63 @@ const server = http.createServer((request, response) => {
           return true;
         });
 
+        // A batch is an actual offering of its parent course, so it must use
+        // one of that course's configured months. Fall back to local course
+        // metadata for deployments where the DB array has not been migrated.
+        const courseMeta = readCourseMetadata()[courseId] || {};
+        const dbAvailableMonths = Array.isArray(courseRow?.available_months) ? courseRow.available_months : [];
+        const configuredMonths = dbAvailableMonths.length > 0
+          ? dbAvailableMonths
+          : (Array.isArray(courseMeta.available_months) && courseMeta.available_months.length > 0
+            ? courseMeta.available_months
+            : (courseRow?.available_month ? [String(courseRow.available_month).slice(0, 7)] : []));
+        const courseSchedule = normalizeCourseScheduleData(courseMeta, courseRow || {});
+        const allowedDays = new Set(courseSchedule.available_days.map(day => String(day).trim().toLowerCase()));
+        const requestedDays = Array.isArray(body.available_days) && body.available_days.length > 0
+          ? body.available_days.map(day => String(day).trim())
+          : String(body.requested_day || '').split(',').map(day => day.trim()).filter(Boolean);
+        if (requestedDays.length === 0) {
+          return sendJson(response, 400, { error: 'Select at least one session day for this batch.' });
+        }
+        const unavailableDay = requestedDays.find(day => !allowedDays.has(day.toLowerCase()));
+        if (unavailableDay) {
+          return sendJson(response, 400, {
+            error: `${unavailableDay} is not an available session day for this course. Update the course schedule first.`
+          });
+        }
+
+        const getTimeSlot = (time) => /01:00|pm|noon|5:00/i.test(String(time)) ? 'PM' : 'AM';
+        const allowedTimeSlots = new Set(courseSchedule.available_times.map(getTimeSlot));
+        const requestedTimes = Array.isArray(body.available_times) && body.available_times.length > 0
+          ? body.available_times.map(time => String(time).trim())
+          : String(body.requested_time || '').split(',').map(time => time.trim()).filter(Boolean);
+        if (requestedTimes.length === 0) {
+          return sendJson(response, 400, { error: 'Select at least one training time for this batch.' });
+        }
+        const unavailableTime = requestedTimes.find(time => !allowedTimeSlots.has(getTimeSlot(time)));
+        if (unavailableTime) {
+          return sendJson(response, 400, {
+            error: `${unavailableTime} is not an available training time for this course. Update the course schedule first.`
+          });
+        }
+        if (configuredMonths.length > 0) {
+          const allowedMonthSet = new Set(configuredMonths);
+          const unavailableMonth = requestedMonths.find(month => !allowedMonthSet.has(month));
+          if (unavailableMonth) {
+            return sendJson(response, 400, {
+              error: `Cannot create a batch for ${unavailableMonth}: that month is not available for this course. Update the course schedule first.`
+            });
+          }
+        }
+
         if (requestedMonths.length > 0 && validMonths.length === 0) {
           return sendJson(response, 400, {
             error: 'Cannot schedule batches: The selected month(s) have already passed in the current year. Please choose current or upcoming months.'
+          });
+        }
+        if (requestedMonths.length > 0 && validMonths.length !== requestedMonths.length) {
+          return sendJson(response, 400, {
+            error: 'One or more selected batch months have already passed. Remove past months and try again.'
           });
         }
 
@@ -2581,13 +2796,15 @@ const server = http.createServer((request, response) => {
           for (const m of validMonths) {
             const [yr, mo] = m.split('-').map(Number);
             const startDate = new Date(yr, mo - 1, 1);
-            const endDate = new Date(yr, mo, 0);
             const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-            const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-            const reqDate = `${yr}-${String(mo).padStart(2, '0')}-01`;
-            const batchScheduleMeta = `Batch Schedule: ${monthName} (1 Month | Start: First Week [${startFormatted}] - End: Last Week [${endFormatted}])${dayScheduleNotes}`;
+            const monthStartDate = `${yr}-${String(mo).padStart(2, '0')}-01`;
+            const reqDate = validMonths.length === 1 && requestedDate.startsWith(`${m}-`) ? requestedDate : monthStartDate;
+            const endDate = calculateTrainingEndDate(reqDate, duration);
+            const actualStart = new Date(`${reqDate}T00:00:00.000Z`);
+            const actualEnd = new Date(`${endDate}T00:00:00.000Z`);
+            const startLabel = actualStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+            const endLabel = actualEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+            const batchScheduleMeta = `Batch Schedule: ${monthName} (${duration} | Start: ${startLabel} - End: ${endLabel})${dayScheduleNotes}`;
             const bookingCode = `BATCH-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
             const finalNotes = rawNotes ? `${batchScheduleMeta} | Notes: ${rawNotes}` : batchScheduleMeta;
             const batchOrgName = validMonths.length > 1 ? `${organization} - ${monthName}` : organization;
@@ -2602,6 +2819,7 @@ const server = http.createServer((request, response) => {
               phone,
               address,
               requested_date: reqDate,
+              end_date: endDate,
               requested_time: requestedTime,
               participants,
               venue,
@@ -2639,27 +2857,15 @@ const server = http.createServer((request, response) => {
           try {
             const cMeta = readCourseMetadata();
             const existing = cMeta[courseId] || {};
-            const curAvail = new Set(existing.available_months || []);
+            const curAvail = new Set(configuredMonths.length ? configuredMonths : (existing.available_months || []));
             validMonths.forEach(m => curAvail.add(m));
             existing.available_months = Array.from(curAvail).sort();
             existing.batch_schedule = existing.available_months.map(m => {
               const [y, mm] = m.split('-').map(Number);
               return new Date(y, mm - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
             }).join(', ') + ' (1 Month Each: 1st Week to Last Week)';
-            if (Array.isArray(body.available_days) && body.available_days.length > 0) {
-              existing.available_days = body.available_days;
-            }
-            if (Array.isArray(body.available_times) && body.available_times.length > 0) {
-              existing.available_times = body.available_times;
-            }
             if (body.duration) {
               existing.duration = String(body.duration).trim();
-            }
-            if (body.session_schedule) {
-              existing.session_schedule = body.session_schedule;
-            }
-            if (body.requested_time) {
-              existing.training_time = body.requested_time;
             }
             cMeta[courseId] = existing;
             writeCourseMetadata(cMeta);
@@ -2668,10 +2874,6 @@ const server = http.createServer((request, response) => {
             const courseDbUpdate = {
               available_months: existing.available_months,
               batch_schedule: existing.batch_schedule,
-              available_days: existing.available_days,
-              available_times: existing.available_times,
-              training_time: existing.training_time,
-              session_schedule: existing.session_schedule,
               duration: existing.duration || '1 Month',
               updated_at: new Date().toISOString()
             };
@@ -2719,13 +2921,15 @@ const server = http.createServer((request, response) => {
           const yr = currentYear;
           const mo = currentMonth;
           const startDate = new Date(yr, mo - 1, 1);
-          const endDate = new Date(yr, mo, 0);
           const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
           const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
           requestedDate = `${yr}-${String(mo).padStart(2, '0')}-01`;
-          batchScheduleMeta = `Batch Schedule: ${monthName} (1 Month | Start: First Week [${startFormatted}] - End: Last Week [${endFormatted}])`;
+          requestedEndDate = calculateTrainingEndDate(requestedDate, duration);
+          const actualEnd = new Date(`${requestedEndDate}T00:00:00.000Z`);
+          const endLabel = actualEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+          batchScheduleMeta = `Batch Schedule: ${monthName} (${duration} | Start: ${startFormatted} - End: ${endLabel})`;
         } else {
           const [rYr, rMo] = requestedDate.split('-').map(Number);
           if (rYr < currentYear || (rYr === currentYear && rMo < currentMonth)) {
@@ -2733,38 +2937,33 @@ const server = http.createServer((request, response) => {
               error: 'Cannot schedule batch: The selected date is from a previous month that has already passed in the current year.'
             });
           }
-          const startDate = new Date(rYr, rMo - 1, 1);
-          const endDate = new Date(rYr, rMo, 0);
-          const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-          const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          batchScheduleMeta = `Batch Schedule: ${monthName} (1 Month | Start: First Week [${startFormatted}] - End: Last Week [${endFormatted}])`;
+          const requestedMonthKey = `${rYr}-${String(rMo).padStart(2, '0')}`;
+          if (configuredMonths.length > 0 && !configuredMonths.includes(requestedMonthKey)) {
+            return sendJson(response, 400, {
+              error: `Cannot create a batch for ${requestedMonthKey}: that month is not available for this course. Update the course schedule first.`
+            });
+          }
+          const startDate = new Date(`${requestedDate}T00:00:00.000Z`);
+          const monthName = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+          const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+          requestedEndDate = calculateTrainingEndDate(requestedDate, duration);
+          const endDate = new Date(`${requestedEndDate}T00:00:00.000Z`);
+          const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+          batchScheduleMeta = `Batch Schedule: ${monthName} (${duration} | Start: ${startFormatted} - End: ${endFormatted})`;
 
           // Sync to course metadata & database
           try {
             const cMeta = readCourseMetadata();
             const existing = cMeta[courseId] || {};
-            const curAvail = new Set(existing.available_months || []);
+            const curAvail = new Set(configuredMonths.length ? configuredMonths : (existing.available_months || []));
             curAvail.add(`${rYr}-${String(rMo).padStart(2, '0')}`);
             existing.available_months = Array.from(curAvail).sort();
             existing.batch_schedule = existing.available_months.map(m => {
               const [y, mm] = m.split('-').map(Number);
               return new Date(y, mm - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
             }).join(', ') + ' (1 Month Each: 1st Week to Last Week)';
-            if (Array.isArray(body.available_days) && body.available_days.length > 0) {
-              existing.available_days = body.available_days;
-            }
-            if (Array.isArray(body.available_times) && body.available_times.length > 0) {
-              existing.available_times = body.available_times;
-            }
             if (body.duration) {
               existing.duration = String(body.duration).trim();
-            }
-            if (body.session_schedule) {
-              existing.session_schedule = body.session_schedule;
-            }
-            if (body.requested_time) {
-              existing.training_time = body.requested_time;
             }
             cMeta[courseId] = existing;
             writeCourseMetadata(cMeta);
@@ -2773,10 +2972,6 @@ const server = http.createServer((request, response) => {
             const courseDbUpdate = {
               available_months: existing.available_months,
               batch_schedule: existing.batch_schedule,
-              available_days: existing.available_days,
-              available_times: existing.available_times,
-              training_time: existing.training_time,
-              session_schedule: existing.session_schedule,
               duration: existing.duration || '1 Month',
               updated_at: new Date().toISOString()
             };
@@ -2807,6 +3002,7 @@ const server = http.createServer((request, response) => {
           phone,
           address,
           requested_date: requestedDate,
+          end_date: requestedEndDate || calculateTrainingEndDate(requestedDate, duration),
           requested_time: requestedTime,
           participants,
           venue,
@@ -2868,7 +3064,7 @@ const server = http.createServer((request, response) => {
         sendJson(response, 500, { error: err.message || 'Failed to create batch schedule.' });
       }
     }).catch(() => sendJson(response, 400, { error: 'Invalid payload.' }));
-    return;
+    return; */
   }
 
   // 7. PUT /api/training/bookings/:id - Update status (paid/rejected) or assign trainer
@@ -2895,11 +3091,19 @@ const server = http.createServer((request, response) => {
           if (pStatus === 'no payment' || pStatus === 'no_payment' || pStatus === 'unpaid' || pStatus === 'rejected') {
             pStatus = 'pending';
           }
+          if (!['pending', 'paid', 'overdue', 'cancelled'].includes(pStatus)) {
+            return sendJson(response, 400, { error: 'Payment status must be pending, paid, overdue, or cancelled.' });
+          }
           updatePayload.payment_status = pStatus;
           if (pStatus === 'paid') {
             updatePayload.payment_confirmed_at = new Date().toISOString();
+            updatePayload.training_status = 'Enrolled';
+          } else if (pStatus === 'cancelled') {
+            updatePayload.payment_confirmed_at = null;
+            updatePayload.training_status = 'Cancelled';
           } else {
             updatePayload.payment_confirmed_at = null;
+            updatePayload.training_status = 'Pending Payment';
           }
         }
         if (body.assigned_trainer_id !== undefined) updatePayload.assigned_trainer_id = body.assigned_trainer_id;
