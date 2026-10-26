@@ -2014,12 +2014,15 @@
 
       <!-- 3. Filters: Box -->
       <div class="drawer-card-box">
-        <div class="drawer-section-heading">
-          <iconify-icon icon="solar:filter-bold" class="heading-icon"></iconify-icon>
-          <span>Filters:</span>
+        <div class="drawer-section-heading" style="justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <iconify-icon icon="solar:filter-bold" class="heading-icon"></iconify-icon>
+            <span>Filters:</span>
+          </div>
+          <span class="drawer-record-badge" id="drawerRecordBadge">Checking records...</span>
         </div>
 
-        <div class="drawer-filter-group">
+        <div class="drawer-filter-group" id="drawerStatusFilterGroup">
           <label for="drawerStatusSelect">Status:</label>
           <div class="drawer-select-wrapper">
             <select id="drawerStatusSelect" class="drawer-select">
@@ -2030,6 +2033,10 @@
               <option value="Cancelled">Cancelled</option>
             </select>
           </div>
+          <small id="drawerStatusLockedNote" style="display:none; color:#15803d; font-size:11px; font-weight:600; margin-top:2px;">
+            <iconify-icon icon="solar:lock-bold" style="vertical-align:middle;"></iconify-icon>
+            Status is locked to Resolved for the Resolved Report.
+          </small>
         </div>
 
         <div class="drawer-filter-group">
@@ -2081,6 +2088,17 @@
         <iconify-icon icon="solar:info-circle-bold" class="drawer-note-icon"></iconify-icon>
         <div class="drawer-note-text">
           <strong>Note:</strong> PDF and Excel-compatible CSV download automatically. Print opens the print dialog.
+        </div>
+      </div>
+
+      <div id="drawerNoRecordsNotice" class="drawer-empty-notice" style="display:none;" role="status" aria-live="polite">
+        <iconify-icon icon="solar:danger-triangle-bold" class="notice-icon"></iconify-icon>
+        <div class="notice-text">
+          <strong id="drawerNoticeTitle">No matching records found</strong>
+          <p id="drawerNoticeMessage">
+            There are no incident records matching the selected report type
+            (<span id="noRecordsReportType">Just Report</span>) and filters.
+          </p>
         </div>
       </div>
 

@@ -223,6 +223,30 @@ describe('Incident Reports & Analytics Module', () => {
     expect(resCode.data).toContain(targetCode);
   });
 
+  test('GET /api/reports/export applies the selected report filters consistently', async () => {
+    const reports = await request('GET', '/api/reports/incidents?status=Resolved');
+    expect(reports.status).toBe(200);
+    expect(reports.data.incidents.length).toBeGreaterThan(0);
+
+    const incident = reports.data.incidents[0];
+    const params = new URLSearchParams({
+      format: 'excel',
+      reportType: 'resolved',
+      status: 'Resolved',
+      category: incident.category,
+      search: incident.id,
+      startDate: incident.created_at.slice(0, 10),
+      endDate: incident.created_at.slice(0, 10),
+      sort: 'asc'
+    });
+    const res = await request('GET', `/api/reports/export?${params.toString()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.data).toContain(`"${incident.incident_code}"`);
+    const exportedRows = res.data.split(/\r?\n/).slice(1).filter(Boolean);
+    expect(exportedRows).toHaveLength(1);
+  });
+
   test('GET /api/reports/export?format=pdf returns a downloadable PDF', async () => {
     const res = await request('GET', '/api/reports/export?format=pdf');
     expect(res.status).toBe(200);
@@ -251,10 +275,14 @@ describe('Incident Reports & Analytics Module', () => {
     const fs = require('fs');
     const path = require('path');
     const dashboardJs = fs.readFileSync(path.join(__dirname, '../public/dashboard.js'), 'utf8');
+    const dashboardHtml = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
 
     expect(dashboardJs).toContain('title="Download Incident Report"');
     expect(dashboardJs).toContain('Official Incident Report:');
     expect(dashboardJs).not.toContain('title="Download Incident Dossier"');
+    expect(dashboardHtml).toContain('id="drawerStatusLockedNote"');
+    expect(dashboardHtml).toContain('id="drawerNoRecordsNotice"');
+    expect(dashboardJs).toContain('statusSelect.disabled = true');
   });
 
   test('Audit modal renders Student Information, Dispatcher Assigned with finish time, and Outcome Verified without database audit logged', () => {

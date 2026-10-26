@@ -6139,45 +6139,82 @@ const server = http.createServer((request, response) => {
         const startDate = url.searchParams.get('startDate');
         const endDate = url.searchParams.get('endDate');
         const sortOrder = url.searchParams.get('sort') || 'desc';
+        const showArchived = url.searchParams.get('archived') === 'true';
+        const isResolvedReport = url.searchParams.get('reportType') === 'resolved';
 
         let query = supabase.from('emergency_alerts').select('*');
-        if (sortOrder === 'asc') {
-          query = query.order('created_at', { ascending: true });
-        } else {
-          query = query.order('created_at', { ascending: false });
-        }
+        query = query.order(isResolvedReport ? 'resolved_at' : 'created_at', { ascending: sortOrder === 'asc' });
 
-        const [{ data: rawAlerts }, { data: students }] = await Promise.all([
+        const [{ data: rawAlerts, error: alertError }, { data: students, error: studentError }] = await Promise.all([
           query,
           supabase.from('accounts_student').select('user_id, student_id, student_name, student_cnum')
         ]);
+        if (alertError) throw alertError;
+        if (studentError) throw studentError;
 
         const studentMap = new Map();
         (students || []).forEach(s => studentMap.set(Number(s.user_id), s));
 
         let filteredAlerts = rawAlerts || [];
+        const archivedSet = getArchivedIncidentIds();
 
         // Apply filters if specified
+        filteredAlerts = filteredAlerts.filter(alert => {
+          const alertStatus = (alert.status || '').toLowerCase().trim();
+          const isCancelled = alertStatus === 'cancelled' || alertStatus === 'canceled';
+          const isArchived = archivedSet.has(alert.id) || isCancelled;
+          if (showArchived) return isArchived;
+          if (isArchived && statusFilter.toLowerCase() !== 'resolved' && statusFilter.toLowerCase() !== 'cancelled' && !isResolvedReport) {
+            return false;
+          }
+          return true;
+        });
+
         if (statusFilter !== 'all') {
           const sf = statusFilter.toLowerCase().replace(/[^a-z]/g, '');
           filteredAlerts = filteredAlerts.filter(a => {
-            const as = (a.status || '').toLowerCase().replace(/[^a-z]/g, '');
+            const rawStatus = (a.status || '').toLowerCase().replace(/[^a-z]/g, '');
+            const isResolved = rawStatus === 'resolved';
+            const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled';
+            const hasResponder = Boolean(a.responder_name && a.responder_name.trim());
+            let displayStatus = 'active';
+            if (isResolved) displayStatus = 'resolved';
+            else if (isCancelled) displayStatus = 'cancelled';
+            else if (hasResponder || rawStatus === 'ongoing' || rawStatus === 'pending') displayStatus = 'ongoing';
             if (sf === 'ongoing' || sf === 'pending') {
-              return as === 'ongoing' || as === 'pending';
+              return displayStatus === 'ongoing';
             }
-            return as === sf;
+            return displayStatus === sf;
           });
         }
         if (categoryFilter !== 'all') {
-          filteredAlerts = filteredAlerts.filter(a => (a.assistance_type || '').toLowerCase() === categoryFilter.toLowerCase());
+          const category = categoryFilter.toLowerCase();
+          filteredAlerts = filteredAlerts.filter(a => {
+            const alertCategory = (a.assistance_type || 'Medical').toLowerCase();
+            if (category === 'urgent') return alertCategory.includes('urg') || alertCategory.includes('assist');
+            if (category === 'campus vicinity' || category === 'vicinity' || category === 'campus') {
+              return alertCategory.includes('vicin') || alertCategory.includes('campus');
+            }
+            if (category === 'medical') return alertCategory.includes('med');
+            if (category === 'security') return alertCategory.includes('sec');
+            return alertCategory === category || alertCategory.includes(category);
+          });
         }
         if (startDate) {
-          const startIso = new Date(startDate).toISOString();
-          filteredAlerts = filteredAlerts.filter(a => a.created_at && a.created_at >= startIso);
+          filteredAlerts = filteredAlerts.filter(alert => {
+            if (!alert.created_at) return false;
+            const utcDate = alert.created_at.slice(0, 10);
+            const localDate = new Date(alert.created_at).toLocaleDateString('en-CA');
+            return utcDate >= startDate || localDate >= startDate;
+          });
         }
         if (endDate) {
-          const endIso = new Date(endDate + 'T23:59:59.999Z').toISOString();
-          filteredAlerts = filteredAlerts.filter(a => a.created_at && a.created_at <= endIso);
+          filteredAlerts = filteredAlerts.filter(alert => {
+            if (!alert.created_at) return false;
+            const utcDate = alert.created_at.slice(0, 10);
+            const localDate = new Date(alert.created_at).toLocaleDateString('en-CA');
+            return utcDate <= endDate || localDate <= endDate;
+          });
         }
         if (searchQuery) {
           const queryClean = searchQuery.replace(/[^a-z0-9]/gi, '');
@@ -6200,10 +6237,14 @@ const server = http.createServer((request, response) => {
           });
         }
 
-        const isResolvedReport = url.searchParams.get('reportType') === 'resolved';
         if (isResolvedReport) {
-          filteredAlerts = filteredAlerts.filter(alert => (alert.status || '').toLowerCase() === 'resolved');
+          filteredAlerts = filteredAlerts.filter(alert => (alert.status || '').toLowerCase().trim() === 'resolved');
         }
+        filteredAlerts.sort((a, b) => {
+          const dateA = new Date(isResolvedReport && a.resolved_at ? a.resolved_at : a.created_at || 0).getTime() || 0;
+          const dateB = new Date(isResolvedReport && b.resolved_at ? b.resolved_at : b.created_at || 0).getTime() || 0;
+          return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+        });
 
         if (url.searchParams.get('format') === 'pdf') {
 
@@ -6423,6 +6464,7 @@ const server = http.createServer((request, response) => {
         });
         response.end('\uFEFF' + csvRows.join('\r\n'));
       } catch (err) {
+        console.error('Reports export error:', err);
         sendJson(response, 500, { error: 'Failed to generate export.' });
       }
     })();
