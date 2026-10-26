@@ -6463,6 +6463,7 @@ const server = http.createServer((request, response) => {
         });
         response.end('\uFEFF' + csvRows.join('\r\n'));
       } catch (err) {
+        console.error('GET /api/reports/export failed:', err);
         sendJson(response, 500, { error: 'Failed to generate export.' });
       }
     })();
