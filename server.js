@@ -6140,44 +6140,72 @@ const server = http.createServer((request, response) => {
         const endDate = url.searchParams.get('endDate');
         const sortOrder = url.searchParams.get('sort') || 'desc';
 
-        let query = supabase.from('emergency_alerts').select('*');
-        if (sortOrder === 'asc') {
-          query = query.order('created_at', { ascending: true });
-        } else {
-          query = query.order('created_at', { ascending: false });
+        const studentQuery = supabase.from('accounts_student').select('user_id, student_id, student_name, student_cnum');
+        const rawAlerts = [];
+        const exportPageSize = 1000;
+        for (let offset = 0; ; offset += exportPageSize) {
+          let pageQuery = supabase.from('emergency_alerts').select('*')
+            .order('created_at', { ascending: sortOrder === 'asc' })
+            .range(offset, offset + exportPageSize - 1);
+          const { data: page, error: alertsError } = await pageQuery;
+          if (alertsError) throw alertsError;
+          rawAlerts.push(...(page || []));
+          if (!page || page.length < exportPageSize) break;
         }
-
-        const [{ data: rawAlerts }, { data: students }] = await Promise.all([
-          query,
-          supabase.from('accounts_student').select('user_id, student_id, student_name, student_cnum')
-        ]);
+        const { data: students, error: studentsError } = await studentQuery;
+        if (studentsError) throw studentsError;
 
         const studentMap = new Map();
         (students || []).forEach(s => studentMap.set(Number(s.user_id), s));
 
-        let filteredAlerts = rawAlerts || [];
+        let filteredAlerts = rawAlerts;
 
-        // Apply filters if specified
-        if (statusFilter !== 'all') {
-          const sf = statusFilter.toLowerCase().replace(/[^a-z]/g, '');
-          filteredAlerts = filteredAlerts.filter(a => {
-            const as = (a.status || '').toLowerCase().replace(/[^a-z]/g, '');
-            if (sf === 'ongoing' || sf === 'pending') {
-              return as === 'ongoing' || as === 'pending';
-            }
-            return as === sf;
+        const isResolvedReport = url.searchParams.get('reportType') === 'resolved';
+        const effectiveStatusFilter = isResolvedReport ? 'resolved' : statusFilter;
+        const getReportStatus = alert => {
+          const rawStatus = String(alert.status || '').toLowerCase().trim();
+          if (rawStatus === 'resolved') return 'resolved';
+          if (rawStatus === 'cancelled' || rawStatus === 'canceled') return 'cancelled';
+          return alert.responder_name || rawStatus === 'ongoing' || rawStatus === 'pending' ? 'ongoing' : 'active';
+        };
+        const matchesCategory = (alert, selectedCategory) => {
+          if (selectedCategory === 'all') return true;
+          const category = String(alert.assistance_type || alert.category || '').toLowerCase();
+          const selected = selectedCategory.toLowerCase();
+          if (selected === 'urgent') return category.includes('urg') || category.includes('assist');
+          if (selected === 'campus vicinity' || selected === 'vicinity' || selected === 'campus') {
+            return category.includes('vicin') || category.includes('campus');
+          }
+          if (selected === 'medical') return category.includes('med');
+          if (selected === 'security') return category.includes('sec');
+          return category === selected || category.includes(selected);
+        };
+
+        // Match the same normalized statuses and category groups shown in the Reports table.
+        if (effectiveStatusFilter !== 'all') {
+          const selectedStatus = effectiveStatusFilter.toLowerCase().replace(/[^a-z]/g, '');
+          filteredAlerts = filteredAlerts.filter(alert => {
+            const alertStatus = getReportStatus(alert);
+            if (selectedStatus === 'ongoing' || selectedStatus === 'pending') return alertStatus === 'ongoing';
+            return alertStatus.replace(/[^a-z]/g, '') === selectedStatus;
           });
         }
         if (categoryFilter !== 'all') {
-          filteredAlerts = filteredAlerts.filter(a => (a.assistance_type || '').toLowerCase() === categoryFilter.toLowerCase());
+          filteredAlerts = filteredAlerts.filter(alert => matchesCategory(alert, categoryFilter));
         }
         if (startDate) {
-          const startIso = new Date(startDate).toISOString();
-          filteredAlerts = filteredAlerts.filter(a => a.created_at && a.created_at >= startIso);
+          filteredAlerts = filteredAlerts.filter(alert => {
+            const utcDate = String(alert.created_at || '').slice(0, 10);
+            const localDate = alert.created_at ? new Date(alert.created_at).toLocaleDateString('en-CA') : utcDate;
+            return utcDate >= startDate || localDate >= startDate;
+          });
         }
         if (endDate) {
-          const endIso = new Date(endDate + 'T23:59:59.999Z').toISOString();
-          filteredAlerts = filteredAlerts.filter(a => a.created_at && a.created_at <= endIso);
+          filteredAlerts = filteredAlerts.filter(alert => {
+            const utcDate = String(alert.created_at || '').slice(0, 10);
+            const localDate = alert.created_at ? new Date(alert.created_at).toLocaleDateString('en-CA') : utcDate;
+            return utcDate <= endDate || localDate <= endDate;
+          });
         }
         if (searchQuery) {
           const queryClean = searchQuery.replace(/[^a-z0-9]/gi, '');
@@ -6200,9 +6228,13 @@ const server = http.createServer((request, response) => {
           });
         }
 
-        const isResolvedReport = url.searchParams.get('reportType') === 'resolved';
         if (isResolvedReport) {
-          filteredAlerts = filteredAlerts.filter(alert => (alert.status || '').toLowerCase() === 'resolved');
+          filteredAlerts = filteredAlerts.filter(alert => getReportStatus(alert) === 'resolved');
+        }
+
+        if (url.searchParams.get('format') === 'pdf' && filteredAlerts.length === 0) {
+          sendJson(response, 404, { error: 'No incident records match the selected filters. Nothing was exported.' });
+          return;
         }
 
         if (url.searchParams.get('format') === 'pdf') {
@@ -6248,6 +6280,13 @@ const server = http.createServer((request, response) => {
             const text = String(value || 'N/A').replace(/\s+/g, ' ').replace(/[^\x20-\x7E]/g, '?');
             return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
           };
+          const filterSummary = cleanPdfText([
+            `Status: ${isResolvedReport ? 'Resolved Only' : (statusFilter === 'all' ? 'All Statuses' : statusFilter)}`,
+            `Category: ${categoryFilter === 'all' ? 'All Categories' : categoryFilter}`,
+            startDate ? `From: ${startDate}` : '',
+            endDate ? `To: ${endDate}` : '',
+            searchQuery ? `Search: ${searchQuery}` : ''
+          ].filter(Boolean).join(' | '), 300);
           const drawTableHeader = () => {
             const y = document.y;
             document.rect(document.page.margins.left, y, printableWidth, 26).fill('#e2e8f0');
@@ -6265,6 +6304,7 @@ const server = http.createServer((request, response) => {
             document.fillColor('#475569').font('Helvetica').fontSize(9)
               .text(`University of Makati | ${reportTitle}`);
             document.fontSize(8).text(`Generated: ${new Date().toLocaleString()} | ${filteredAlerts.length} records`);
+            document.fontSize(7).fillColor('#64748b').text(`Filters: ${filterSummary}`, { width: printableWidth });
             document.moveDown(0.8);
             drawTableHeader();
           };

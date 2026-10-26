@@ -1,5 +1,18 @@
 [
   {
+    "id": "act-1793034691869-otj2j",
+    "employee_id": "EMP-1792691202031-RHCE9X",
+    "admin_name": "Christine Luis",
+    "admin_email": "cluis.k12149336@umak.edu.ph",
+    "admin_role": "HEAD",
+    "action": "Admin Sign In",
+    "category": "Security",
+    "details": "Christine Luis (HEAD) successfully signed in via OTP verification.",
+    "target": "",
+    "ip_address": "",
+    "timestamp": "2026-10-26T17:11:31.869Z"
+  },
+  {
     "id": "act-1792603330527-fqt80",
     "employee_id": "EMP-1792242501250-UEFBCD",
     "admin_name": "Cia",

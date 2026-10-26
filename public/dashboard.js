@@ -7427,6 +7427,7 @@ function openExportDrawer() {
   if (drawerSort && mainSort) drawerSort.value = mainSort.value;
   if (drawerStartDate && mainStartDate) drawerStartDate.value = mainStartDate.value;
   if (drawerEndDate && mainEndDate) drawerEndDate.value = mainEndDate.value;
+  if (drawerStatus) drawerStatus.dataset.preResolvedValue = drawerStatus.value || 'all';
 
   selectExportFormat(currentExportFormat || 'pdf');
   selectReportType(currentExportReportType || 'just');
@@ -7475,6 +7476,23 @@ function selectReportType(type) {
     card.classList.toggle('active', isSelected);
     card.setAttribute('aria-checked', isSelected ? 'true' : 'false');
   });
+
+  const statusSelect = document.getElementById('drawerStatusSelect');
+  const statusGroup = document.getElementById('drawerStatusFilterGroup');
+  if (statusSelect) {
+    if (type === 'resolved') {
+      if (!statusSelect.disabled) statusSelect.dataset.preResolvedValue = statusSelect.value || 'all';
+      statusSelect.value = 'Resolved';
+      statusSelect.disabled = true;
+    } else {
+      statusSelect.disabled = false;
+      statusSelect.value = statusSelect.dataset.preResolvedValue || 'all';
+    }
+  }
+  if (statusGroup) {
+    statusGroup.classList.toggle('is-disabled', type === 'resolved');
+    statusGroup.setAttribute('aria-disabled', String(type === 'resolved'));
+  }
 }
 
 async function handleDrawerExport() {
@@ -7485,7 +7503,7 @@ async function handleDrawerExport() {
   const drawerStartDate = document.getElementById('drawerStartDate');
   const drawerEndDate = document.getElementById('drawerEndDate');
 
-  const status = drawerStatus ? drawerStatus.value : 'all';
+  const status = currentExportReportType === 'resolved' ? 'Resolved' : (drawerStatus ? drawerStatus.value : 'all');
   const category = drawerCategory ? drawerCategory.value : 'all';
   const search = drawerSearch ? drawerSearch.value.trim() : '';
   const sort = drawerSort ? drawerSort.value : 'desc';
@@ -7515,7 +7533,16 @@ async function handleDrawerExport() {
     return;
   }
 
-  // PDF or Print Format handled directly on the client side
+  if (currentExportFormat === 'pdf') {
+    closeExportDrawer();
+    await downloadIncidentReportPdf({
+      reportType: currentExportReportType,
+      status, category, search, sort, startDate, endDate
+    });
+    return;
+  }
+
+  // Print format is rendered in a browser tab for the native print dialog.
   closeExportDrawer();
   await generateAndExportReport({
     format: currentExportFormat,
@@ -7524,13 +7551,61 @@ async function handleDrawerExport() {
   });
 }
 
+async function downloadIncidentReportPdf(options) {
+  try {
+    const params = new URLSearchParams({ format: 'pdf' });
+    const isResolvedReport = options.reportType === 'resolved';
+    const status = isResolvedReport ? 'Resolved' : options.status;
+    if (isResolvedReport) params.set('reportType', 'resolved');
+    if (status && status !== 'all') params.set('status', status);
+    if (options.category && options.category !== 'all') params.set('category', options.category);
+    if (options.search) params.set('search', options.search);
+    if (options.startDate) params.set('startDate', options.startDate);
+    if (options.endDate) params.set('endDate', options.endDate);
+    if (options.sort) params.set('sort', options.sort);
+
+    showToast(`Generating ${isResolvedReport ? 'Resolved' : 'Incident'} PDF report...`);
+    const response = await fetch(`/api/reports/export?${params.toString()}`);
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !contentType.includes('application/pdf')) {
+      let message = 'Failed to generate the PDF report.';
+      try {
+        const result = await response.json();
+        if (result.error) message = result.error;
+      } catch (_) { /* Keep the default message for non-JSON server errors. */ }
+      showToast(message, response.status === 404 ? 'warning' : 'error');
+      return;
+    }
+
+    const pdfBlob = await response.blob();
+    if (!pdfBlob.size) {
+      showToast('The PDF export was empty. Please try again.', 'error');
+      return;
+    }
+
+    const downloadUrl = URL.createObjectURL(pdfBlob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = isResolvedReport ? 'heas-resolved-incidents-report.pdf' : 'heas-incidents-report.pdf';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    showToast('PDF downloaded successfully.', 'success');
+  } catch (error) {
+    console.error('Error downloading incident PDF:', error);
+    showToast(`Failed to generate PDF report: ${error.message}`, 'error');
+  }
+}
+
 async function generateAndExportReport(options) {
   try {
     const isResolvedReport = options.reportType === 'resolved';
     showToast(`Generating ${isResolvedReport ? 'Resolved' : 'Incident'} ${options.format.toUpperCase()} report...`);
 
     const params = new URLSearchParams();
-    if (options.status !== 'all') params.set('status', options.status);
+    const status = isResolvedReport ? 'Resolved' : options.status;
+    if (status !== 'all') params.set('status', status);
     if (options.category !== 'all') params.set('category', options.category);
     if (options.search) params.set('search', options.search);
     if (options.startDate) params.set('startDate', options.startDate);
@@ -7546,12 +7621,17 @@ async function generateAndExportReport(options) {
       incidents = incidents.filter(i => (i.status || '').toLowerCase() === 'resolved');
     }
 
+    if (incidents.length === 0) {
+      showToast('No incident records match the selected filters. Nothing was exported.', 'warning');
+      return;
+    }
+
     const reportTitle = isResolvedReport
       ? 'Resolved Incidents & Resolution Summary Report'
       : 'Comprehensive Campus Emergency Incident Report';
     const timestamp = new Date().toLocaleString();
     const filterInfo = [
-      `Status: ${options.status === 'all' ? (isResolvedReport ? 'Resolved Only' : 'All Statuses') : options.status}`,
+      `Status: ${isResolvedReport ? 'Resolved Only' : (options.status === 'all' ? 'All Statuses' : options.status)}`,
       `Category: ${options.category === 'all' ? 'All Categories' : options.category}`,
       options.startDate ? `From: ${options.startDate}` : '',
       options.endDate ? `To: ${options.endDate}` : '',

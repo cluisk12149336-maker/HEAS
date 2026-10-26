@@ -15,7 +15,7 @@
     rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/navigation.css">
-  <link rel="stylesheet" href="/dashboard.css?v=8">
+  <link rel="stylesheet" href="/dashboard.css?v=9">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <!-- 1. MAIN LEAFLET (Must load first) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -2019,7 +2019,7 @@
           <span>Filters:</span>
         </div>
 
-        <div class="drawer-filter-group">
+        <div class="drawer-filter-group" id="drawerStatusFilterGroup">
           <label for="drawerStatusSelect">Status:</label>
           <div class="drawer-select-wrapper">
             <select id="drawerStatusSelect" class="drawer-select">
@@ -3198,7 +3198,7 @@
 
   <!-- Leaflet Map JS and Dashboard Logic -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="/dashboard.js?v=19"></script>
+  <script src="/dashboard.js?v=21"></script>
 </body>
 
 </html>
