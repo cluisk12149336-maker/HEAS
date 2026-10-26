@@ -6,6 +6,11 @@
       "use": "@vercel/node"
     }
   ],
+  "functions": {
+    "server.js": {
+      "includeFiles": "node_modules/pdfkit/js/standard-fonts/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
