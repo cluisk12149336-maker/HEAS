@@ -4195,28 +4195,11 @@ function formatAuditDetails(item) {
 function renderAdminActivities(filteredActivities, accountFilter = 'all', searchVal = '') {
   const cardsContainer = document.getElementById('auditAccountCardsView');
   const tableBody = document.getElementById('auditActivityTimelineTableBody');
-
-  if (!filteredActivities || filteredActivities.length === 0) {
-    if (cardsContainer) {
-      cardsContainer.innerHTML = `
-        <div class="audit-empty-state">
-          <iconify-icon icon="solar:magnifer-linear" style="font-size: 32px; color: #94a3b8; margin-bottom: 8px;"></iconify-icon>
-          <p><strong>No activities found</strong></p>
-          <small>${searchVal ? `No logged actions match "${escapeHtml(searchVal)}". Try searching by another action, student name, or emergency type.` : 'No administrative actions match the selected filter criteria.'}</small>
-        </div>`;
-    }
-    if (tableBody) {
-      tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 36px 20px; color: #64748b;">
-        <iconify-icon icon="solar:magnifer-linear" style="font-size: 24px; vertical-align: middle; margin-right: 6px; color: #94a3b8;"></iconify-icon>
-        ${searchVal ? `No activities found matching "<strong>${escapeHtml(searchVal)}</strong>".` : 'No activities match the selected filter.'}
-      </td></tr>`;
-    }
-    return;
-  }
+  filteredActivities = Array.isArray(filteredActivities) ? filteredActivities : [];
 
   // 1. Render Chronological Timeline Table (Clean 5-Column Layout)
   if (tableBody) {
-    tableBody.innerHTML = filteredActivities.map(item => {
+    tableBody.innerHTML = filteredActivities.length ? filteredActivities.map(item => {
       const summaryAcc = cachedAccountsSummary.find(s =>
         (s.employee_id && item.employee_id && s.employee_id === item.employee_id) ||
         (s.email && item.admin_email && s.email.toLowerCase() === item.admin_email.toLowerCase())
@@ -4252,7 +4235,10 @@ function renderAdminActivities(filteredActivities, accountFilter = 'all', search
           </td>
         </tr>
       `;
-    }).join('');
+    }).join('') : `<tr><td colspan="5" style="text-align: center; padding: 36px 20px; color: #64748b;">
+      <iconify-icon icon="solar:magnifer-linear" style="font-size: 24px; vertical-align: middle; margin-right: 6px; color: #94a3b8;"></iconify-icon>
+      ${searchVal ? `No activities found matching "<strong>${escapeHtml(searchVal)}</strong>".` : 'No activities match the selected filter.'}
+    </td></tr>`;
   }
 
   // 2. Render By Admin Account Cards Grid
